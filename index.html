@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>English QR Reader</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #f5f6f8; color: #111; }
+    main { max-width: 680px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 1.7rem; margin: 6px 0 16px; }
+    .card { background: #fff; border-radius: 18px; padding: 18px; margin-bottom: 16px;
+            box-shadow: 0 4px 18px rgba(0,0,0,.07); }
+    #reader { width: 100%; overflow: hidden; border-radius: 14px; }
+    button, select, input[type="file"], textarea {
+      font: inherit; border-radius: 12px; border: 1px solid #c9cdd4;
+    }
+    button { padding: 13px 16px; background: #111; color: #fff; border: 0; font-weight: 700; }
+    button.secondary { background: #e9edf3; color: #111; }
+    button.danger { background: #8b1e1e; }
+    button:disabled { opacity: .5; }
+    input[type="file"] { width: 100%; box-sizing: border-box; padding: 10px; background: #fff; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 80px; padding: 12px; }
+    select { padding: 10px; background: #fff; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .row > * { flex: 1 1 130px; }
+    #english { font-size: clamp(1.8rem, 7vw, 3.4rem); font-weight: 800; line-height: 1.2;
+               overflow-wrap: anywhere; margin: 8px 0; }
+    #japanese { font-size: 1.15rem; color: #555; margin-top: 10px; }
+    .hint { color: #666; font-size: .92rem; line-height: 1.55; }
+    .status { min-height: 1.4em; font-weight: 600; }
+    .ok { color: #285; }
+    .error { color: #a21b1b; }
+    .badge { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #e9edf3;
+             font-size: .85rem; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>English QR Reader</h1>
+
+  <section class="card">
+    <h2>1．CSVを登録</h2>
+    <p class="hint">
+      iPhoneの「ファイル」アプリに保存した <b>words.csv</b> を選択します。
+      CSV内容はこの端末のSafari内に保存され、GitHubへ送信されません。
+    </p>
+    <input id="csvFile" type="file" accept=".csv,text/csv">
+    <div class="row">
+      <button id="importBtn">CSVを読み込む</button>
+      <button id="clearBtn" class="danger">登録データを消す</button>
+    </div>
+    <p id="csvStatus" class="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>2．QRコードを読み取る</h2>
+    <div id="reader"></div>
+    <div class="row">
+      <button id="startBtn">QRコードを読み取る</button>
+      <button id="stopBtn" class="secondary" disabled>カメラを止める</button>
+    </div>
+    <p id="scanStatus" class="status"></p>
+    <p class="hint">QRコードには <b>E001</b> など、CSVのID列と同じ文字を入れてください。</p>
+  </section>
+
+  <section class="card">
+    <span id="idBadge" class="badge">ID：未選択</span>
+    <div id="english">CSVを登録してQRコードを読み取ってください</div>
+    <div id="japanese"></div>
+
+    <div class="row">
+      <button id="speakBtn">▶ 読む</button>
+      <button id="repeatBtn" class="secondary">🔁 指定回数読む</button>
+    </div>
+
+    <div class="row">
+      <label>
+        読む速さ
+        <select id="rate">
+          <option value="0.6">ゆっくり 0.6</option>
+          <option value="0.8" selected>少しゆっくり 0.8</option>
+          <option value="1">ふつう 1.0</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>動作確認</h2>
+    <p class="hint">QRコードがなくても、CSVにあるIDを直接入力して確認できます。</p>
+    <textarea id="manualId" placeholder="E001"></textarea>
+    <div class="row">
+      <button id="manualBtn" class="secondary">このIDを検索する</button>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const STORAGE_KEY = "englishQrReaderCsvDataV1";
+
+  const csvFileEl = document.getElementById("csvFile");
+  const csvStatusEl = document.getElementById("csvStatus");
+  const scanStatusEl = document.getElementById("scanStatus");
+  const englishEl = document.getElementById("english");
+  const japaneseEl = document.getElementById("japanese");
+  const idBadgeEl = document.getElementById("idBadge");
+  const rateEl = document.getElementById("rate");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+
+  let records = {};
+  let scanner = null;
+  let currentRecord = null;
+  let speakingToken = 0;
+
+  function setStatus(element, message, ok = true) {
+    element.textContent = message;
+    element.className = "status " + (ok ? "ok" : "error");
+  }
+
+  function normalizeHeader(value) {
+    return String(value || "").replace(/^\uFEFF/, "").trim().toLowerCase();
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          cell += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (ch === "\n") {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+        } else if (ch !== "\r") {
+          cell += ch;
+        }
+      }
+    }
+
+    row.push(cell);
+    if (row.some(v => v !== "")) rows.push(row);
+    return rows;
+  }
+
+  function rowsToRecords(rows) {
+    if (rows.length < 2) throw new Error("CSVにデータ行がありません。");
+
+    const headers = rows[0].map(normalizeHeader);
+    const findColumn = names => headers.findIndex(h => names.includes(h));
+
+    const idIndex = findColumn(["id"]);
+    const englishIndex = findColumn(["english", "英語", "英文"]);
+    const japaneseIndex = findColumn(["japanese", "日本語", "和訳"]);
+    const rateIndex = findColumn(["rate", "速度"]);
+    const repeatIndex = findColumn(["repeat", "回数"]);
+
+    if (idIndex < 0 || englishIndex < 0) {
+      throw new Error("CSVにはID列とEnglish列が必要です。");
+    }
+
+    const result = {};
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i];
+      const id = String(cols[idIndex] || "").trim();
+      const english = String(cols[englishIndex] || "").trim();
+      if (!id || !english) continue;
+
+      result[id] = {
+        id,
+        english,
+        japanese: japaneseIndex >= 0 ? String(cols[japaneseIndex] || "").trim() : "",
+        rate: rateIndex >= 0 ? Number(cols[rateIndex]) || 0.8 : 0.8,
+        repeat: repeatIndex >= 0 ? Math.max(1, Number.parseInt(cols[repeatIndex], 10) || 1) : 1
+      };
+    }
+
+    if (Object.keys(result).length === 0) {
+      throw new Error("有効なデータを読み込めませんでした。");
+    }
+    return result;
+  }
+
+  function saveRecords() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  function loadRecords() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      records = saved ? JSON.parse(saved) : {};
+      const count = Object.keys(records).length;
+      if (count > 0) setStatus(csvStatusEl, count + "件のデータが端末内に登録されています。");
+    } catch (_) {
+      records = {};
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
+  function showRecord(record) {
+    currentRecord = record;
+    idBadgeEl.textContent = "ID：" + record.id;
+    englishEl.textContent = record.english;
+    japaneseEl.textContent = record.japanese;
+    rateEl.value = ["0.6", "0.8", "1"].includes(String(record.rate)) ? String(record.rate) : "0.8";
+  }
+
+  function lookupId(rawId, autoSpeak = true) {
+    const id = String(rawId || "").trim();
+    if (!id) return;
+
+    const record = records[id];
+    if (!record) {
+      currentRecord = null;
+      idBadgeEl.textContent = "ID：" + id;
+      englishEl.textContent = "このIDはCSVに登録されていません";
+      japaneseEl.textContent = "";
+      setStatus(scanStatusEl, id + " が見つかりません。", false);
+      return;
+    }
+
+    showRecord(record);
+    setStatus(scanStatusEl, id + " を読み取りました。");
+    if (autoSpeak) speak(record.repeat);
+  }
+
+  function getEnglishVoice() {
+    const voices = speechSynthesis.getVoices();
+    return voices.find(v => v.lang === "en-US")
+      || voices.find(v => v.lang.startsWith("en"))
+      || null;
+  }
+
+  function speakOnce(text) {
+    return new Promise(resolve => {
+      if (!("speechSynthesis" in window) || !text) {
+        setStatus(scanStatusEl, "この端末では読み上げ機能を利用できません。", false);
+        resolve();
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = Number(rateEl.value);
+      const voice = getEnglishVoice();
+      if (voice) utterance.voice = voice;
+      utterance.onend = resolve;
+      utterance.onerror = resolve;
+      speechSynthesis.speak(utterance);
+    });
+  }
+
+  async function speak(repeats = 1) {
+    if (!currentRecord) return;
+    const token = ++speakingToken;
+    speechSynthesis.cancel();
+
+    for (let i = 0; i < repeats; i++) {
+      if (token !== speakingToken) break;
+      await speakOnce(currentRecord.english);
+      if (i < repeats - 1) await new Promise(r => setTimeout(r, 450));
+    }
+  }
+
+  async function stopScanner() {
+    if (!scanner) return;
+    try {
+      await scanner.stop();
+      await scanner.clear();
+    } catch (_) {}
+    scanner = null;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+
+  async function startScanner() {
+    if (Object.keys(records).length === 0) {
+      setStatus(scanStatusEl, "先にCSVを登録してください。", false);
+      return;
+    }
+    if (!window.isSecureContext) {
+      setStatus(scanStatusEl, "カメラはHTTPSのページから利用してください。", false);
+      return;
+    }
+    if (typeof Html5Qrcode === "undefined") {
+      setStatus(scanStatusEl, "QR読み取り機能を読み込めませんでした。通信状態を確認してください。", false);
+      return;
+    }
+
+    await stopScanner();
+    scanner = new Html5Qrcode("reader");
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        async decodedText => {
+          await stopScanner();
+          lookupId(decodedText, true);
+        },
+        () => {}
+      );
+      setStatus(scanStatusEl, "カメラをQRコードに向けてください。");
+    } catch (_) {
+      setStatus(scanStatusEl, "カメラを開始できません。Safariのカメラ許可を確認してください。", false);
+      await stopScanner();
+    }
+  }
+
+  document.getElementById("importBtn").addEventListener("click", async () => {
+    const file = csvFileEl.files[0];
+    if (!file) {
+      setStatus(csvStatusEl, "words.csvを選択してください。", false);
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsedRows = parseCsv(text);
+      records = rowsToRecords(parsedRows);
+      saveRecords();
+      setStatus(csvStatusEl, Object.keys(records).length + "件を端末内に登録しました。");
+    } catch (error) {
+      setStatus(csvStatusEl, error.message || "CSVを読み込めませんでした。", false);
+    }
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    records = {};
+    currentRecord = null;
+    localStorage.removeItem(STORAGE_KEY);
+    csvFileEl.value = "";
+    idBadgeEl.textContent = "ID：未選択";
+    englishEl.textContent = "CSVを登録してQRコードを読み取ってください";
+    japaneseEl.textContent = "";
+    setStatus(csvStatusEl, "端末内の登録データを削除しました。");
+  });
+
+  startBtn.addEventListener("click", startScanner);
+  stopBtn.addEventListener("click", stopScanner);
+  document.getElementById("speakBtn").addEventListener("click", () => speak(1));
+  document.getElementById("repeatBtn").addEventListener("click", () => {
+    speak(currentRecord ? currentRecord.repeat : 1);
+  });
+  document.getElementById("manualBtn").addEventListener("click", () => {
+    lookupId(document.getElementById("manualId").value, false);
+  });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+  }
+
+  loadRecords();
+</script>
+</body>
+</html>
