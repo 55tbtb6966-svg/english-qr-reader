@@ -127,6 +127,7 @@
             <option value="1.4">1.4倍</option>
           </select>
         </label>
+        <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
       </div>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
     </div>
@@ -140,6 +141,7 @@
         <label><span>日本語</span><input id="editJapanese" type="text"></label>
       </div>
       <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
+      <label style="margin-top:10px;"><span>日本語読み（任意・ひらがな推奨）</span><textarea id="editJapaneseRead" placeholder="これは りんご です。"></textarea></label>
       <div class="grid3" style="margin-top:10px;">
         <label><span>読み方</span>
           <select id="editMode">
@@ -188,7 +190,7 @@
 
       <div class="tableWrap">
         <table>
-          <thead><tr><th>選択</th><th>ID</th><th>英文</th><th>日本語</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
+          <thead><tr><th>選択</th><th>ID</th><th>英文</th><th>日本語</th><th>日本語読み</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
           <tbody id="recordBody"></tbody>
         </table>
       </div>
@@ -288,7 +290,7 @@ function csvToRecords(rows) {
   if(rows.length<2) throw new Error("CSVにデータ行がありません。");
   const h=rows[0].map(v=>String(v||"").replace(/^\uFEFF/,"").trim().toLowerCase());
   const idx=names=>h.findIndex(x=>names.includes(x));
-  const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iJa=idx(["japanese","日本語","和訳"]);
+  const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iJa=idx(["japanese","日本語","和訳"]), iJaRead=idx(["japaneseread","japanese_read","日本語読み","読み"]);
   const iMode=idx(["mode","読み方"]), iER=idx(["englishrate","english_rate","英語速度"]);
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
   const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]);
@@ -299,7 +301,7 @@ function csvToRecords(rows) {
     if(!id||!english) continue;
     const modeRaw=String(iMode>=0?c[iMode]||"both":"both").trim().toLowerCase();
     const mode=["english","japanese","both"].includes(modeRaw)?modeRaw:"both";
-    const rec={id,english,japanese:iJa>=0?String(c[iJa]||"").trim():"",
+    const rec={id,english,japanese:iJa>=0?String(c[iJa]||"").trim():"",japaneseRead:iJaRead>=0?String(c[iJaRead]||"").trim():"",
       mode,englishRate:iER>=0?Number(c[iER])||1:1,japaneseRate:iJR>=0?Number(c[iJR])||1:1,
       repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1,
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
@@ -327,8 +329,8 @@ async function importCsv(replace) {
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getAllRecords()).sort((a,b)=>a.id.localeCompare(b.id));
-  const lines=["ID,English,Japanese,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version"];
-  all.forEach(r=>lines.push([r.id,r.english,r.japanese,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||""].map(csvEscape).join(",")));
+  const lines=["ID,English,Japanese,JapaneseRead,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version"];
+  all.forEach(r=>lines.push([r.id,r.english,r.japanese,r.japaneseRead||"",r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||""].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="words.csv";a.click();URL.revokeObjectURL(a.href);
 }
@@ -343,7 +345,24 @@ async function refreshSummary(){
   }else $("storageUsage").textContent="取得不可";
 }
 function englishVoice(){const v=speechSynthesis.getVoices();return v.find(x=>x.lang==="en-US")||v.find(x=>x.lang.startsWith("en"))||null;}
-function japaneseVoice(){const v=speechSynthesis.getVoices();return v.find(x=>x.lang==="ja-JP")||v.find(x=>x.lang.startsWith("ja"))||null;}
+function japaneseVoice(){
+  const voices=speechSynthesis.getVoices().filter(x=>x.lang==="ja-JP"||x.lang.startsWith("ja"));
+  const selected=$("japaneseVoiceSelect")?.value;
+  return voices.find(v=>v.name===selected)||voices[0]||null;
+}
+function loadJapaneseVoices(){
+  const select=$("japaneseVoiceSelect");
+  if(!select)return;
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="ja-JP"||v.lang.startsWith("ja"));
+  const old=select.value;
+  select.innerHTML="";
+  voices.forEach(v=>{
+    const o=document.createElement("option");
+    o.value=v.name;o.textContent=v.name+" ("+v.lang+")";
+    select.appendChild(o);
+  });
+  if(old&&voices.some(v=>v.name===old))select.value=old;
+}
 function speakText(text,lang,rate){
   return new Promise(resolve=>{
     if(!text){resolve();return;}
@@ -359,11 +378,11 @@ async function playRecord(modeOverride=null){
   for(let i=0;i<currentRecord.repeat;i++){
     if(token!==speakingToken)break;
     if(mode==="english") await speakText(currentRecord.english,"en-US",currentRecord.englishRate);
-    else if(mode==="japanese") await speakText(currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
+    else if(mode==="japanese") await speakText(currentRecord.japaneseRead||currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
     else{
       await speakText(currentRecord.english,"en-US",currentRecord.englishRate);
       await new Promise(r=>setTimeout(r,(currentRecord.gap||0.5)*1000));
-      await speakText(currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
+      await speakText(currentRecord.japaneseRead||currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
     }
     if(i<currentRecord.repeat-1)await new Promise(r=>setTimeout(r,450));
   }
@@ -389,14 +408,14 @@ async function startScanner(){
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
 function clearEditor(){
-  ["editId","editJapanese","editEnglish","editVersion"].forEach(id=>$(id).value="");
+  ["editId","editJapanese","editJapaneseRead","editEnglish","editVersion"].forEach(id=>$(id).value="");
   $("editMode").value="both";$("editEnglishRate").value="1";$("editJapaneseRate").value="1";
   $("editRepeat").value="1";$("editGap").value="0.5";
 }
 async function saveEditor(){
   const id=$("editId").value.trim(),english=$("editEnglish").value.trim();
   if(!id||!english){setStatus($("editStatus"),"IDと英文は必須です。",false);return;}
-  const r={id,english,japanese:$("editJapanese").value.trim(),mode:$("editMode").value,
+  const r={id,english,japanese:$("editJapanese").value.trim(),japaneseRead:$("editJapaneseRead").value.trim(),mode:$("editMode").value,
     englishRate:Number($("editEnglishRate").value)||1,japaneseRate:Number($("editJapaneseRate").value)||1,
     repeat:Math.max(1,parseInt($("editRepeat").value,10)||1),gap:Math.max(0,Number($("editGap").value)||0),
     version:$("editVersion").value.trim()};
@@ -405,7 +424,7 @@ async function saveEditor(){
 }
 async function editRecord(id){
   const r=await getRecord(id);if(!r)return;
-  $("editId").value=r.id;$("editEnglish").value=r.english;$("editJapanese").value=r.japanese;
+  $("editId").value=r.id;$("editEnglish").value=r.english;$("editJapanese").value=r.japanese;$("editJapaneseRead").value=r.japaneseRead||"";
   $("editMode").value=r.mode;$("editEnglishRate").value=String(r.englishRate);
   $("editJapaneseRate").value=String(r.japaneseRate);$("editRepeat").value=String(r.repeat);
   $("editGap").value=String(r.gap);$("editVersion").value=r.version||"";
@@ -422,7 +441,7 @@ async function renderPage(){
     const tr=document.createElement("tr");
     const sel=document.createElement("td"),cb=document.createElement("input");cb.type="checkbox";cb.checked=selectedIds.has(r.id);
     cb.addEventListener("change",()=>cb.checked?selectedIds.add(r.id):selectedIds.delete(r.id));sel.appendChild(cb);tr.appendChild(sel);
-    [r.id,r.english,r.japanese,modeLabel(r.mode),r.englishRate,r.japaneseRate,r.repeat].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
+    [r.id,r.english,r.japanese,r.japaneseRead||"",modeLabel(r.mode),r.englishRate,r.japaneseRate,r.repeat].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
     const act=document.createElement("td"),e=document.createElement("button"),d=document.createElement("button");
     e.textContent="編集";e.className="smallBtn secondary";e.addEventListener("click",()=>editRecord(r.id));
     d.textContent="削除";d.className="smallBtn danger";d.style.marginLeft="6px";d.addEventListener("click",async()=>{if(confirm(r.id+"を削除しますか？")){await deleteRecord(r.id);selectedIds.delete(r.id);await refreshSummary();await renderPage();}});
@@ -476,6 +495,7 @@ $("makeRangeQrBtn").addEventListener("click",async()=>{
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
+  loadJapaneseVoices();speechSynthesis.onvoiceschanged=loadJapaneseVoices;
   await openDb();await refreshSummary();await renderPage();
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 })();
