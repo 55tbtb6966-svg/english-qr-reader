@@ -10,7 +10,7 @@
   <style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #f5f6f8; color: #111; }
-    main { max-width: 760px; margin: 0 auto; padding: 18px; }
+    main { max-width: 920px; margin: 0 auto; padding: 18px; }
     h1 { font-size: 1.7rem; margin: 4px 0 16px; }
     h2 { font-size: 1.15rem; margin-top: 0; }
     .card { background: #fff; border-radius: 18px; padding: 18px; margin-bottom: 16px;
@@ -44,19 +44,32 @@
     .badge { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #e9edf3;
              font-size: .85rem; margin-bottom: 8px; }
     .tableWrap { overflow-x: auto; margin-top: 12px; }
-    table { width: 100%; border-collapse: collapse; min-width: 620px; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
     th, td { border-bottom: 1px solid #ddd; padding: 9px 7px; text-align: left; vertical-align: top; }
     th { background: #f1f3f6; }
     .smallBtn { padding: 7px 9px; font-size: .88rem; }
-    #qrcode { min-height: 210px; display: flex; align-items: center; justify-content: center; margin-top: 12px; }
-    #qrcode img, #qrcode canvas { max-width: 220px; width: 100%; height: auto; }
     .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .tabBtn { background: #e9edf3; color: #111; }
     .tabBtn.active { background: #111; color: #fff; }
     .tabPanel { display: none; }
     .tabPanel.active { display: block; }
+    .qrSheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+    .qrCard { border: 1px solid #ccc; border-radius: 14px; padding: 12px; text-align: center; break-inside: avoid; }
+    .qrCard canvas, .qrCard img { width: 150px !important; height: 150px !important; }
+    .qrId { font-weight: 800; margin-top: 8px; }
+    .qrEnglish { font-size: .95rem; margin-top: 4px; }
+    .qrJapanese { font-size: .85rem; color: #555; margin-top: 2px; }
+    .checkbox { transform: scale(1.25); }
     @media (max-width: 620px) {
       .grid, .grid3 { grid-template-columns: 1fr; }
+      .qrSheet { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: #fff; }
+      main > :not(#batchTab), #batchTab .card > :not(.qrSheet) { display: none !important; }
+      #batchTab, #batchTab .card, .qrSheet { display: block !important; box-shadow: none; padding: 0; margin: 0; }
+      .qrSheet { display: grid !important; grid-template-columns: repeat(2, 1fr); gap: 10mm; }
+      .qrCard { border: 1px solid #000; page-break-inside: avoid; }
     }
   </style>
 </head>
@@ -67,16 +80,12 @@
   <div class="tabs">
     <button class="tabBtn active" data-tab="readerTab">読み取り</button>
     <button class="tabBtn" data-tab="dataTab">英文データ編集</button>
-    <button class="tabBtn" data-tab="qrTab">QRコード作成</button>
+    <button class="tabBtn" data-tab="batchTab">一括QR作成</button>
   </div>
 
   <section id="readerTab" class="tabPanel active">
     <section class="card">
       <h2>1．iCloud DriveのCSVを登録</h2>
-      <p class="hint">
-        「ファイルを選択」から、iCloud Driveに保存した <b>words.csv</b> を選びます。
-        読み込んだ内容はこのiPhoneのSafari内に保存され、GitHubへ送信されません。
-      </p>
       <input id="csvFile" type="file" accept=".csv,text/csv,text/plain">
       <div class="row">
         <button id="importBtn">CSVを読み込む</button>
@@ -94,34 +103,27 @@
         <button id="stopBtn" class="secondary" disabled>カメラを止める</button>
       </div>
       <p id="scanStatus" class="status"></p>
-      <p class="hint">QRコードには <b>E001</b> など、CSVのID列と同じ文字を入れてください。</p>
     </section>
 
     <section class="card">
       <span id="idBadge" class="badge">ID：未選択</span>
       <div id="english">CSVを登録してQRコードを読み取ってください</div>
       <div id="japanese"></div>
-
       <div class="row">
         <button id="speakBtn">▶ 読む</button>
         <button id="repeatBtn" class="secondary">🔁 指定回数読む</button>
       </div>
-
       <div class="grid" style="margin-top:12px;">
-        <label>
-          <span>読む速さ</span>
+        <label><span>読む速さ</span>
           <select id="rate">
             <option value="0.6">0.6倍</option>
-            <option value="0.8" selected>0.8倍</option>
-            <option value="1">1.0倍</option>
+            <option value="0.8">0.8倍</option>
+            <option value="1" selected>1.0倍</option>
             <option value="1.2">1.2倍</option>
             <option value="1.4">1.4倍</option>
           </select>
         </label>
-        <label>
-          <span>確認用ID</span>
-          <input id="manualId" type="text" placeholder="E001">
-        </label>
+        <label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
       </div>
       <div class="row">
         <button id="manualBtn" class="secondary">IDを検索する</button>
@@ -132,31 +134,22 @@
   <section id="dataTab" class="tabPanel">
     <section class="card">
       <h2>英文データを追加・書き換え</h2>
-      <p class="hint">
-        IDが既にある場合は上書き、ない場合は新規追加になります。
-        保存後は「CSVを書き出す」でiCloud Driveへバックアップしてください。
-      </p>
-
+      <p class="hint">同じIDなら上書き、新しいIDなら追加です。保存後はCSVを書き出してバックアップしてください。</p>
       <div class="grid">
-        <label><span>ID</span><input id="editId" type="text" placeholder="E001"></label>
-        <label><span>日本語</span><input id="editJapanese" type="text" placeholder="りんご"></label>
+        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
+        <label><span>日本語</span><input id="editJapanese" type="text"></label>
       </div>
-      <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish" placeholder="apple"></textarea></label>
+      <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
       <div class="grid3" style="margin-top:10px;">
-        <label>
-          <span>速度</span>
+        <label><span>速度</span>
           <select id="editRate">
-            <option value="0.6">0.6</option>
-            <option value="0.8" selected>0.8</option>
-            <option value="1">1.0</option>
-            <option value="1.2">1.2</option>
-            <option value="1.4">1.4</option>
+            <option value="0.6">0.6</option><option value="0.8">0.8</option>
+            <option value="1" selected>1.0</option><option value="1.2">1.2</option><option value="1.4">1.4</option>
           </select>
         </label>
         <label><span>回数</span><input id="editRepeat" type="number" min="1" max="10" value="1"></label>
         <label><span>検索</span><input id="filterText" type="text" placeholder="ID・英文・日本語"></label>
       </div>
-
       <div class="row">
         <button id="saveRecordBtn">追加／上書き</button>
         <button id="newRecordBtn" class="secondary">入力欄を空にする</button>
@@ -165,28 +158,44 @@
 
       <div class="tableWrap">
         <table>
-          <thead>
-            <tr><th>ID</th><th>英文</th><th>日本語</th><th>速度</th><th>回数</th><th>操作</th></tr>
-          </thead>
+          <thead><tr><th>選択</th><th>ID</th><th>英文</th><th>日本語</th><th>速度</th><th>回数</th><th>操作</th></tr></thead>
           <tbody id="recordBody"></tbody>
         </table>
       </div>
     </section>
   </section>
 
-  <section id="qrTab" class="tabPanel">
+  <section id="batchTab" class="tabPanel">
     <section class="card">
-      <h2>QRコードを作成</h2>
+      <h2>一括QRコード作成</h2>
       <p class="hint">
-        QRコードに入れるのはIDだけです。例：<b>E001</b>。
-        作成したQRコードは長押しして写真へ保存できます。
+        英文データ一覧で選択したIDから、10件ずつQRカードを作ります。
+        QRカードにはID、英文、日本語を一緒に表示できます。
       </p>
-      <label><span>QRコードにするID</span><input id="qrId" type="text" placeholder="E001"></label>
-      <div class="row">
-        <button id="makeQrBtn">QRコードを作る</button>
+      <div class="grid3">
+        <label><span>1ページの件数</span>
+          <select id="batchSize">
+            <option value="6">6件</option>
+            <option value="8">8件</option>
+            <option value="10" selected>10件</option>
+            <option value="12">12件</option>
+          </select>
+        </label>
+        <label><span>開始位置</span><input id="batchStart" type="number" min="1" value="1"></label>
+        <label><span>検索</span><input id="batchFilter" type="text" placeholder="ID・英文・日本語"></label>
       </div>
-      <p id="qrStatus" class="status"></p>
-      <div id="qrcode"></div>
+      <div class="row">
+        <button id="selectFirstBtn" class="secondary">表示中の先頭10件を選択</button>
+        <button id="selectAllBtn" class="secondary">表示中をすべて選択</button>
+        <button id="clearSelectionBtn" class="secondary">選択解除</button>
+      </div>
+      <div class="row">
+        <button id="makeBatchBtn">選択したQRを作る</button>
+        <button id="makePageBtn" class="secondary">指定位置から10件作る</button>
+        <button id="printBtn" class="secondary">印刷／PDF保存</button>
+      </div>
+      <p id="batchStatus" class="status"></p>
+      <div id="qrSheet" class="qrSheet"></div>
     </section>
   </section>
 </main>
@@ -194,361 +203,206 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-  const STORAGE_KEY = "englishQrReaderCsvDataV3";
+  const STORAGE_KEY = "englishQrReaderCsvDataV4";
   const $ = id => document.getElementById(id);
-
   let records = {};
+  let selectedIds = new Set();
   let scanner = null;
   let currentRecord = null;
   let speakingToken = 0;
 
-  function setStatus(element, message, ok = true) {
-    element.textContent = message;
-    element.className = "status " + (ok ? "ok" : "error");
+  function setStatus(el, msg, ok=true) {
+    el.textContent = msg;
+    el.className = "status " + (ok ? "ok" : "error");
   }
-
-  function normalizeHeader(value) {
-    return String(value || "").replace(/^\uFEFF/, "").trim().toLowerCase();
-  }
-
+  function norm(v) { return String(v || "").replace(/^\uFEFF/, "").trim().toLowerCase(); }
   function parseCsv(text) {
-    const rows = [];
-    let row = [], cell = "", inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      if (inQuotes) {
+    const rows=[]; let row=[], cell="", quoted=false;
+    for (let i=0;i<text.length;i++) {
+      const ch=text[i];
+      if (quoted) {
         if (ch === '"') {
-          if (text[i + 1] === '"') { cell += '"'; i++; }
-          else inQuotes = false;
-        } else cell += ch;
+          if (text[i+1] === '"') { cell+='"'; i++; } else quoted=false;
+        } else cell+=ch;
       } else {
-        if (ch === '"') inQuotes = true;
-        else if (ch === ",") { row.push(cell); cell = ""; }
-        else if (ch === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
-        else if (ch !== "\r") cell += ch;
+        if (ch === '"') quoted=true;
+        else if (ch === ",") { row.push(cell); cell=""; }
+        else if (ch === "\n") { row.push(cell); rows.push(row); row=[]; cell=""; }
+        else if (ch !== "\r") cell+=ch;
       }
     }
-    row.push(cell);
-    if (row.some(v => v !== "")) rows.push(row);
-    return rows;
+    row.push(cell); if (row.some(v=>v!=="")) rows.push(row); return rows;
   }
-
   function rowsToRecords(rows) {
     if (rows.length < 2) throw new Error("CSVにデータ行がありません。");
-    const headers = rows[0].map(normalizeHeader);
-    const findColumn = names => headers.findIndex(h => names.includes(h));
-    const idIndex = findColumn(["id"]);
-    const englishIndex = findColumn(["english", "英語", "英文"]);
-    const japaneseIndex = findColumn(["japanese", "日本語", "和訳"]);
-    const rateIndex = findColumn(["rate", "速度"]);
-    const repeatIndex = findColumn(["repeat", "回数"]);
-    if (idIndex < 0 || englishIndex < 0) throw new Error("CSVにはID列とEnglish列が必要です.");
-
-    const result = {};
-    for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i];
-      const id = String(cols[idIndex] || "").trim();
-      const english = String(cols[englishIndex] || "").trim();
-      if (!id || !english) continue;
-      result[id] = {
-        id,
-        english,
-        japanese: japaneseIndex >= 0 ? String(cols[japaneseIndex] || "").trim() : "",
-        rate: rateIndex >= 0 ? Number(cols[rateIndex]) || 0.8 : 0.8,
-        repeat: repeatIndex >= 0 ? Math.max(1, parseInt(cols[repeatIndex], 10) || 1) : 1
-      };
+    const h=rows[0].map(norm), idx=names=>h.findIndex(x=>names.includes(x));
+    const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iJa=idx(["japanese","日本語","和訳"]),
+          iRate=idx(["rate","速度"]), iRep=idx(["repeat","回数"]);
+    if (iId<0 || iEn<0) throw new Error("ID列とEnglish列が必要です。");
+    const out={};
+    for (let i=1;i<rows.length;i++) {
+      const c=rows[i], id=String(c[iId]||"").trim(), en=String(c[iEn]||"").trim();
+      if (!id || !en) continue;
+      out[id]={id, english:en, japanese:iJa>=0?String(c[iJa]||"").trim():"",
+        rate:iRate>=0?Number(c[iRate])||1:1, repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1};
     }
-    if (!Object.keys(result).length) throw new Error("有効なデータを読み込めませんでした。");
-    return result;
+    return out;
   }
-
   function saveRecords() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     renderTable();
   }
-
   function loadRecords() {
-    try {
-      records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      const count = Object.keys(records).length;
-      if (count) setStatus($("csvStatus"), count + "件のデータが端末内に登録されています。");
-    } catch {
-      records = {};
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    try { records=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"); } catch { records={}; }
+    const n=Object.keys(records).length;
+    if (n) setStatus($("csvStatus"), n+"件のデータが端末内に登録されています。");
     renderTable();
   }
-
-  function csvEscape(value) {
-    const s = String(value ?? "");
-    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  function esc(v) {
+    const s=String(v??""); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
   }
-
   function exportCsv() {
-    const header = ["ID","English","Japanese","Rate","Repeat"];
-    const lines = [header.join(",")];
-    Object.values(records).sort((a,b) => a.id.localeCompare(b.id)).forEach(r => {
-      lines.push([r.id,r.english,r.japanese,r.rate,r.repeat].map(csvEscape).join(","));
+    const lines=["ID,English,Japanese,Rate,Repeat"];
+    Object.values(records).sort((a,b)=>a.id.localeCompare(b.id)).forEach(r=>{
+      lines.push([r.id,r.english,r.japanese,r.rate,r.repeat].map(esc).join(","));
     });
-    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "words.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setStatus($("csvStatus"), "words.csvを書き出しました。");
+    const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="words.csv"; a.click();
+    URL.revokeObjectURL(a.href); setStatus($("csvStatus"),"words.csvを書き出しました。");
   }
-
-  function showRecord(record) {
-    currentRecord = record;
-    $("idBadge").textContent = "ID：" + record.id;
-    $("english").textContent = record.english;
-    $("japanese").textContent = record.japanese;
-    $("rate").value = ["0.6","0.8","1","1.2","1.4"].includes(String(record.rate)) ? String(record.rate) : "0.8";
+  function showRecord(r) {
+    currentRecord=r; $("idBadge").textContent="ID："+r.id; $("english").textContent=r.english;
+    $("japanese").textContent=r.japanese; $("rate").value=String(r.rate);
   }
-
-  function lookupId(rawId, autoSpeak = true) {
-    const id = String(rawId || "").trim();
-    if (!id) return;
-    const record = records[id];
-    if (!record) {
-      currentRecord = null;
-      $("idBadge").textContent = "ID：" + id;
-      $("english").textContent = "このIDは登録されていません";
-      $("japanese").textContent = "";
-      setStatus($("scanStatus"), id + " が見つかりません。", false);
-      return;
-    }
-    showRecord(record);
-    setStatus($("scanStatus"), id + " を読み取りました。");
-    if (autoSpeak) speak(record.repeat);
+  function lookupId(id, auto=true) {
+    id=String(id||"").trim(); if (!id) return;
+    const r=records[id];
+    if (!r) { setStatus($("scanStatus"),id+" が見つかりません。",false); return; }
+    showRecord(r); setStatus($("scanStatus"),id+" を読み取りました。"); if (auto) speak(r.repeat);
   }
-
-  function getEnglishVoice() {
-    const voices = speechSynthesis.getVoices();
-    return voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en")) || null;
+  function voice() {
+    const vs=speechSynthesis.getVoices();
+    return vs.find(v=>v.lang==="en-US")||vs.find(v=>v.lang.startsWith("en"))||null;
   }
-
   function speakOnce(text) {
-    return new Promise(resolve => {
-      if (!("speechSynthesis" in window) || !text) {
-        setStatus($("scanStatus"), "この端末では読み上げ機能を利用できません。", false);
-        resolve(); return;
-      }
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-US";
-      u.rate = Number($("rate").value);
-      const voice = getEnglishVoice();
-      if (voice) u.voice = voice;
-      u.onend = resolve;
-      u.onerror = resolve;
-      speechSynthesis.speak(u);
+    return new Promise(resolve=>{
+      const u=new SpeechSynthesisUtterance(text); u.lang="en-US"; u.rate=Number($("rate").value);
+      const v=voice(); if (v) u.voice=v; u.onend=resolve; u.onerror=resolve; speechSynthesis.speak(u);
     });
   }
-
-  async function speak(repeats = 1) {
-    if (!currentRecord) return;
-    const token = ++speakingToken;
-    speechSynthesis.cancel();
-    for (let i = 0; i < repeats; i++) {
-      if (token !== speakingToken) break;
-      await speakOnce(currentRecord.english);
-      if (i < repeats - 1) await new Promise(r => setTimeout(r, 450));
-    }
+  async function speak(n=1) {
+    if (!currentRecord) return; const token=++speakingToken; speechSynthesis.cancel();
+    for (let i=0;i<n;i++) { if (token!==speakingToken) break; await speakOnce(currentRecord.english);
+      if (i<n-1) await new Promise(r=>setTimeout(r,450)); }
   }
-
   async function stopScanner() {
-    if (!scanner) return;
-    try { await scanner.stop(); await scanner.clear(); } catch {}
-    scanner = null;
-    $("startBtn").disabled = false;
-    $("stopBtn").disabled = true;
+    if (!scanner) return; try { await scanner.stop(); await scanner.clear(); } catch {}
+    scanner=null; $("startBtn").disabled=false; $("stopBtn").disabled=true;
   }
-
   async function startScanner() {
-    if (!Object.keys(records).length) {
-      setStatus($("scanStatus"), "先にCSVを登録してください。", false); return;
-    }
-    if (!window.isSecureContext) {
-      setStatus($("scanStatus"), "カメラはHTTPSのページから利用してください。", false); return;
-    }
-    if (typeof Html5Qrcode === "undefined") {
-      setStatus($("scanStatus"), "QR読み取り機能を読み込めませんでした。", false); return;
-    }
-    await stopScanner();
-    scanner = new Html5Qrcode("reader");
-    $("startBtn").disabled = true;
-    $("stopBtn").disabled = false;
+    if (!Object.keys(records).length) { setStatus($("scanStatus"),"先にCSVを登録してください。",false); return; }
+    await stopScanner(); scanner=new Html5Qrcode("reader"); $("startBtn").disabled=true; $("stopBtn").disabled=false;
     try {
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        async decodedText => {
-          await stopScanner();
-          lookupId(decodedText, true);
-        },
-        () => {}
-      );
-      setStatus($("scanStatus"), "カメラをQRコードに向けてください。");
-    } catch {
-      setStatus($("scanStatus"), "カメラを開始できません。Safariのカメラ許可を確認してください。", false);
-      await stopScanner();
-    }
+      await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
+        async text=>{ await stopScanner(); lookupId(text,true); },()=>{});
+      setStatus($("scanStatus"),"カメラをQRコードに向けてください。");
+    } catch { setStatus($("scanStatus"),"カメラを開始できません。",false); await stopScanner(); }
   }
-
   function clearEditor() {
-    $("editId").value = "";
-    $("editEnglish").value = "";
-    $("editJapanese").value = "";
-    $("editRate").value = "0.8";
-    $("editRepeat").value = "1";
+    ["editId","editEnglish","editJapanese"].forEach(id=>$(id).value="");
+    $("editRate").value="1"; $("editRepeat").value="1";
   }
-
   function saveEditedRecord() {
-    const id = $("editId").value.trim();
-    const english = $("editEnglish").value.trim();
-    if (!id || !english) {
-      setStatus($("editStatus"), "IDと英文は必須です。", false);
-      return;
-    }
-    records[id] = {
-      id,
-      english,
-      japanese: $("editJapanese").value.trim(),
-      rate: Number($("editRate").value) || 0.8,
-      repeat: Math.max(1, parseInt($("editRepeat").value, 10) || 1)
-    };
-    saveRecords();
-    setStatus($("editStatus"), id + " を保存しました。");
+    const id=$("editId").value.trim(), en=$("editEnglish").value.trim();
+    if (!id||!en) { setStatus($("editStatus"),"IDと英文は必須です。",false); return; }
+    records[id]={id,english:en,japanese:$("editJapanese").value.trim(),
+      rate:Number($("editRate").value)||1,repeat:Math.max(1,parseInt($("editRepeat").value,10)||1)};
+    saveRecords(); setStatus($("editStatus"),id+" を保存しました。");
   }
-
   function editRecord(id) {
-    const r = records[id];
-    if (!r) return;
-    $("editId").value = r.id;
-    $("editEnglish").value = r.english;
-    $("editJapanese").value = r.japanese;
-    $("editRate").value = String(r.rate);
-    $("editRepeat").value = String(r.repeat);
-    document.querySelector('[data-tab="dataTab"]').click();
-    window.scrollTo({top:0, behavior:"smooth"});
+    const r=records[id]; $("editId").value=r.id; $("editEnglish").value=r.english;
+    $("editJapanese").value=r.japanese; $("editRate").value=String(r.rate); $("editRepeat").value=String(r.repeat);
   }
-
   function deleteRecord(id) {
-    if (!confirm(id + " を削除しますか？")) return;
-    delete records[id];
-    saveRecords();
-    setStatus($("editStatus"), id + " を削除しました。");
+    if (!confirm(id+" を削除しますか？")) return;
+    delete records[id]; selectedIds.delete(id); saveRecords();
   }
-
+  function filteredRecords(filterId) {
+    const q=$(filterId).value.trim().toLowerCase();
+    return Object.values(records).sort((a,b)=>a.id.localeCompare(b.id))
+      .filter(r=>!q||[r.id,r.english,r.japanese].some(v=>String(v).toLowerCase().includes(q)));
+  }
   function renderTable() {
-    const body = $("recordBody");
-    body.innerHTML = "";
-    const filter = $("filterText") ? $("filterText").value.trim().toLowerCase() : "";
-    Object.values(records)
-      .sort((a,b) => a.id.localeCompare(b.id))
-      .filter(r => !filter || [r.id,r.english,r.japanese].some(v => String(v).toLowerCase().includes(filter)))
-      .forEach(r => {
-        const tr = document.createElement("tr");
-        [r.id,r.english,r.japanese,r.rate,r.repeat].forEach(value => {
-          const td = document.createElement("td");
-          td.textContent = value;
-          tr.appendChild(td);
-        });
-        const action = document.createElement("td");
-        const editBtn = document.createElement("button");
-        editBtn.textContent = "編集";
-        editBtn.className = "smallBtn secondary";
-        editBtn.addEventListener("click", () => editRecord(r.id));
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "削除";
-        delBtn.className = "smallBtn danger";
-        delBtn.style.marginLeft = "6px";
-        delBtn.addEventListener("click", () => deleteRecord(r.id));
-        action.append(editBtn, delBtn);
-        tr.appendChild(action);
-        body.appendChild(tr);
-      });
-  }
-
-  function makeQr() {
-    const id = $("qrId").value.trim();
-    const box = $("qrcode");
-    box.innerHTML = "";
-    if (!id) {
-      setStatus($("qrStatus"), "IDを入力してください。", false);
-      return;
-    }
-    if (typeof QRCode === "undefined") {
-      setStatus($("qrStatus"), "QRコード作成機能を読み込めませんでした。", false);
-      return;
-    }
-    new QRCode(box, {
-      text: id,
-      width: 220,
-      height: 220,
-      correctLevel: QRCode.CorrectLevel.M
-    });
-    setStatus($("qrStatus"), id + " のQRコードを作成しました。");
-  }
-
-  document.querySelectorAll(".tabBtn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".tabBtn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".tabPanel").forEach(p => p.classList.remove("active"));
-      btn.classList.add("active");
-      $(btn.dataset.tab).classList.add("active");
-    });
-  });
-
-  $("importBtn").addEventListener("click", async () => {
-    const file = $("csvFile").files[0];
-    if (!file) { setStatus($("csvStatus"), "words.csvを選択してください。", false); return; }
-    try {
-      records = rowsToRecords(parseCsv(await file.text()));
-      saveRecords();
-      setStatus($("csvStatus"), Object.keys(records).length + "件を端末内に登録しました。");
-    } catch (e) {
-      setStatus($("csvStatus"), e.message || "CSVを読み込めませんでした。", false);
-    }
-  });
-
-  $("exportBtn").addEventListener("click", exportCsv);
-  $("clearBtn").addEventListener("click", () => {
-    if (!confirm("端末内の登録データをすべて削除しますか？")) return;
-    records = {}; currentRecord = null;
-    localStorage.removeItem(STORAGE_KEY);
-    $("csvFile").value = "";
-    $("idBadge").textContent = "ID：未選択";
-    $("english").textContent = "CSVを登録してQRコードを読み取ってください";
-    $("japanese").textContent = "";
-    renderTable();
-    setStatus($("csvStatus"), "端末内の登録データを削除しました。");
-  });
-
-  $("startBtn").addEventListener("click", startScanner);
-  $("stopBtn").addEventListener("click", stopScanner);
-  $("speakBtn").addEventListener("click", () => speak(1));
-  $("repeatBtn").addEventListener("click", () => speak(currentRecord ? currentRecord.repeat : 1));
-  $("manualBtn").addEventListener("click", () => lookupId($("manualId").value, false));
-  $("saveRecordBtn").addEventListener("click", saveEditedRecord);
-  $("newRecordBtn").addEventListener("click", clearEditor);
-  $("filterText").addEventListener("input", renderTable);
-  $("makeQrBtn").addEventListener("click", makeQr);
-
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", async () => {
-      try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const reg of regs) await reg.update();
-        await navigator.serviceWorker.register("./sw.js");
-      } catch {}
+    const body=$("recordBody"); body.innerHTML="";
+    filteredRecords("filterText").forEach(r=>{
+      const tr=document.createElement("tr");
+      const sel=document.createElement("td"), cb=document.createElement("input");
+      cb.type="checkbox"; cb.className="checkbox"; cb.checked=selectedIds.has(r.id);
+      cb.addEventListener("change",()=>{ cb.checked?selectedIds.add(r.id):selectedIds.delete(r.id); });
+      sel.appendChild(cb); tr.appendChild(sel);
+      [r.id,r.english,r.japanese,r.rate,r.repeat].forEach(v=>{ const td=document.createElement("td"); td.textContent=v; tr.appendChild(td); });
+      const td=document.createElement("td");
+      const e=document.createElement("button"); e.textContent="編集"; e.className="smallBtn secondary"; e.addEventListener("click",()=>editRecord(r.id));
+      const d=document.createElement("button"); d.textContent="削除"; d.className="smallBtn danger"; d.style.marginLeft="6px"; d.addEventListener("click",()=>deleteRecord(r.id));
+      td.append(e,d); tr.appendChild(td); body.appendChild(tr);
     });
   }
+  function renderQrCards(list) {
+    const sheet=$("qrSheet"); sheet.innerHTML="";
+    list.forEach(r=>{
+      const card=document.createElement("div"); card.className="qrCard";
+      const qr=document.createElement("div"); card.appendChild(qr);
+      new QRCode(qr,{text:r.id,width:150,height:150,correctLevel:QRCode.CorrectLevel.M});
+      const id=document.createElement("div"); id.className="qrId"; id.textContent=r.id;
+      const en=document.createElement("div"); en.className="qrEnglish"; en.textContent=r.english;
+      const ja=document.createElement("div"); ja.className="qrJapanese"; ja.textContent=r.japanese;
+      card.append(id,en,ja); sheet.appendChild(card);
+    });
+    setStatus($("batchStatus"),list.length+"件のQRコードを作成しました。");
+  }
 
+  document.querySelectorAll(".tabBtn").forEach(btn=>btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tabBtn").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tabPanel").forEach(p=>p.classList.remove("active"));
+    btn.classList.add("active"); $(btn.dataset.tab).classList.add("active");
+  }));
+  $("importBtn").addEventListener("click",async()=>{
+    const f=$("csvFile").files[0]; if(!f){setStatus($("csvStatus"),"CSVを選択してください。",false);return;}
+    try{records=rowsToRecords(parseCsv(await f.text()));selectedIds.clear();saveRecords();
+      setStatus($("csvStatus"),Object.keys(records).length+"件を登録しました。");}
+    catch(e){setStatus($("csvStatus"),e.message,false);}
+  });
+  $("exportBtn").addEventListener("click",exportCsv);
+  $("clearBtn").addEventListener("click",()=>{if(confirm("すべて削除しますか？")){records={};selectedIds.clear();saveRecords();}});
+  $("startBtn").addEventListener("click",startScanner); $("stopBtn").addEventListener("click",stopScanner);
+  $("speakBtn").addEventListener("click",()=>speak(1)); $("repeatBtn").addEventListener("click",()=>speak(currentRecord?currentRecord.repeat:1));
+  $("manualBtn").addEventListener("click",()=>lookupId($("manualId").value,false));
+  $("saveRecordBtn").addEventListener("click",saveEditedRecord); $("newRecordBtn").addEventListener("click",clearEditor);
+  $("filterText").addEventListener("input",renderTable);
+
+  $("selectFirstBtn").addEventListener("click",()=>{
+    selectedIds.clear(); filteredRecords("batchFilter").slice(0,Number($("batchSize").value)).forEach(r=>selectedIds.add(r.id));
+    renderTable(); setStatus($("batchStatus"),selectedIds.size+"件を選択しました。");
+  });
+  $("selectAllBtn").addEventListener("click",()=>{
+    selectedIds.clear(); filteredRecords("batchFilter").forEach(r=>selectedIds.add(r.id));
+    renderTable(); setStatus($("batchStatus"),selectedIds.size+"件を選択しました。");
+  });
+  $("clearSelectionBtn").addEventListener("click",()=>{selectedIds.clear();renderTable();setStatus($("batchStatus"),"選択を解除しました。");});
+  $("makeBatchBtn").addEventListener("click",()=>{
+    const list=Object.values(records).filter(r=>selectedIds.has(r.id)).sort((a,b)=>a.id.localeCompare(b.id));
+    if(!list.length){setStatus($("batchStatus"),"先に英文データ一覧で選択してください。",false);return;}
+    renderQrCards(list);
+  });
+  $("makePageBtn").addEventListener("click",()=>{
+    const all=filteredRecords("batchFilter"), start=Math.max(1,Number($("batchStart").value)||1)-1,
+      size=Number($("batchSize").value)||10, list=all.slice(start,start+size);
+    if(!list.length){setStatus($("batchStatus"),"対象データがありません。",false);return;}
+    renderQrCards(list);
+  });
+  $("printBtn").addEventListener("click",()=>window.print());
+
+  if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
   loadRecords();
 </script>
 </body>
