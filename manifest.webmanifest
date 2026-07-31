@@ -1,5 +1,5 @@
 {
-  "name": "English QR Reader",
+  "name": "English QR Reader IndexedDB",
   "short_name": "QR English",
   "start_url": "./",
   "display": "standalone",

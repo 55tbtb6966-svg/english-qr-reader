@@ -1,22 +1,30 @@
-# English QR Reader v3
+# English QR Reader IndexedDB版
 
-## 主な機能
-- CSVの読み込み・書き出し
-- 英文データの追加・上書き・削除
-- 読み上げ速度 0.6 / 0.8 / 1.0 / 1.2 / 1.4
-- QR読み取り
-- 複数IDを選択して一括QRコード作成
-- 6 / 8 / 10 / 12件単位でQR作成
-- QRカードにID・英文・日本語を表示
-- 印刷またはPDF保存
+## 保存方式
+CSVは配布・バックアップ用です。
+読み込んだデータは各iPhoneのSafari内のIndexedDBへ1件ずつ保存されます。
+
+## 読み方
+Mode列に次のいずれかを指定します。
+
+- english：英語のみ
+- japanese：日本語のみ
+- both：英語を読んだ後に日本語
+
+## CSV列
+ID,English,Japanese,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version
+
+例：
+E000001,This is an apple.,これはリンゴです。,both,1.0,1.0,1,0.5,2026-08-01
+
+## 更新方法
+- 全置換：古いIndexedDBデータを消してCSV内容に統一
+- 追加・上書き：新規IDを追加し、同じIDだけ更新
+
+複数人への正式配布では全置換がおすすめです。
 
 ## GitHubへアップロード
-`github_upload` 内の4ファイルをリポジトリ最上位へアップロードしてください。
+github_uploadフォルダ内の4ファイルをリポジトリ最上位へアップロードします。
 
-## QRコード一括作成
-1. 「英文データ編集」で対象行にチェック
-2. 「一括QR作成」を開く
-3. 「選択したQRを作る」
-4. 「印刷／PDF保存」
-
-「指定位置から10件作る」を使うと、並び順の指定位置から10件ずつ作成できます。
+## iCloud Drive
+icloud_drive内のwords.csvを配布・バックアップ用として保存します。
