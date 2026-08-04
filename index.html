@@ -211,6 +211,15 @@
         </label>
         <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英文・日本語"></label>
       </div>
+      <div class="grid2" style="margin-top:10px;">
+        <label><span>QRカードに表示する読み</span>
+          <select id="qrDisplayMode">
+            <option value="both" selected>英語＋ひらがな</option>
+            <option value="english">英語のみ</option>
+            <option value="hiragana">ひらがなのみ</option>
+          </select>
+        </label>
+      </div>
       <div class="row">
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
         <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
@@ -377,7 +386,7 @@ function speakText(text,lang,rate){
 }
 async function playRecord(modeOverride=null){
   if(!currentRecord)return;
-  const token=++speakingToken;speechSynthesis.cancel();
+  const token=++speakingToken;speechSynthesis.cancel();await new Promise(r=>setTimeout(r,180));
   const mode=modeOverride||currentRecord.mode;
   for(let i=0;i<currentRecord.repeat;i++){
     if(token!==speakingToken)break;
@@ -403,11 +412,17 @@ async function lookup(id,auto=true){
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
 async function startScanner(){
+  try{
+    const warm=new SpeechSynthesisUtterance(" ");
+    warm.volume=0;
+    warm.lang="ja-JP";
+    speechSynthesis.speak(warm);
+  }catch{}
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
   try{
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
-      async text=>{await stopScanner();await lookup(text,true);},()=>{});
+      async text=>{await stopScanner();await new Promise(r=>setTimeout(r,500));await lookup(text,true);},()=>{});
     setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
@@ -456,16 +471,35 @@ async function renderPage(){
 }
 function renderQr(records){
   const sheet=$("qrSheet");sheet.innerHTML="";
+  const displayMode=$("qrDisplayMode")?.value||"both";
   records.forEach(r=>{
     const card=document.createElement("div");card.className="qrCard";
     const q=document.createElement("div");card.appendChild(q);
     new QRCode(q,{text:r.id,width:150,height:150,correctLevel:QRCode.CorrectLevel.M});
-    for(const [cls,text] of [["qrId",r.id],["qrEnglish",r.english],["qrJapanese","漢字："+r.japanese],["qrJapanese","読み："+(r.japaneseRead||r.japanese)]]){
-      const d=document.createElement("div");d.className=cls;d.textContent=text;card.appendChild(d);
+
+    const id=document.createElement("div");
+    id.className="qrId";
+    id.textContent=r.id;
+    card.appendChild(id);
+
+    if(displayMode==="both"||displayMode==="english"){
+      const en=document.createElement("div");
+      en.className="qrEnglish";
+      en.textContent=r.english;
+      card.appendChild(en);
     }
+
+    if(displayMode==="both"||displayMode==="hiragana"){
+      const ja=document.createElement("div");
+      ja.className="qrJapanese";
+      ja.textContent=r.japaneseRead||r.japanese;
+      card.appendChild(ja);
+    }
+
     sheet.appendChild(card);
   });
-  setStatus($("qrStatus"),records.length+"件作成しました。");
+  const label=displayMode==="both"?"英語＋ひらがな":displayMode==="english"?"英語のみ":"ひらがなのみ";
+  setStatus($("qrStatus"),records.length+"件作成しました（"+label+"）。");
 }
 
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
