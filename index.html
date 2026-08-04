@@ -134,6 +134,60 @@
       .qrId { font-size:0.98rem !important; }
     }
 
+  
+    details.advancedSettings {
+      margin-top:12px;
+      border:1px dashed #b9c2d0;
+      border-radius:12px;
+      background:#fbfcfe;
+      overflow:hidden;
+    }
+    details.advancedSettings > summary {
+      padding:11px 14px;
+      cursor:pointer;
+      font-weight:700;
+      color:#4a5668;
+      user-select:none;
+    }
+    .advancedSettingsBody {
+      padding:4px 14px 14px;
+    }
+    .sizeSettingGrid {
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px 14px;
+    }
+    .sizeSettingGrid label span {
+      display:block;
+      margin-bottom:5px;
+      font-size:0.88rem;
+      color:#556176;
+    }
+    .sizeSettingGrid input[type="number"] {
+      width:100%;
+    }
+    @media (max-width:600px) {
+      .sizeSettingGrid { grid-template-columns:1fr; }
+    }
+
+  
+    :root {
+      --qr-card-size:132px;
+      --qr-id-size:1.05rem;
+      --qr-en-size:1.18rem;
+      --qr-ipa-size:1.05rem;
+      --qr-ja-size:1.12rem;
+    }
+    .qrCard canvas, .qrCard img {
+      width:var(--qr-card-size) !important;
+      height:var(--qr-card-size) !important;
+      max-width:var(--qr-card-size) !important;
+    }
+    .qrId { font-size:var(--qr-id-size) !important; }
+    .qrEnglish { font-size:var(--qr-en-size) !important; }
+    .qrIpa { font-size:var(--qr-ipa-size) !important; }
+    .qrJapanese { font-size:var(--qr-ja-size) !important; }
+
   </style>
 </head>
 <body>
@@ -301,6 +355,23 @@
           </div>
         </div></div>
       </div>
+      <details class="advancedSettings">
+        <summary>詳細設定（QR・文字サイズ）</summary>
+        <div class="advancedSettingsBody">
+          <div class="sizeSettingGrid">
+            <label><span>QRコードサイズ（px）</span><input id="settingQrSize" type="number" min="80" max="220" step="2" value="132"></label>
+            <label><span>ID文字サイズ（rem）</span><input id="settingIdSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
+            <label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" type="number" min="0.7" max="2.5" step="0.05" value="1.18"></label>
+            <label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
+            <label><span>ひらがな文字サイズ（rem）</span><input id="settingJapaneseSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
+            <button id="resetSizeSettingsBtn" type="button" class="secondary">初期値に戻す</button>
+          </div>
+          <p class="hint">設定はこのiPhoneのSafari内に保存されます。</p>
+        </div>
+      </details>
       <div class="row">
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
         <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
@@ -559,13 +630,82 @@ async function renderPage(){
   $("pageStatus").textContent=all.length?`${start+1}～${Math.min(start+size,all.length)} / ${all.length}件`:"0件";
   $("prevBtn").disabled=currentPage===0;$("nextBtn").disabled=start+size>=all.length;
 }
+
+const DEFAULT_SIZE_SETTINGS={
+  qrSize:132,
+  idSize:1.05,
+  englishSize:1.18,
+  ipaSize:1.05,
+  japaneseSize:1.12
+};
+
+function getSizeSettings(){
+  try{
+    const saved=JSON.parse(localStorage.getItem("qrCardSizeSettings")||"{}");
+    return {...DEFAULT_SIZE_SETTINGS,...saved};
+  }catch{
+    return {...DEFAULT_SIZE_SETTINGS};
+  }
+}
+
+function loadSizeSettingsControls(){
+  const s=getSizeSettings();
+  $("settingQrSize").value=s.qrSize;
+  $("settingIdSize").value=s.idSize;
+  $("settingEnglishSize").value=s.englishSize;
+  $("settingIpaSize").value=s.ipaSize;
+  $("settingJapaneseSize").value=s.japaneseSize;
+  applySizeSettingsToCss(s);
+}
+
+function readSizeSettingsControls(){
+  const clamp=(v,min,max,def)=>{
+    const n=Number(v);
+    return Number.isFinite(n)?Math.min(max,Math.max(min,n)):def;
+  };
+  return {
+    qrSize:Math.round(clamp($("settingQrSize").value,80,220,132)),
+    idSize:clamp($("settingIdSize").value,0.6,2,1.05),
+    englishSize:clamp($("settingEnglishSize").value,0.7,2.5,1.18),
+    ipaSize:clamp($("settingIpaSize").value,0.6,2,1.05),
+    japaneseSize:clamp($("settingJapaneseSize").value,0.7,2.5,1.12)
+  };
+}
+
+function applySizeSettingsToCss(s){
+  document.documentElement.style.setProperty("--qr-card-size",s.qrSize+"px");
+  document.documentElement.style.setProperty("--qr-id-size",s.idSize+"rem");
+  document.documentElement.style.setProperty("--qr-en-size",s.englishSize+"rem");
+  document.documentElement.style.setProperty("--qr-ipa-size",s.ipaSize+"rem");
+  document.documentElement.style.setProperty("--qr-ja-size",s.japaneseSize+"rem");
+}
+
+function saveAndApplySizeSettings(){
+  const s=readSizeSettingsControls();
+  localStorage.setItem("qrCardSizeSettings",JSON.stringify(s));
+  applySizeSettingsToCss(s);
+  if(qrPageSource.length){
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
+  setStatus($("qrStatus"),"QRと文字のサイズ設定を保存しました。");
+}
+
+function resetSizeSettings(){
+  localStorage.removeItem("qrCardSizeSettings");
+  loadSizeSettingsControls();
+  if(qrPageSource.length){
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
+  setStatus($("qrStatus"),"サイズ設定を初期値に戻しました。");
+}
+
 function renderQr(records){
   const sheet=$("qrSheet");sheet.innerHTML="";
   const displayMode=$("qrDisplayMode")?.value||"both";
   records.forEach(r=>{
     const card=document.createElement("div");card.className="qrCard";
     const q=document.createElement("div");card.appendChild(q);
-    new QRCode(q,{text:r.id,width:132,height:132,correctLevel:QRCode.CorrectLevel.M});
+    const qrSize=getSizeSettings().qrSize;new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
 
     if($("qrShowId")?.checked){
       const id=document.createElement("div");
@@ -656,9 +796,12 @@ $("nextQrPageBtn").addEventListener("click",()=>{
     renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
   }
 });
+$("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
+$("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
+  loadSizeSettingsControls();
   loadJapaneseVoices();speechSynthesis.onvoiceschanged=loadJapaneseVoices;
   await openDb();await refreshSummary();await renderPage();
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
