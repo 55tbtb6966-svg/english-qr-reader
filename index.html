@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.3 / 更新 2026-08-04 23:08</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.4 / 更新 2026-08-04 23:11</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -284,24 +284,28 @@
       </div>
       <div class="qrOptionBox" style="margin-top:12px;">
         <div class="qrOptionTitle">読み上げ設定</div>
-        <div class="qrOptionRow">
-          <label class="qrCheckLabel">
-            <input id="settingSoftWordStart" type="checkbox" checked>
-            <span>短い英語の開始待機</span>
-          </label>
-        </div>
-        <p class="hint" style="margin:6px 0 0;">
-          短い単語や短い表現を読む前に少し待ち、最初の音が欠けたり強く聞こえたりするのを抑えます。
+        <p class="hint" style="margin:0;">
+          短い単語や短い表現では、最初の音が欠けたり強く聞こえたりすることがあります。必要に応じて詳細設定から調整できます。
         </p>
 
         <details class="advancedSettings" style="margin-top:10px;">
-          <summary>詳細設定（読む人を選ぶ）</summary>
+          <summary>詳細設定（開始待機・読む人）</summary>
           <div class="advancedSettingsBody">
+            <div class="qrOptionRow" style="margin-bottom:12px;">
+              <label class="qrCheckLabel">
+                <input id="settingSoftWordStart" type="checkbox" checked>
+                <span>短い英語の開始待機</span>
+              </label>
+            </div>
+            <p class="hint" style="margin:0 0 12px;">
+              ONにすると、短い英語を読む前に少し待ち、先頭音の欠けや強い立ち上がりを抑えます。
+            </p>
+
             <div class="sizeSettingGrid">
               <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
               <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
             </div>
-            <p class="hint">選択した音声はこのiPhoneのSafariに保存されます。</p>
+            <p class="hint">選択した設定と音声はこのiPhoneのSafariに保存されます。</p>
           </div>
         </details>
       </div>
@@ -442,8 +446,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.3";
-const APP_UPDATED="2026-08-04 23:08";
+const APP_VERSION="v2.0.4";
+const APP_UPDATED="2026-08-04 23:11";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
