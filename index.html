@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.2 / 更新 2026-08-04 22:58</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.3 / 更新 2026-08-04 23:08</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -282,11 +282,29 @@
         </label>
         
       </div>
-      <div class="grid2" style="margin-top:10px;">
-        <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
-        <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+      <div class="qrOptionBox" style="margin-top:12px;">
+        <div class="qrOptionTitle">読み上げ設定</div>
+        <div class="qrOptionRow">
+          <label class="qrCheckLabel">
+            <input id="settingSoftWordStart" type="checkbox" checked>
+            <span>短い英語の開始待機</span>
+          </label>
+        </div>
+        <p class="hint" style="margin:6px 0 0;">
+          短い単語や短い表現を読む前に少し待ち、最初の音が欠けたり強く聞こえたりするのを抑えます。
+        </p>
+
+        <details class="advancedSettings" style="margin-top:10px;">
+          <summary>詳細設定（読む人を選ぶ）</summary>
+          <div class="advancedSettingsBody">
+            <div class="sizeSettingGrid">
+              <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
+              <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+            </div>
+            <p class="hint">選択した音声はこのiPhoneのSafariに保存されます。</p>
+          </div>
+        </details>
       </div>
-      <p class="hint">選択した音声はこのiPhoneのSafariに保存されます。</p>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
     </div>
   </section>
@@ -397,10 +415,6 @@
             <label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" type="number" min="0.7" max="2.5" step="0.05" value="1.18"></label>
             <label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
             <label><span>ひらがな文字サイズ（rem）</span><input id="settingJapaneseSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input id="settingSoftWordStart" type="checkbox" checked style="width:auto;">
-              <span style="margin:0;">短い英語の開始待機</span>
-            </label>
           </div>
           <div class="row" style="margin-top:10px;">
             <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
@@ -428,8 +442,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.2";
-const APP_UPDATED="2026-08-04 22:58";
+const APP_VERSION="v2.0.3";
+const APP_UPDATED="2026-08-04 23:08";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
