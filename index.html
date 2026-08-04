@@ -225,6 +225,7 @@
           </select>
         </label>
         <label style="display:flex;align-items:center;gap:8px;"><input id="qrShowIpa" type="checkbox" checked style="width:auto;"><span>発音記号を表示</span></label>
+        <label style="display:flex;align-items:center;gap:8px;"><input id="qrShowId" type="checkbox" checked style="width:auto;"><span>IDを表示</span></label>
       </div>
       <div class="row">
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
@@ -492,10 +493,12 @@ function renderQr(records){
     const q=document.createElement("div");card.appendChild(q);
     new QRCode(q,{text:r.id,width:150,height:150,correctLevel:QRCode.CorrectLevel.M});
 
-    const id=document.createElement("div");
-    id.className="qrId";
-    id.textContent=r.id;
-    card.appendChild(id);
+    if($("qrShowId")?.checked){
+      const id=document.createElement("div");
+      id.className="qrId";
+      id.textContent=r.id;
+      card.appendChild(id);
+    }
 
     if(displayMode==="both"||displayMode==="english"){
       const en=document.createElement("div");
@@ -520,7 +523,7 @@ function renderQr(records){
     sheet.appendChild(card);
   });
   const label=displayMode==="both"?"英語＋ひらがな":displayMode==="english"?"英語のみ":"ひらがなのみ";
-  setStatus($("qrStatus"),records.length+"件作成しました（"+label+"）。");
+  const idLabel=$("qrShowId")?.checked?"IDあり":"IDなし";setStatus($("qrStatus"),records.length+"件作成しました（"+label+"・"+idLabel+"）。");
   if(qrPageSource.length){
     const start=qrPageStart+1;
     const end=Math.min(qrPageStart+records.length,qrPageSource.length);
