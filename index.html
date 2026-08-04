@@ -188,9 +188,37 @@
     .qrIpa { font-size:var(--qr-ipa-size) !important; }
     .qrJapanese { font-size:var(--qr-ja-size) !important; }
 
+  
+    .appVersionBadge {
+      position:fixed;
+      top:8px;
+      right:10px;
+      z-index:999;
+      font-size:0.68rem;
+      line-height:1.2;
+      color:#7b8492;
+      background:rgba(255,255,255,0.82);
+      border:1px solid rgba(180,188,200,0.55);
+      border-radius:999px;
+      padding:4px 7px;
+      backdrop-filter:blur(4px);
+      -webkit-backdrop-filter:blur(4px);
+      user-select:none;
+      pointer-events:none;
+      max-width:46vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    @media print {
+      .appVersionBadge { display:none !important; }
+    }
+
   </style>
 </head>
 <body>
+  <div id="appVersionBadge" class="appVersionBadge">App v1.9.0</div>
+
 <main>
   <h1>English QR Reader</h1>
 
@@ -395,6 +423,14 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
+const APP_VERSION="v1.9.0";
+function updateVersionBadge(csvVersion=""){
+  const el=document.getElementById("appVersionBadge");
+  if(!el)return;
+  el.textContent=csvVersion?`App ${APP_VERSION} / CSV ${csvVersion}`:`App ${APP_VERSION}`;
+  el.title=el.textContent;
+}
+
 const DB_NAME = "EnglishQrReaderDB";
 const DB_VERSION = 1;
 const STORE = "records";
@@ -604,7 +640,7 @@ async function lookup(id,auto=true){
   const r=await getRecord(id);
   if(!r){$("japaneseReadDisplay").textContent="";$("ipaDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
-  $("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;
+  $("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
   setStatus($("scanStatus"),id+" を読み取りました。");
   if(auto)playRecord();
@@ -836,9 +872,15 @@ $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
+  updateVersionBadge("");
   loadSizeSettingsControls();
   loadJapaneseVoices();speechSynthesis.onvoiceschanged=loadJapaneseVoices;
   await openDb();await refreshSummary();await renderPage();
+  try{
+    const allForVersion=await getAllRecords();
+    const csvVersion=allForVersion.find(r=>r.version)?.version||"";
+    updateVersionBadge(csvVersion);
+  }catch{}
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 })();
 </script>
