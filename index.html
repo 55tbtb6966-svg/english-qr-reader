@@ -387,40 +387,21 @@ function loadJapaneseVoices(){
 function speakText(text,lang,rate){
   return new Promise(resolve=>{
     if(!text){resolve();return;}
-    const lead=new SpeechSynthesisUtterance(" ");
-    lead.lang=lang;
-    lead.volume=0;
-    lead.rate=1;
-    lead.onend=()=>{
-      setTimeout(()=>{
-        const u=new SpeechSynthesisUtterance(text);
-        u.lang=lang;
-        u.rate=rate;
-        const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
-        if(v)u.voice=v;
-        u.onend=resolve;
-        u.onerror=resolve;
-        speechSynthesis.speak(u);
-      },250);
-    };
-    lead.onerror=()=>{
-      setTimeout(()=>{
-        const u=new SpeechSynthesisUtterance(text);
-        u.lang=lang;
-        u.rate=rate;
-        const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
-        if(v)u.voice=v;
-        u.onend=resolve;
-        u.onerror=resolve;
-        speechSynthesis.speak(u);
-      },250);
-    };
-    speechSynthesis.speak(lead);
+    setTimeout(()=>{
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang=lang;
+      u.rate=rate;
+      const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
+      if(v)u.voice=v;
+      u.onend=resolve;
+      u.onerror=resolve;
+      speechSynthesis.speak(u);
+    },350);
   });
 }
 async function playRecord(modeOverride=null){
   if(!currentRecord)return;
-  const token=++speakingToken;speechSynthesis.cancel();await new Promise(r=>setTimeout(r,350));
+  const token=++speakingToken;speechSynthesis.cancel();await new Promise(r=>setTimeout(r,300));
   const mode=modeOverride||currentRecord.mode;
   for(let i=0;i<currentRecord.repeat;i++){
     if(token!==speakingToken)break;
@@ -446,17 +427,11 @@ async function lookup(id,auto=true){
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
 async function startScanner(){
-  try{
-    const warm=new SpeechSynthesisUtterance(" ");
-    warm.volume=0;
-    warm.lang="ja-JP";
-    speechSynthesis.speak(warm);
-  }catch{}
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
   try{
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
-      async text=>{await stopScanner();await new Promise(r=>setTimeout(r,1000));await lookup(text,true);},()=>{});
+      async text=>{await stopScanner();await new Promise(r=>setTimeout(r,900));await lookup(text,true);},()=>{});
     setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
