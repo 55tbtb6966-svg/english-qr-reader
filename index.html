@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.1 / 更新 2026-08-04 21:03</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.2 / 更新 2026-08-04 22:58</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -282,6 +282,11 @@
         </label>
         
       </div>
+      <div class="grid2" style="margin-top:10px;">
+        <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
+        <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+      </div>
+      <p class="hint">選択した音声はこのiPhoneのSafariに保存されます。</p>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
     </div>
   </section>
@@ -396,8 +401,6 @@
               <input id="settingSoftWordStart" type="checkbox" checked style="width:auto;">
               <span style="margin:0;">短い英語の開始待機</span>
             </label>
-            <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
-            <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
           </div>
           <div class="row" style="margin-top:10px;">
             <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
@@ -425,8 +428,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.1";
-const APP_UPDATED="2026-08-04 21:03";
+const APP_VERSION="v2.0.2";
+const APP_UPDATED="2026-08-04 22:58";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
