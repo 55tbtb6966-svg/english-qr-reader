@@ -280,6 +280,7 @@
             <option value="1.4">1.4倍</option>
           </select>
         </label>
+        <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
         <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
       </div>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
@@ -557,17 +558,43 @@ async function refreshSummary(){
     $("storageUsage").textContent=used+" MB / 約"+quota+" MB";
   }else $("storageUsage").textContent="取得不可";
 }
-function englishVoice(){const v=speechSynthesis.getVoices();return v.find(x=>x.lang==="en-US")||v.find(x=>x.lang.startsWith("en"))||null;}
+function englishVoice(){
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="en-US"||v.lang.startsWith("en"));
+  const selected=$("englishVoiceSelect")?.value||localStorage.getItem("selectedEnglishVoice")||"";
+  return voices.find(v=>v.name===selected)||
+         voices.find(v=>v.lang==="en-US")||
+         voices[0]||
+         null;
+}
 function japaneseVoice(){
   const voices=speechSynthesis.getVoices().filter(x=>x.lang==="ja-JP"||x.lang.startsWith("ja"));
-  const selected=$("japaneseVoiceSelect")?.value;
+  const selected=$("japaneseVoiceSelect")?.value||localStorage.getItem("selectedJapaneseVoice")||"";
   return voices.find(v=>v.name===selected)||voices[0]||null;
 }
+function loadEnglishVoices(){
+  const select=$("englishVoiceSelect");
+  if(!select)return;
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="en-US"||v.lang.startsWith("en"));
+  const saved=localStorage.getItem("selectedEnglishVoice")||select.value;
+  select.innerHTML="";
+  voices.forEach(v=>{
+    const o=document.createElement("option");
+    o.value=v.name;
+    o.textContent=v.name+" ("+v.lang+")";
+    select.appendChild(o);
+  });
+  if(saved&&voices.some(v=>v.name===saved))select.value=saved;
+  else{
+    const us=voices.find(v=>v.lang==="en-US");
+    if(us)select.value=us.name;
+  }
+}
+
 function loadJapaneseVoices(){
   const select=$("japaneseVoiceSelect");
   if(!select)return;
   const voices=speechSynthesis.getVoices().filter(v=>v.lang==="ja-JP"||v.lang.startsWith("ja"));
-  const old=select.value;
+  const old=localStorage.getItem("selectedJapaneseVoice")||select.value;
   select.innerHTML="";
   voices.forEach(v=>{
     const o=document.createElement("option");
@@ -832,6 +859,12 @@ $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
 $("startBtn").addEventListener("click",startScanner);$("stopBtn").addEventListener("click",stopScanner);
 $("manualLookupBtn").addEventListener("click",()=>lookup($("manualId").value,false));
+$("englishVoiceSelect").addEventListener("change",()=>{
+  localStorage.setItem("selectedEnglishVoice",$("englishVoiceSelect").value);
+});
+$("japaneseVoiceSelect").addEventListener("change",()=>{
+  localStorage.setItem("selectedJapaneseVoice",$("japaneseVoiceSelect").value);
+});
 $("showIpa").addEventListener("change",()=>{$("ipaDisplay").textContent=currentRecord&&$("showIpa").checked&&currentRecord.ipa?currentRecord.ipa:"";});
 $("playConfiguredBtn").addEventListener("click",()=>playRecord());
 $("playEnglishBtn").addEventListener("click",()=>playRecord("english"));
@@ -874,7 +907,7 @@ $("printBtn").addEventListener("click",()=>window.print());
 (async()=>{
   updateVersionBadge("");
   loadSizeSettingsControls();
-  loadJapaneseVoices();speechSynthesis.onvoiceschanged=loadJapaneseVoices;
+  loadEnglishVoices();loadJapaneseVoices();speechSynthesis.onvoiceschanged=()=>{loadEnglishVoices();loadJapaneseVoices();};
   await openDb();await refreshSummary();await renderPage();
   try{
     const allForVersion=await getAllRecords();
