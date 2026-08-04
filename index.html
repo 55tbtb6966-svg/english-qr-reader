@@ -207,7 +207,7 @@
       <div class="grid3">
         <label><span>開始位置</span><input id="qrStart" type="number" min="1" value="1"></label>
         <label><span>件数</span>
-          <select id="qrCount"><option>6</option><option>8</option><option selected>10</option><option>12</option></select>
+          <select id="qrCount"><option>6</option><option>8</option><option selected>10</option><option>12</option><option>20</option><option>30</option><option>50</option></select>
         </label>
         <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英文・日本語"></label>
       </div>
@@ -225,6 +225,11 @@
         <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
         <button id="printBtn" class="secondary">印刷／PDF保存</button>
       </div>
+      <div class="row">
+        <button id="prevQrPageBtn" class="secondary">前のページ</button>
+        <button id="nextQrPageBtn" class="secondary">次のページ</button>
+      </div>
+      <p id="qrPageStatus" class="hint"></p>
       <p id="qrStatus" class="status"></p>
       <div id="qrSheet" class="qrSheet"></div>
     </div>
@@ -246,6 +251,9 @@ let currentRecord = null;
 let currentPage = 0;
 let selectedIds = new Set();
 let speakingToken = 0;
+let qrPageStart = 0;
+let qrPageSource = [];
+let qrPageSize = 10;
 
 function setStatus(el, msg, ok=true) {
   el.textContent = msg;
@@ -500,6 +508,17 @@ function renderQr(records){
   });
   const label=displayMode==="both"?"英語＋ひらがな":displayMode==="english"?"英語のみ":"ひらがなのみ";
   setStatus($("qrStatus"),records.length+"件作成しました（"+label+"）。");
+  if(qrPageSource.length){
+    const start=qrPageStart+1;
+    const end=Math.min(qrPageStart+records.length,qrPageSource.length);
+    $("qrPageStatus").textContent=start+"～"+end+" / "+qrPageSource.length+"件";
+    $("prevQrPageBtn").disabled=qrPageStart===0;
+    $("nextQrPageBtn").disabled=qrPageStart+qrPageSize>=qrPageSource.length;
+  }else{
+    $("qrPageStatus").textContent="";
+    $("prevQrPageBtn").disabled=true;
+    $("nextQrPageBtn").disabled=true;
+  }
 }
 
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
@@ -524,11 +543,27 @@ $("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;rende
 $("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
   const all=await getAllRecords(),list=all.filter(r=>selectedIds.has(r.id)).sort((a,b)=>a.id.localeCompare(b.id));
-  if(!list.length){setStatus($("qrStatus"),"データ管理画面で選択してください。",false);return;}renderQr(list);
+  if(!list.length){setStatus($("qrStatus"),"データ管理画面で選択してください。",false);return;}
+  qrPageSource=list;
+  qrPageSize=Number($("qrCount").value)||10;
+  qrPageStart=0;
+  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
 });
 $("makeRangeQrBtn").addEventListener("click",async()=>{
-  const all=await filteredAll("qrSearch"),start=Math.max(1,Number($("qrStart").value)||1)-1,count=Number($("qrCount").value)||10;
-  renderQr(all.slice(start,start+count));
+  qrPageSource=await filteredAll("qrSearch");
+  qrPageStart=Math.max(1,Number($("qrStart").value)||1)-1;
+  qrPageSize=Number($("qrCount").value)||10;
+  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+});
+$("prevQrPageBtn").addEventListener("click",()=>{
+  qrPageStart=Math.max(0,qrPageStart-qrPageSize);
+  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+});
+$("nextQrPageBtn").addEventListener("click",()=>{
+  if(qrPageStart+qrPageSize<qrPageSource.length){
+    qrPageStart+=qrPageSize;
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
 });
 $("printBtn").addEventListener("click",()=>window.print());
 
