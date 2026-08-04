@@ -71,6 +71,54 @@
       .qrSheet{display:grid!important;grid-template-columns:repeat(2,1fr);gap:10mm;}
       .qrCard{border:1px solid #000;page-break-inside:avoid;}
     }
+  
+    .qrOptionBox {
+      margin-top:10px;
+      padding:12px 14px;
+      border:1px solid #d9dee7;
+      border-radius:12px;
+      background:#f8fafc;
+    }
+    .qrOptionTitle {
+      font-size:0.9rem;
+      font-weight:700;
+      color:#465266;
+      margin-bottom:8px;
+    }
+    .qrOptionRow {
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:10px 22px;
+    }
+    .qrCheckLabel {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      margin:0;
+      min-height:32px;
+      cursor:pointer;
+      font-weight:600;
+      color:#263244;
+    }
+    .qrCheckLabel input[type="checkbox"] {
+      width:20px;
+      height:20px;
+      margin:0;
+      flex:0 0 auto;
+    }
+    @media (max-width:600px) {
+      .qrOptionRow {
+        display:grid;
+        grid-template-columns:1fr;
+        gap:8px;
+      }
+      .qrCheckLabel {
+        width:100%;
+        padding:4px 0;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -224,8 +272,19 @@
             <option value="hiragana">ひらがなのみ</option>
           </select>
         </label>
-        <label style="display:flex;align-items:center;gap:8px;"><input id="qrShowIpa" type="checkbox" checked style="width:auto;"><span>発音記号を表示</span></label>
-        <label style="display:flex;align-items:center;gap:8px;"><input id="qrShowId" type="checkbox" checked style="width:auto;"><span>IDを表示</span></label>
+        <div style="grid-column:1 / -1;"><div class="qrOptionBox">
+          <div class="qrOptionTitle">QRカードの追加表示</div>
+          <div class="qrOptionRow">
+            <label class="qrCheckLabel">
+              <input id="qrShowIpa" type="checkbox" checked>
+              <span>発音記号を表示</span>
+            </label>
+            <label class="qrCheckLabel">
+              <input id="qrShowId" type="checkbox" checked>
+              <span>IDを表示</span>
+            </label>
+          </div>
+        </div></div>
       </div>
       <div class="row">
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
