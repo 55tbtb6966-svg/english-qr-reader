@@ -366,7 +366,7 @@
             <label><span>ひらがな文字サイズ（rem）</span><input id="settingJapaneseSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
             <label style="display:flex;align-items:center;gap:8px;">
               <input id="settingSoftWordStart" type="checkbox" checked style="width:auto;">
-              <span style="margin:0;">単語1語のソフトスタート</span>
+              <span style="margin:0;">短い英語のソフトスタート</span>
             </label>
           </div>
           <div class="row" style="margin-top:10px;">
@@ -540,30 +540,38 @@ function loadJapaneseVoices(){
   });
   if(old&&voices.some(v=>v.name===old))select.value=old;
 }
-function isSingleEnglishWord(text,lang){
+function isShortEnglishExpression(text,lang){
   if(!lang.startsWith("en"))return false;
   const t=String(text||"").trim();
-  return /^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(t);
+  if(!t)return false;
+  // 1～3語程度の短い英語表現を対象にする。
+  // 文末記号は許可するが、長い例文には適用しない。
+  const cleaned=t.replace(/[.!?]+$/,"").trim();
+  const words=cleaned.split(/\s+/).filter(Boolean);
+  return words.length>=1 &&
+         words.length<=3 &&
+         cleaned.length<=28 &&
+         words.every(w=>/^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(w));
 }
 
 function speakText(text,lang,rate){
   return new Promise(resolve=>{
     if(!text){resolve();return;}
-    const singleWord=isSingleEnglishWord(text,lang)&&getSizeSettings().softWordStart!==false;
+    const softStart=isShortEnglishExpression(text,lang)&&getSizeSettings().softWordStart!==false;
     setTimeout(()=>{
       // 単語1語だけの場合は、同じ発話内の先頭に句読点ポーズを入れる。
       // 別の無音発話は使わないため、音声経路の再起動音を起こしにくい。
-      const spokenText=singleWord?"… "+text:text;
+      const spokenText=softStart?"… "+text:text;
       const u=new SpeechSynthesisUtterance(spokenText);
       u.lang=lang;
       u.rate=rate;
-      u.volume=singleWord?0.82:1.0;
+      u.volume=softStart?0.82:1.0;
       const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
       if(v)u.voice=v;
       u.onend=resolve;
       u.onerror=resolve;
       speechSynthesis.speak(u);
-    },singleWord?500:350);
+    },softStart?500:350);
   });
 }
 async function playRecord(modeOverride=null){
