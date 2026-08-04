@@ -364,6 +364,10 @@
             <label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" type="number" min="0.7" max="2.5" step="0.05" value="1.18"></label>
             <label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
             <label><span>ひらがな文字サイズ（rem）</span><input id="settingJapaneseSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input id="settingSoftWordStart" type="checkbox" checked style="width:auto;">
+              <span style="margin:0;">単語1語のソフトスタート</span>
+            </label>
           </div>
           <div class="row" style="margin-top:10px;">
             <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
@@ -536,24 +540,44 @@ function loadJapaneseVoices(){
   });
   if(old&&voices.some(v=>v.name===old))select.value=old;
 }
+function isSingleEnglishWord(text,lang){
+  if(!lang.startsWith("en"))return false;
+  const t=String(text||"").trim();
+  return /^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(t);
+}
+
 function speakText(text,lang,rate){
   return new Promise(resolve=>{
     if(!text){resolve();return;}
+    const singleWord=isSingleEnglishWord(text,lang)&&getSizeSettings().softWordStart!==false;
     setTimeout(()=>{
-      const u=new SpeechSynthesisUtterance(text);
+      // 単語1語だけの場合は、同じ発話内の先頭に句読点ポーズを入れる。
+      // 別の無音発話は使わないため、音声経路の再起動音を起こしにくい。
+      const spokenText=singleWord?"… "+text:text;
+      const u=new SpeechSynthesisUtterance(spokenText);
       u.lang=lang;
       u.rate=rate;
+      u.volume=singleWord?0.82:1.0;
       const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
       if(v)u.voice=v;
       u.onend=resolve;
       u.onerror=resolve;
       speechSynthesis.speak(u);
-    },350);
+    },singleWord?500:350);
   });
 }
 async function playRecord(modeOverride=null){
   if(!currentRecord)return;
-  const token=++speakingToken;speechSynthesis.cancel();await new Promise(r=>setTimeout(r,300));
+  const token=++speakingToken;
+  // 発話中・待機中のときだけcancelする。
+  // 毎回cancelすると、iPhoneで音声出力経路が再初期化され、
+  // 開始時のポップ音が目立つことがある。
+  if(speechSynthesis.speaking||speechSynthesis.pending){
+    speechSynthesis.cancel();
+    await new Promise(r=>setTimeout(r,300));
+  }else{
+    await new Promise(r=>setTimeout(r,120));
+  }
   const mode=modeOverride||currentRecord.mode;
   for(let i=0;i<currentRecord.repeat;i++){
     if(token!==speakingToken)break;
@@ -636,7 +660,8 @@ const DEFAULT_SIZE_SETTINGS={
   idSize:1.05,
   englishSize:1.18,
   ipaSize:1.05,
-  japaneseSize:1.12
+  japaneseSize:1.12,
+  softWordStart:true
 };
 
 function getSizeSettings(){
@@ -655,6 +680,7 @@ function loadSizeSettingsControls(){
   $("settingEnglishSize").value=s.englishSize;
   $("settingIpaSize").value=s.ipaSize;
   $("settingJapaneseSize").value=s.japaneseSize;
+  $("settingSoftWordStart").checked=s.softWordStart!==false;
   applySizeSettingsToCss(s);
 }
 
@@ -668,7 +694,8 @@ function readSizeSettingsControls(){
     idSize:clamp($("settingIdSize").value,0.6,2,1.05),
     englishSize:clamp($("settingEnglishSize").value,0.7,2.5,1.18),
     ipaSize:clamp($("settingIpaSize").value,0.6,2,1.05),
-    japaneseSize:clamp($("settingJapaneseSize").value,0.7,2.5,1.12)
+    japaneseSize:clamp($("settingJapaneseSize").value,0.7,2.5,1.12),
+    softWordStart:$("settingSoftWordStart").checked
   };
 }
 
