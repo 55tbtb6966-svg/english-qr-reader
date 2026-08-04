@@ -205,7 +205,7 @@
       -webkit-backdrop-filter:blur(4px);
       user-select:none;
       pointer-events:none;
-      max-width:46vw;
+      max-width:72vw;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v1.9.0</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.0 / 更新 2026-08-04 20:54</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -280,8 +280,7 @@
             <option value="1.4">1.4倍</option>
           </select>
         </label>
-        <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
-        <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+        
       </div>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
     </div>
@@ -397,6 +396,8 @@
               <input id="settingSoftWordStart" type="checkbox" checked style="width:auto;">
               <span style="margin:0;">短い英語の開始待機</span>
             </label>
+            <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
+            <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
           </div>
           <div class="row" style="margin-top:10px;">
             <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
@@ -424,11 +425,13 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v1.9.0";
+const APP_VERSION="v2.0.0";
+const APP_UPDATED="2026-08-04 20:54";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
-  el.textContent=csvVersion?`App ${APP_VERSION} / CSV ${csvVersion}`:`App ${APP_VERSION}`;
+  const csv=csvVersion?` / CSV ${csvVersion}`:"";
+  el.textContent=`App ${APP_VERSION} / 更新 ${APP_UPDATED}${csv}`;
   el.title=el.textContent;
 }
 
@@ -444,6 +447,7 @@ let currentRecord = null;
 let currentPage = 0;
 let selectedIds = new Set();
 let speakingToken = 0;
+let qrScanLocked=false;
 let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
@@ -637,8 +641,12 @@ function speakText(text,lang,rate){
     },softStart?650:350);
   });
 }
-async function playRecord(modeOverride=null){
+async async function playRecord(modeOverride=null){
   if(!currentRecord)return;
+  if(!("speechSynthesis" in window)){
+    setStatus($("scanStatus"),"このブラウザでは音声再生を利用できません。",false);
+    return;
+  }
   const token=++speakingToken;
   // 発話中・待機中のときだけcancelする。
   // 毎回cancelすると、iPhoneで音声出力経路が再初期化され、
@@ -670,15 +678,26 @@ async function lookup(id,auto=true){
   $("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
   setStatus($("scanStatus"),id+" を読み取りました。");
-  if(auto)playRecord();
+  if(auto)await playRecord();
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
 async function startScanner(){
+  qrScanLocked=false;
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
   try{
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
-      async text=>{await stopScanner();await new Promise(r=>setTimeout(r,900));await lookup(text,true);},()=>{});
+      async text=>{
+        if(qrScanLocked)return;
+        qrScanLocked=true;
+        try{
+          await stopScanner();
+          await new Promise(r=>setTimeout(r,900));
+          await lookup(text,true);
+        }finally{
+          setTimeout(()=>{qrScanLocked=false;},700);
+        }
+      },()=>{});
     setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
