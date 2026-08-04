@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.7 / 更新 2026-08-05 01:14</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.8 / 更新 2026-08-05 08:22</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -272,6 +272,7 @@
       </div>
       <div class="grid2" style="margin-top:12px;">
         <label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
+      <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
         <label><span>英語速度</span>
           <select id="manualEnglishRate">
             <option value="0.6">0.6倍</option><option value="0.8">0.8倍</option>
@@ -314,7 +315,7 @@
           </div>
         </details>
       </div>
-      <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
+      
     </div>
   </section>
 
@@ -445,8 +446,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.7";
-const APP_UPDATED="2026-08-05 01:14";
+const APP_VERSION="v2.0.8";
+const APP_UPDATED="2026-08-05 08:22";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
