@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.0 / 更新 2026-08-04 20:54</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.1 / 更新 2026-08-04 21:03</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -425,8 +425,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.0";
-const APP_UPDATED="2026-08-04 20:54";
+const APP_VERSION="v2.0.1";
+const APP_UPDATED="2026-08-04 21:03";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -553,14 +553,30 @@ async function exportCsv(){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="words.csv";a.click();URL.revokeObjectURL(a.href);
 }
 async function refreshSummary(){
-  $("recordCount").textContent=await countRecords();
-  $("dataVersion").textContent=(await getMeta("version"))||"未設定";
-  if(navigator.storage?.estimate){
-    const e=await navigator.storage.estimate();
-    const used=((e.usage||0)/1024/1024).toFixed(1);
-    const quota=((e.quota||0)/1024/1024).toFixed(0);
-    $("storageUsage").textContent=used+" MB / 約"+quota+" MB";
-  }else $("storageUsage").textContent="取得不可";
+  try{
+    $("recordCount").textContent=await countRecords();
+  }catch{
+    $("recordCount").textContent="取得エラー";
+  }
+
+  try{
+    $("dataVersion").textContent=(await getMeta("version"))||"未設定";
+  }catch{
+    $("dataVersion").textContent="取得エラー";
+  }
+
+  try{
+    if(navigator.storage?.estimate){
+      const e=await navigator.storage.estimate();
+      const used=((e.usage||0)/1024/1024).toFixed(1);
+      const quota=((e.quota||0)/1024/1024).toFixed(0);
+      $("storageUsage").textContent=used+" MB / 約"+quota+" MB";
+    }else{
+      $("storageUsage").textContent="取得不可";
+    }
+  }catch{
+    $("storageUsage").textContent="取得不可";
+  }
 }
 function englishVoice(){
   const voices=speechSynthesis.getVoices().filter(v=>v.lang==="en-US"||v.lang.startsWith("en"));
@@ -641,7 +657,7 @@ function speakText(text,lang,rate){
     },softStart?650:350);
   });
 }
-async async function playRecord(modeOverride=null){
+async function playRecord(modeOverride=null){
   if(!currentRecord)return;
   if(!("speechSynthesis" in window)){
     setStatus($("scanStatus"),"このブラウザでは音声再生を利用できません。",false);
@@ -934,7 +950,13 @@ $("printBtn").addEventListener("click",()=>window.print());
     updateVersionBadge(csvVersion);
   }catch{}
   if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
-})();
+})().catch(err=>{
+  console.error(err);
+  const storage=document.getElementById("storageUsage");
+  if(storage&&storage.textContent==="確認中")storage.textContent="起動エラー";
+  const status=document.getElementById("scanStatus");
+  if(status)status.textContent="アプリの起動に失敗しました。ページを再読み込みしてください。";
+});
 </script>
 </body>
 </html>
