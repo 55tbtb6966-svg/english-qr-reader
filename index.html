@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.5 / 更新 2026-08-04 23:18</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.6 / 更新 2026-08-05 01:04</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -394,26 +394,20 @@
         <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英文・日本語"></label>
       </div>
       <div class="grid2" style="margin-top:10px;">
-        <label><span>QRカードに表示する読み</span>
-          <select id="qrDisplayMode">
-            <option value="both" selected>英語＋ひらがな</option>
-            <option value="english">英語のみ</option>
-            <option value="hiragana">ひらがなのみ</option>
-          </select>
-        </label>
-        <div style="grid-column:1 / -1;"><div class="qrOptionBox">
-          <div class="qrOptionTitle">QRカードの追加表示</div>
+        
+        <div style="grid-column:1 / -1;">
+        <div class="qrOptionBox">
+          <div class="qrOptionTitle">QRカードに表示する項目</div>
           <div class="qrOptionRow">
-            <label class="qrCheckLabel">
-              <input id="qrShowIpa" type="checkbox" checked>
-              <span>発音記号を表示</span>
-            </label>
-            <label class="qrCheckLabel">
-              <input id="qrShowId" type="checkbox" checked>
-              <span>IDを表示</span>
-            </label>
+            <label class="qrCheckLabel"><input id="qrShowEnglish" type="checkbox" checked><span>英語</span></label>
+            <label class="qrCheckLabel"><input id="qrShowIpa" type="checkbox" checked><span>発音記号</span></label>
+            <label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox"><span>日本語</span></label>
+            <label class="qrCheckLabel"><input id="qrShowJapaneseRead" type="checkbox" checked><span>日本語読み</span></label>
+            <label class="qrCheckLabel"><input id="qrShowId" type="checkbox" checked><span>ID</span></label>
           </div>
-        </div></div>
+          <p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
+        </div>
+      </div>
       </div>
       <details class="advancedSettings">
         <summary>詳細設定（QR・文字サイズ）</summary>
@@ -451,8 +445,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.5";
-const APP_UPDATED="2026-08-04 23:18";
+const APP_VERSION="v2.0.6";
+const APP_UPDATED="2026-08-05 01:04";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -787,6 +781,30 @@ async function renderPage(){
   $("prevBtn").disabled=currentPage===0;$("nextBtn").disabled=start+size>=all.length;
 }
 
+
+const QR_FIELD_DEFAULTS={
+  qrShowEnglish:true,
+  qrShowIpa:true,
+  qrShowJapanese:false,
+  qrShowJapaneseRead:true,
+  qrShowId:true
+};
+
+function loadQrFieldSettings(){
+  for(const [id,def] of Object.entries(QR_FIELD_DEFAULTS)){
+    const el=$(id);
+    if(!el)continue;
+    const saved=localStorage.getItem(id);
+    el.checked=saved===null?def:saved==="true";
+    el.addEventListener("change",()=>{
+      localStorage.setItem(id,String(el.checked));
+      if(qrPageSource.length){
+        renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+      }
+    });
+  }
+}
+
 const DEFAULT_SIZE_SETTINGS={
   qrSize:132,
   idSize:1.05,
@@ -860,43 +878,59 @@ function resetSizeSettings(){
 
 function renderQr(records){
   const sheet=$("qrSheet");sheet.innerHTML="";
-  const displayMode=$("qrDisplayMode")?.value||"both";
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+
   records.forEach(r=>{
     const card=document.createElement("div");card.className="qrCard";
     const q=document.createElement("div");card.appendChild(q);
-    const qrSize=getSizeSettings().qrSize;new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
+    const qrSize=getSizeSettings().qrSize;
+    new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
 
-    if($("qrShowId")?.checked){
+    if(showId){
       const id=document.createElement("div");
       id.className="qrId";
       id.textContent=r.id;
       card.appendChild(id);
     }
-
-    if(displayMode==="both"||displayMode==="english"){
+    if(showEnglish){
       const en=document.createElement("div");
       en.className="qrEnglish";
       en.textContent=r.english;
       card.appendChild(en);
-      if($("qrShowIpa")?.checked&&r.ipa){
-        const ipa=document.createElement("div");
-        ipa.className="qrIpa";
-        ipa.textContent=r.ipa;
-        card.appendChild(ipa);
-      }
     }
-
-    if(displayMode==="both"||displayMode==="hiragana"){
+    if(showIpa&&r.ipa){
+      const ipa=document.createElement("div");
+      ipa.className="qrIpa";
+      ipa.textContent=r.ipa;
+      card.appendChild(ipa);
+    }
+    if(showJapanese&&r.japanese){
       const ja=document.createElement("div");
       ja.className="qrJapanese";
-      ja.textContent=r.japaneseRead||r.japanese;
+      ja.textContent=r.japanese;
       card.appendChild(ja);
     }
-
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese)){
+      const jr=document.createElement("div");
+      jr.className="qrJapanese";
+      jr.textContent=r.japaneseRead||r.japanese;
+      card.appendChild(jr);
+    }
     sheet.appendChild(card);
   });
-  const label=displayMode==="both"?"英語＋ひらがな":displayMode==="english"?"英語のみ":"ひらがなのみ";
-  const idLabel=$("qrShowId")?.checked?"IDあり":"IDなし";setStatus($("qrStatus"),records.length+"件作成しました（"+label+"・"+idLabel+"）。");
+
+  const labels=[];
+  if(showEnglish)labels.push("英語");
+  if(showIpa)labels.push("発音記号");
+  if(showJapanese)labels.push("日本語");
+  if(showJapaneseRead)labels.push("日本語読み");
+  if(showId)labels.push("ID");
+  setStatus($("qrStatus"),records.length+"件作成しました（"+(labels.join("・")||"文字表示なし")+"）。");
+
   if(qrPageSource.length){
     const start=qrPageStart+1;
     const end=Math.min(qrPageStart+records.length,qrPageSource.length);
@@ -967,6 +1001,7 @@ $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
   updateVersionBadge("");
+  loadQrFieldSettings();
   loadSizeSettingsControls();
   const savedShowIpa=localStorage.getItem("showIpa");
   $("showIpa").checked=savedShowIpa===null?true:savedShowIpa==="true";
