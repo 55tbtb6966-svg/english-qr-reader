@@ -217,7 +217,7 @@
   </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.6 / 更新 2026-08-05 01:04</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.7 / 更新 2026-08-05 01:14</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -399,11 +399,11 @@
         <div class="qrOptionBox">
           <div class="qrOptionTitle">QRカードに表示する項目</div>
           <div class="qrOptionRow">
+            <label class="qrCheckLabel"><input id="qrShowId" type="checkbox" checked><span>ID</span></label>
             <label class="qrCheckLabel"><input id="qrShowEnglish" type="checkbox" checked><span>英語</span></label>
             <label class="qrCheckLabel"><input id="qrShowIpa" type="checkbox" checked><span>発音記号</span></label>
             <label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox"><span>日本語</span></label>
             <label class="qrCheckLabel"><input id="qrShowJapaneseRead" type="checkbox" checked><span>日本語読み</span></label>
-            <label class="qrCheckLabel"><input id="qrShowId" type="checkbox" checked><span>ID</span></label>
           </div>
           <p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
         </div>
@@ -445,8 +445,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.6";
-const APP_UPDATED="2026-08-05 01:04";
+const APP_VERSION="v2.0.7";
+const APP_UPDATED="2026-08-05 01:14";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
