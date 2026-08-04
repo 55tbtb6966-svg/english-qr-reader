@@ -45,7 +45,8 @@
       font-size:.85rem; margin:0 6px 8px 0; }
     #english { font-size:clamp(1.8rem,7vw,3.4rem); font-weight:800; line-height:1.2;
       overflow-wrap:anywhere; margin:8px 0; }
-    #japanese { font-size:1.2rem; color:#555; margin-top:10px; }
+    #japanese { font-size:1.2rem; color:#333; margin-top:6px; }
+    #japaneseReadDisplay { font-size:1.1rem; color:#666; margin-top:6px; }
     #reader { width:100%; overflow:hidden; border-radius:14px; }
     .tableWrap { overflow-x:auto; margin-top:12px; }
     table { width:100%; border-collapse:collapse; min-width:860px; }
@@ -111,7 +112,10 @@
       <span id="idBadge" class="badge">ID：未選択</span>
       <span id="modeBadge" class="badge">読み方：未選択</span>
       <div id="english">CSVを登録してQRコードを読み取ってください</div>
+      <div class="hint" style="margin-top:14px;">表示用日本語（漢字）</div>
       <div id="japanese"></div>
+      <div class="hint" style="margin-top:14px;">日本語読み</div>
+      <div id="japaneseReadDisplay"></div>
       <div class="row">
         <button id="playConfiguredBtn">▶ 設定どおり読む</button>
         <button id="playEnglishBtn" class="secondary">英語だけ</button>
@@ -390,9 +394,9 @@ async function playRecord(modeOverride=null){
 async function lookup(id,auto=true){
   id=String(id||"").trim();if(!id)return;
   const r=await getRecord(id);
-  if(!r){setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
+  if(!r){$("japaneseReadDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
-  $("english").textContent=r.english;$("japanese").textContent=r.japanese;
+  $("english").textContent=r.english;$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;
   $("manualEnglishRate").value=String(r.englishRate);
   setStatus($("scanStatus"),id+" を読み取りました。");
   if(auto)playRecord();
@@ -456,7 +460,7 @@ function renderQr(records){
     const card=document.createElement("div");card.className="qrCard";
     const q=document.createElement("div");card.appendChild(q);
     new QRCode(q,{text:r.id,width:150,height:150,correctLevel:QRCode.CorrectLevel.M});
-    for(const [cls,text] of [["qrId",r.id],["qrEnglish",r.english],["qrJapanese",r.japanese]]){
+    for(const [cls,text] of [["qrId",r.id],["qrEnglish",r.english],["qrJapanese","漢字："+r.japanese],["qrJapanese","読み："+(r.japaneseRead||r.japanese)]]){
       const d=document.createElement("div");d.className=cls;d.textContent=text;card.appendChild(d);
     }
     sheet.appendChild(card);
