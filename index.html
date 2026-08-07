@@ -221,10 +221,40 @@
     .hidCapture{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
     .scannerModeStatus{font-size:.9rem;color:#556176;margin:4px 0 10px}
 
+
+    .scanModePanel{
+      margin-top:10px;
+      padding:12px 14px;
+      border:1px solid #d9dee7;
+      border-radius:12px;
+      background:#fff;
+    }
+    .scanModePanelTitle{
+      font-weight:700;
+      margin-bottom:8px;
+      color:#344054;
+    }
+    .cameraActionRow{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .externalReady{
+      padding:12px;
+      border-radius:10px;
+      background:#f8fafc;
+      color:#475467;
+      font-size:.95rem;
+    }
+    .hiddenScanPanel{display:none !important;}
+    @media(max-width:600px){
+      .cameraActionRow{grid-template-columns:1fr;}
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.0 / 更新 2026-08-07 20:35</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.1 / 更新 2026-08-07 20:41</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -265,9 +295,16 @@
         </div>
 
       <div id="reader"></div>
-      <div class="row">
-        <button id="startBtn">QRコードを読み取る</button>
-        <button id="stopBtn" class="secondary" disabled>カメラを止める</button>
+      <div id="cameraControlsPanel" class="scanModePanel">
+        <div class="scanModePanelTitle">iPhoneカメラ操作</div>
+        <div class="cameraActionRow">
+          <button id="startBtn" type="button">QRコードを読み取る</button>
+          <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
+        </div>
+      </div>
+      <div id="externalScannerPanel" class="scanModePanel hiddenScanPanel">
+        <div class="scanModePanelTitle">外部QRスキャナー</div>
+        <div class="externalReady">スキャン待機中です。TeraでQRコードを読み取ると、自動で検索して発音します。</div>
       </div>
       <p id="scanStatus" class="status"></p>
     </div>
@@ -463,8 +500,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.1.0";
-const APP_UPDATED="2026-08-07 20:35";
+const APP_VERSION="v2.1.1";
+const APP_UPDATED="2026-08-07 20:41";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -747,10 +784,13 @@ function updateScanInputModeUi(){
   $("useExternalScannerModeBtn")?.classList.toggle("secondary",camera);
   if($("scannerModeStatus")){
     $("scannerModeStatus").textContent=camera
-      ?"iPhoneカメラでQRコードを読み取ります。"
-      :"TeraなどのHIDスキャナーでQRを読み、Enterで自動検索・自動発音します。";
+      ?"iPhoneカメラを使います。下のボタンから開始・停止できます。"
+      :"外部QRスキャナーを使います。カメラ操作は不要です。";
   }
   if(!camera)setTimeout(()=>{$("hidCaptureInput")?.focus({preventScroll:true});},0);
+
+  $("cameraControlsPanel")?.classList.toggle("hiddenScanPanel",!camera);
+  $("externalScannerPanel")?.classList.toggle("hiddenScanPanel",camera);
 }
 
 async function setScanInputMode(mode){
