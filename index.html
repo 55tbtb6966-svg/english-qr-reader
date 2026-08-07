@@ -224,7 +224,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.9 / 更新 2026-08-07 20:31</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.0 / 更新 2026-08-07 20:35</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -254,6 +254,16 @@
 
     <div class="card">
       <h2>QRコードを読み取る</h2>
+        <div class="qrOptionBox" style="margin-top:10px;">
+          <div class="qrOptionTitle">読み取り方法</div>
+          <div class="scanSourceSwitch">
+          <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
+          <button id="useExternalScannerModeBtn" type="button" class="secondary">外部QRスキャナー</button>
+        </div>
+        <div id="scannerModeStatus" class="scannerModeStatus"></div>
+        <input id="hidCaptureInput" class="hidCapture" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+
       <div id="reader"></div>
       <div class="row">
         <button id="startBtn">QRコードを読み取る</button>
@@ -278,16 +288,6 @@
         <button id="playBothBtn" class="secondary">英語→日本語</button>
       </div>
       <div class="grid2" style="margin-top:12px;">
-        
-      <div class="qrOptionBox" style="margin-top:10px;">
-        <div class="qrOptionTitle">QR読み取り方法</div>
-        <div class="scanSourceSwitch">
-          <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
-          <button id="useExternalScannerModeBtn" type="button" class="secondary">外部QRスキャナー</button>
-        </div>
-        <div id="scannerModeStatus" class="scannerModeStatus"></div>
-        <input id="hidCaptureInput" class="hidCapture" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
-      </div>
 <label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
         <label><span>英語速度</span>
@@ -463,8 +463,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.9";
-const APP_UPDATED="2026-08-07 20:31";
+const APP_VERSION="v2.1.0";
+const APP_UPDATED="2026-08-07 20:35";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
