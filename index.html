@@ -214,10 +214,17 @@
       .appVersionBadge { display:none !important; }
     }
 
-  </style>
+  
+    .scanSourceSwitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}
+    .scanSourceSwitch button{margin:0}
+    .scanSourceSwitch button.active{outline:3px solid rgba(59,130,246,.18);font-weight:700}
+    .hidCapture{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
+    .scannerModeStatus{font-size:.9rem;color:#556176;margin:4px 0 10px}
+
+</style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.0.8 / 更新 2026-08-05 08:22</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.0.9 / 更新 2026-08-07 20:31</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -271,7 +278,17 @@
         <button id="playBothBtn" class="secondary">英語→日本語</button>
       </div>
       <div class="grid2" style="margin-top:12px;">
-        <label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
+        
+      <div class="qrOptionBox" style="margin-top:10px;">
+        <div class="qrOptionTitle">QR読み取り方法</div>
+        <div class="scanSourceSwitch">
+          <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
+          <button id="useExternalScannerModeBtn" type="button" class="secondary">外部QRスキャナー</button>
+        </div>
+        <div id="scannerModeStatus" class="scannerModeStatus"></div>
+        <input id="hidCaptureInput" class="hidCapture" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+<label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
       <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
         <label><span>英語速度</span>
           <select id="manualEnglishRate">
@@ -446,8 +463,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.0.8";
-const APP_UPDATED="2026-08-05 08:22";
+const APP_VERSION="v2.0.9";
+const APP_UPDATED="2026-08-07 20:31";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -468,6 +485,9 @@ let currentRecord = null;
 let currentPage = 0;
 let selectedIds = new Set();
 let speakingToken = 0;
+let scanInputMode=localStorage.getItem("scanInputMode")||"camera";
+let hidBuffer="";
+let hidLastKeyAt=0;
 let qrScanLocked=false;
 let qrPageStart = 0;
 let qrPageSource = [];
@@ -718,7 +738,100 @@ async function lookup(id,auto=true){
   if(auto)await playRecord();
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
+
+function updateScanInputModeUi(){
+  const camera=scanInputMode==="camera";
+  $("useCameraModeBtn")?.classList.toggle("active",camera);
+  $("useExternalScannerModeBtn")?.classList.toggle("active",!camera);
+  $("useCameraModeBtn")?.classList.toggle("secondary",!camera);
+  $("useExternalScannerModeBtn")?.classList.toggle("secondary",camera);
+  if($("scannerModeStatus")){
+    $("scannerModeStatus").textContent=camera
+      ?"iPhoneカメラでQRコードを読み取ります。"
+      :"TeraなどのHIDスキャナーでQRを読み、Enterで自動検索・自動発音します。";
+  }
+  if(!camera)setTimeout(()=>{$("hidCaptureInput")?.focus({preventScroll:true});},0);
+}
+
+async function setScanInputMode(mode){
+  scanInputMode=mode==="external"?"external":"camera";
+  localStorage.setItem("scanInputMode",scanInputMode);
+  if(scanInputMode==="external"){
+    try{await stopScanner();}catch{}
+    hidBuffer="";
+  }
+  updateScanInputModeUi();
+}
+
+function normalizeScannedId(raw){
+  const t=String(raw||"").trim();
+  if(!t)return "";
+  try{
+    const u=new URL(t);
+    return u.searchParams.get("id")||t;
+  }catch{
+    return t;
+  }
+}
+
+async function handleExternalScannerSubmit(raw){
+  const id=normalizeScannedId(raw);
+  if(!id)return;
+  $("manualId").value=id;
+  await lookup(id,true);
+}
+
+function setupExternalScannerCapture(){
+  const capture=$("hidCaptureInput");
+  if(!capture)return;
+
+  capture.addEventListener("keydown",async e=>{
+    if(scanInputMode!=="external")return;
+    if(e.key==="Enter"){
+      e.preventDefault();
+      const value=capture.value||hidBuffer;
+      capture.value="";
+      hidBuffer="";
+      await handleExternalScannerSubmit(value);
+      setTimeout(()=>capture.focus({preventScroll:true}),50);
+    }
+  });
+
+  window.addEventListener("keydown",async e=>{
+    if(scanInputMode!=="external")return;
+    const tag=(document.activeElement?.tagName||"").toLowerCase();
+    const editable=["input","textarea","select"].includes(tag) && document.activeElement!==capture;
+    if(editable)return;
+
+    const now=Date.now();
+    if(now-hidLastKeyAt>150)hidBuffer="";
+    hidLastKeyAt=now;
+
+    if(e.key==="Enter"){
+      if(!hidBuffer)return;
+      e.preventDefault();
+      const value=hidBuffer;
+      hidBuffer="";
+      await handleExternalScannerSubmit(value);
+      setTimeout(()=>capture.focus({preventScroll:true}),50);
+      return;
+    }
+
+    if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+      hidBuffer+=e.key;
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener("click",()=>{
+    if(scanInputMode==="external"){
+      setTimeout(()=>capture.focus({preventScroll:true}),0);
+    }
+  });
+}
+
 async function startScanner(){
+  if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部QRスキャナーモードです。",false);return;}
   qrScanLocked=false;
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
@@ -998,6 +1111,10 @@ $("nextQrPageBtn").addEventListener("click",()=>{
 });
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
+$("useCameraModeBtn").addEventListener("click",()=>setScanInputMode("camera"));
+$("useExternalScannerModeBtn").addEventListener("click",()=>setScanInputMode("external"));
+setupExternalScannerCapture();
+updateScanInputModeUi();
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
@@ -1008,6 +1125,10 @@ $("printBtn").addEventListener("click",()=>window.print());
   $("showIpa").checked=savedShowIpa===null?true:savedShowIpa==="true";
   loadEnglishVoices();loadJapaneseVoices();speechSynthesis.onvoiceschanged=()=>{loadEnglishVoices();loadJapaneseVoices();};
   await openDb();await refreshSummary();await renderPage();
+  updateScanInputModeUi();
+  if(scanInputMode==="external"){
+    setTimeout(()=>{$("hidCaptureInput")?.focus({preventScroll:true});},150);
+  }
   try{
     const allForVersion=await getAllRecords();
     const csvVersion=allForVersion.find(r=>r.version)?.version||"";
