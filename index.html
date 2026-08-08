@@ -286,7 +286,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.5 / 更新 2026-08-08 16:35</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.6 / 更新 2026-08-08 16:41</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -339,7 +339,7 @@
         <div class="scanModePanelTitle">外部QRスキャナー</div>
         <button id="startExternalScannerBtn" type="button">スキャナーを開始</button>
         <div id="externalReadyStatus" class="externalReady" style="margin-top:10px;">
-          開始ボタンをタップするとスキャン待機になります。
+          最初に1回だけ開始してください。その後は自動でスキャン待機に戻ります。
         </div>
       </div>
       <p id="scanStatus" class="status"></p>
@@ -536,8 +536,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.1.5";
-const APP_UPDATED="2026-08-08 16:35";
+const APP_VERSION="v2.1.6";
+const APP_UPDATED="2026-08-08 16:41";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -561,6 +561,7 @@ let speakingToken = 0;
 let scanInputMode="none";
 let hidBuffer="";
 let externalScannerArmed=false;
+let externalScannerStartedOnce=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
 let qrPageStart = 0;
@@ -847,11 +848,22 @@ function updateScanInputModeUi(){
 }
 
 async function setScanInputMode(mode){
-  scanInputMode=mode==="external"?"external":"camera";
-  externalScannerArmed=false;
+  const nextMode=mode==="external"?"external":"camera";
+  if(nextMode!==scanInputMode){
+    externalScannerStartedOnce=false;
+    externalScannerArmed=false;
+  }
+  scanInputMode=nextMode;
   hidBuffer="";
   try{await stopScanner();}catch{}
   updateScanInputModeUi();
+
+  if(scanInputMode==="external"){
+    const st=$("externalReadyStatus");
+    if(st)st.textContent="開始ボタンを1回タップすると、その後は自動でスキャン待機に戻ります。";
+    const btn=$("startExternalScannerBtn");
+    if(btn)btn.textContent="スキャナーを開始";
+  }
 }
 
 function normalizeScannedId(raw){
@@ -886,6 +898,8 @@ async function handleExternalScannerSubmit(raw){
   if(!id)return;
   $("manualId").value=id;
   await lookup(id,true);
+  // 読み取り・発音後に再度スキャン待機へ戻す
+  setTimeout(resumeExternalScannerFocus,120);
 }
 
 
@@ -899,14 +913,31 @@ function scannerCharFromCode(e){
 }
 
 
+function resumeExternalScannerFocus(){
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  externalScannerArmed=true;
+  const capture=$("hidCaptureInput");
+  if(capture){
+    capture.value="";
+    setTimeout(()=>{
+      try{capture.focus({preventScroll:true});}catch{}
+    },20);
+  }
+  const st=$("externalReadyStatus");
+  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
+  const btn=$("startExternalScannerBtn");
+  if(btn)btn.textContent="スキャン待機中";
+}
+
 function startExternalScanner(){
   if(scanInputMode!=="external")return;
+  externalScannerStartedOnce=true;
   externalScannerArmed=true;
   hidBuffer="";
   const capture=$("hidCaptureInput");
   if(capture){
     capture.value="";
-    capture.focus({preventScroll:true});
+    try{capture.focus({preventScroll:true});}catch{}
   }
   const st=$("externalReadyStatus");
   if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
@@ -1010,8 +1041,8 @@ function setupExternalScannerCapture(){
   }, true);
 
   document.addEventListener("click",()=>{
-    if(scanInputMode==="external"){
-      setTimeout(()=>capture.focus({preventScroll:true}),0);
+    if(scanInputMode==="external" && externalScannerStartedOnce){
+      setTimeout(resumeExternalScannerFocus,80);
     }
   });
 }
@@ -1299,11 +1330,28 @@ $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>setScanInputMode("camera"));
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden)setTimeout(resumeExternalScannerFocus,120);
+});
+window.addEventListener("focus",()=>setTimeout(resumeExternalScannerFocus,120));
+window.addEventListener("pageshow",()=>setTimeout(resumeExternalScannerFocus,120));
+
+
 $("useExternalScannerModeBtn").addEventListener("click",()=>setScanInputMode("external"));
 setupExternalScannerCapture();
 scanInputMode="none";
 externalScannerArmed=false;
 updateScanInputModeUi();
+
+document.addEventListener("click",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  const el=e.target?.closest?.("button,[role='tab'],a");
+  if(!el)return;
+  if(el.id==="startExternalScannerBtn")return;
+  setTimeout(resumeExternalScannerFocus,180);
+});
+
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
