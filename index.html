@@ -286,7 +286,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.6 / 更新 2026-08-08 16:41</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.7 / 更新 2026-08-08 16:45</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -339,7 +339,7 @@
         <div class="scanModePanelTitle">外部QRスキャナー</div>
         <button id="startExternalScannerBtn" type="button">スキャナーを開始</button>
         <div id="externalReadyStatus" class="externalReady" style="margin-top:10px;">
-          最初に1回だけ開始してください。その後は自動でスキャン待機に戻ります。
+          最初に1回だけ開始してください。音声準備として小さく「Ready」と読み上げ、その後は自動でスキャン待機に戻ります。
         </div>
       </div>
       <p id="scanStatus" class="status"></p>
@@ -536,8 +536,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.1.6";
-const APP_UPDATED="2026-08-08 16:41";
+const APP_VERSION="v2.1.7";
+const APP_UPDATED="2026-08-08 16:45";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -562,6 +562,7 @@ let scanInputMode="none";
 let hidBuffer="";
 let externalScannerArmed=false;
 let externalScannerStartedOnce=false;
+let speechUnlockedByScannerStart=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
 let qrPageStart = 0;
@@ -852,6 +853,7 @@ async function setScanInputMode(mode){
   if(nextMode!==scanInputMode){
     externalScannerStartedOnce=false;
     externalScannerArmed=false;
+    speechUnlockedByScannerStart=false;
   }
   scanInputMode=nextMode;
   hidBuffer="";
@@ -860,7 +862,7 @@ async function setScanInputMode(mode){
 
   if(scanInputMode==="external"){
     const st=$("externalReadyStatus");
-    if(st)st.textContent="開始ボタンを1回タップすると、その後は自動でスキャン待機に戻ります。";
+    if(st)st.textContent="開始ボタンを1回タップすると音声も準備し、その後は自動でスキャン待機に戻ります。";
     const btn=$("startExternalScannerBtn");
     if(btn)btn.textContent="スキャナーを開始";
   }
@@ -913,6 +915,45 @@ function scannerCharFromCode(e){
 }
 
 
+
+function unlockSpeechForExternalScanner(){
+  if(speechUnlockedByScannerStart)return;
+  if(!("speechSynthesis" in window))return;
+
+  try{
+    window.speechSynthesis.cancel();
+
+    const u=new SpeechSynthesisUtterance("Ready");
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.22;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=window.speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    u.onend=()=>{
+      speechUnlockedByScannerStart=true;
+      setTimeout(resumeExternalScannerFocus,80);
+    };
+    u.onerror=()=>{
+      // Even if the short readiness utterance fails, keep scanner usable.
+      setTimeout(resumeExternalScannerFocus,80);
+    };
+
+    // Must be called synchronously from the user's Start button gesture.
+    window.speechSynthesis.speak(u);
+  }catch{
+    setTimeout(resumeExternalScannerFocus,80);
+  }
+}
+
 function resumeExternalScannerFocus(){
   if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
   externalScannerArmed=true;
@@ -934,15 +975,23 @@ function startExternalScanner(){
   externalScannerStartedOnce=true;
   externalScannerArmed=true;
   hidBuffer="";
+
   const capture=$("hidCaptureInput");
   if(capture){
     capture.value="";
     try{capture.focus({preventScroll:true});}catch{}
   }
+
   const st=$("externalReadyStatus");
-  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
+  if(st)st.textContent="音声を準備しています…";
   const btn=$("startExternalScannerBtn");
   if(btn)btn.textContent="スキャン待機中";
+
+  // Use this explicit tap to unlock iOS Safari speech synthesis.
+  unlockSpeechForExternalScanner();
+
+  // Fallback: if onend is delayed/not fired, restore scanner focus anyway.
+  setTimeout(resumeExternalScannerFocus,700);
 }
 
 function setupExternalScannerCapture(){
