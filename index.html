@@ -251,10 +251,42 @@
       .cameraActionRow{grid-template-columns:1fr;}
     }
 
+
+    .scanSourceSwitch{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin:10px 0 12px;
+    }
+    .scanSourceSwitch button{
+      margin:0;
+      min-height:54px;
+      border:2px solid #d0d5dd;
+      background:#fff;
+      color:#344054;
+      font-weight:700;
+      border-radius:12px;
+      transition:.15s ease;
+    }
+    .scanSourceSwitch button.active{
+      border-color:#2563eb;
+      background:#eff6ff;
+      color:#1d4ed8;
+      box-shadow:0 0 0 3px rgba(37,99,235,.12);
+    }
+    .scanSourceSwitch button:not(.active){
+      opacity:.78;
+    }
+    .scanChoiceHint{
+      font-size:.9rem;
+      color:#667085;
+      margin-top:4px;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.4 / 更新 2026-08-08 16:23</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.5 / 更新 2026-08-08 16:35</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -290,7 +322,8 @@
           <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
           <button id="useExternalScannerModeBtn" type="button" class="secondary">外部QRスキャナー</button>
         </div>
-        <div id="scannerModeStatus" class="scannerModeStatus"></div>
+        <div id="scanChoiceHint" class="scanChoiceHint">読み取り方法を選んでください。</div>
+<div id="scannerModeStatus" class="scannerModeStatus"></div>
         <input id="hidCaptureInput" class="hidCapture" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" lang="en">
         </div>
 
@@ -304,7 +337,10 @@
       </div>
       <div id="externalScannerPanel" class="scanModePanel hiddenScanPanel">
         <div class="scanModePanelTitle">外部QRスキャナー</div>
-        <div class="externalReady">スキャン待機中です。TeraでQRコードを読み取ると、自動で検索して発音します。日本語キーボード中でも、HIDキーを直接判定してIDを読み取ります。</div>
+        <button id="startExternalScannerBtn" type="button">スキャナーを開始</button>
+        <div id="externalReadyStatus" class="externalReady" style="margin-top:10px;">
+          開始ボタンをタップするとスキャン待機になります。
+        </div>
       </div>
       <p id="scanStatus" class="status"></p>
     </div>
@@ -500,8 +536,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.1.4";
-const APP_UPDATED="2026-08-08 16:23";
+const APP_VERSION="v2.1.5";
+const APP_UPDATED="2026-08-08 16:35";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -522,8 +558,9 @@ let currentRecord = null;
 let currentPage = 0;
 let selectedIds = new Set();
 let speakingToken = 0;
-let scanInputMode=localStorage.getItem("scanInputMode")||"camera";
+let scanInputMode="none";
 let hidBuffer="";
+let externalScannerArmed=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
 let qrPageStart = 0;
@@ -777,29 +814,43 @@ async function lookup(id,auto=true){
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
 
 function updateScanInputModeUi(){
+  const camBtn=$("useCameraModeBtn");
+  const extBtn=$("useExternalScannerModeBtn");
+  const status=$("scannerModeStatus");
+  const hint=$("scanChoiceHint");
+
   const camera=scanInputMode==="camera";
-  $("useCameraModeBtn")?.classList.toggle("active",camera);
-  $("useExternalScannerModeBtn")?.classList.toggle("active",!camera);
-  $("useCameraModeBtn")?.classList.toggle("secondary",!camera);
-  $("useExternalScannerModeBtn")?.classList.toggle("secondary",camera);
-  if($("scannerModeStatus")){
-    $("scannerModeStatus").textContent=camera
-      ?"iPhoneカメラを使います。下のボタンから開始・停止できます。"
-      :"外部QRスキャナーを使います。カメラ操作は不要です。";
-  }
-  if(!camera)setTimeout(()=>{$("hidCaptureInput")?.focus({preventScroll:true});},0);
+  const external=scanInputMode==="external";
+  const none=!camera&&!external;
+
+  camBtn?.classList.toggle("active",camera);
+  extBtn?.classList.toggle("active",external);
 
   $("cameraControlsPanel")?.classList.toggle("hiddenScanPanel",!camera);
-  $("externalScannerPanel")?.classList.toggle("hiddenScanPanel",camera);
+  $("externalScannerPanel")?.classList.toggle("hiddenScanPanel",!external);
+
+  if(hint){
+    hint.textContent = none
+      ? "読み取り方法を選んでください。"
+      : camera
+        ? "選択中：iPhoneカメラ"
+        : "選択中：外部QRスキャナー";
+  }
+
+  if(status){
+    status.textContent = none
+      ? ""
+      : camera
+        ? "下の「QRコードを読み取る」から開始します。"
+        : "下の「スキャナーを開始」を1回タップしてから、TeraでQRを読み取ります。";
+  }
 }
 
 async function setScanInputMode(mode){
   scanInputMode=mode==="external"?"external":"camera";
-  localStorage.setItem("scanInputMode",scanInputMode);
-  if(scanInputMode==="external"){
-    try{await stopScanner();}catch{}
-    hidBuffer="";
-  }
+  externalScannerArmed=false;
+  hidBuffer="";
+  try{await stopScanner();}catch{}
   updateScanInputModeUi();
 }
 
@@ -847,6 +898,22 @@ function scannerCharFromCode(e){
   return "";
 }
 
+
+function startExternalScanner(){
+  if(scanInputMode!=="external")return;
+  externalScannerArmed=true;
+  hidBuffer="";
+  const capture=$("hidCaptureInput");
+  if(capture){
+    capture.value="";
+    capture.focus({preventScroll:true});
+  }
+  const st=$("externalReadyStatus");
+  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
+  const btn=$("startExternalScannerBtn");
+  if(btn)btn.textContent="スキャン待機中";
+}
+
 function setupExternalScannerCapture(){
   const capture=$("hidCaptureInput");
   if(!capture)return;
@@ -870,7 +937,7 @@ function setupExternalScannerCapture(){
   // Hidden input gets first priority. We build E + digits from physical HID
   // key codes, so the Japanese IME never gets a chance to turn E into 「え」.
   capture.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external")return;
+    if(scanInputMode!=="external"||!externalScannerArmed)return;
 
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       e.preventDefault();
@@ -902,7 +969,7 @@ function setupExternalScannerCapture(){
 
   // Fallback for scanners/browsers that do not expose useful .code values.
   capture.addEventListener("input",()=>{
-    if(scanInputMode!=="external")return;
+    if(scanInputMode!=="external"||!externalScannerArmed)return;
     const normalized=normalizeScannedId(capture.value);
     if(/^E\d{6}$/.test(normalized)){
       hidBuffer=normalized;
@@ -913,7 +980,7 @@ function setupExternalScannerCapture(){
 
   // Global fallback when focus has moved away from our capture field.
   window.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external")return;
+    if(scanInputMode!=="external"||!externalScannerArmed)return;
     if(document.activeElement===capture)return;
 
     const tag=(document.activeElement?.tagName||"").toLowerCase();
@@ -1231,8 +1298,11 @@ $("nextQrPageBtn").addEventListener("click",()=>{
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>setScanInputMode("camera"));
+$("startExternalScannerBtn").addEventListener("click",startExternalScanner);
 $("useExternalScannerModeBtn").addEventListener("click",()=>setScanInputMode("external"));
 setupExternalScannerCapture();
+scanInputMode="none";
+externalScannerArmed=false;
 updateScanInputModeUi();
 $("printBtn").addEventListener("click",()=>window.print());
 
@@ -1245,9 +1315,6 @@ $("printBtn").addEventListener("click",()=>window.print());
   loadEnglishVoices();loadJapaneseVoices();speechSynthesis.onvoiceschanged=()=>{loadEnglishVoices();loadJapaneseVoices();};
   await openDb();await refreshSummary();await renderPage();
   updateScanInputModeUi();
-  if(scanInputMode==="external"){
-    setTimeout(()=>{$("hidCaptureInput")?.focus({preventScroll:true});},150);
-  }
   try{
     const allForVersion=await getAllRecords();
     const csvVersion=allForVersion.find(r=>r.version)?.version||"";
