@@ -254,7 +254,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.3 / 更新 2026-08-08 10:17</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.1.4 / 更新 2026-08-08 16:23</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -304,7 +304,7 @@
       </div>
       <div id="externalScannerPanel" class="scanModePanel hiddenScanPanel">
         <div class="scanModePanelTitle">外部QRスキャナー</div>
-        <div class="externalReady">スキャン待機中です。TeraでQRコードを読み取ると、自動で検索して発音します。日本語入力中でもIDを自動補正します。</div>
+        <div class="externalReady">スキャン待機中です。TeraでQRコードを読み取ると、自動で検索して発音します。日本語キーボード中でも、HIDキーを直接判定してIDを読み取ります。</div>
       </div>
       <p id="scanStatus" class="status"></p>
     </div>
@@ -500,8 +500,8 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-const APP_VERSION="v2.1.3";
-const APP_UPDATED="2026-08-08 10:17";
+const APP_VERSION="v2.1.4";
+const APP_UPDATED="2026-08-08 16:23";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -837,63 +837,116 @@ async function handleExternalScannerSubmit(raw){
   await lookup(id,true);
 }
 
+
+function scannerCharFromCode(e){
+  // KeyboardEvent.code is based on the physical HID key and is independent
+  // of the active Japanese/English IME for the characters used in our IDs.
+  if(e.code==="KeyE")return "E";
+  if(/^Digit[0-9]$/.test(e.code))return e.code.slice(-1);
+  if(/^Numpad[0-9]$/.test(e.code))return e.code.slice(-1);
+  return "";
+}
+
 function setupExternalScannerCapture(){
   const capture=$("hidCaptureInput");
   if(!capture)return;
 
+  let submitTimer=null;
+
+  const resetCapture=()=>{
+    capture.value="";
+    hidBuffer="";
+    if(submitTimer){clearTimeout(submitTimer);submitTimer=null;}
+  };
+
+  const submitCurrent=async()=>{
+    const value=hidBuffer || capture.value;
+    resetCapture();
+    if(!value)return;
+    await handleExternalScannerSubmit(value);
+    setTimeout(()=>capture.focus({preventScroll:true}),50);
+  };
+
+  // Hidden input gets first priority. We build E + digits from physical HID
+  // key codes, so the Japanese IME never gets a chance to turn E into 「え」.
   capture.addEventListener("keydown",async e=>{
     if(scanInputMode!=="external")return;
-    if(e.key==="Enter"){
+
+    if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       e.preventDefault();
-      const value=capture.value||hidBuffer;
-      capture.value="";
-      hidBuffer="";
-      await handleExternalScannerSubmit(value);
-      setTimeout(()=>capture.focus({preventScroll:true}),50);
-    }
-  });
-
-  window.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external")return;
-    const tag=(document.activeElement?.tagName||"").toLowerCase();
-    const editable=["input","textarea","select"].includes(tag) && document.activeElement!==capture;
-    if(editable)return;
-
-    const now=Date.now();
-    if(now-hidLastKeyAt>150)hidBuffer="";
-    hidLastKeyAt=now;
-
-    if(e.key==="Enter"){
-      if(!hidBuffer)return;
-      e.preventDefault();
-      const value=hidBuffer;
-      hidBuffer="";
-      await handleExternalScannerSubmit(value);
-      setTimeout(()=>capture.focus({preventScroll:true}),50);
+      e.stopPropagation();
+      await submitCurrent();
       return;
     }
 
-    if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
-      hidBuffer+=e.key;
+    const ch=scannerCharFromCode(e);
+    if(ch){
       e.preventDefault();
+      e.stopPropagation();
+
+      const now=Date.now();
+      if(now-hidLastKeyAt>250)hidBuffer="";
+      hidLastKeyAt=now;
+      hidBuffer+=ch;
+      capture.value=hidBuffer;
+
+      // Current IDs are E + 6 digits. Submit even if the scanner's Enter is
+      // swallowed by the Japanese IME.
+      if(/^E\d{6}$/.test(hidBuffer)){
+        if(submitTimer)clearTimeout(submitTimer);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+      }
+      return;
+    }
+  }, true);
+
+  // Fallback for scanners/browsers that do not expose useful .code values.
+  capture.addEventListener("input",()=>{
+    if(scanInputMode!=="external")return;
+    const normalized=normalizeScannedId(capture.value);
+    if(/^E\d{6}$/.test(normalized)){
+      hidBuffer=normalized;
+      if(submitTimer)clearTimeout(submitTimer);
+      submitTimer=setTimeout(()=>{ submitCurrent(); },80);
     }
   });
+
+  // Global fallback when focus has moved away from our capture field.
+  window.addEventListener("keydown",async e=>{
+    if(scanInputMode!=="external")return;
+    if(document.activeElement===capture)return;
+
+    const tag=(document.activeElement?.tagName||"").toLowerCase();
+    const editable=["input","textarea","select"].includes(tag);
+    if(editable)return;
+
+    if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
+      if(!hidBuffer)return;
+      e.preventDefault();
+      await submitCurrent();
+      return;
+    }
+
+    const ch=scannerCharFromCode(e);
+    if(ch){
+      e.preventDefault();
+      const now=Date.now();
+      if(now-hidLastKeyAt>250)hidBuffer="";
+      hidLastKeyAt=now;
+      hidBuffer+=ch;
+
+      if(/^E\d{6}$/.test(hidBuffer)){
+        if(submitTimer)clearTimeout(submitTimer);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+      }
+    }
+  }, true);
 
   document.addEventListener("click",()=>{
     if(scanInputMode==="external"){
       setTimeout(()=>capture.focus({preventScroll:true}),0);
     }
   });
-  capture.addEventListener("compositionend",()=>{
-    if(scanInputMode!=="external")return;
-    // IME確定後の文字列はEnter時にcapture.valueから取得する
-  });
-
-  capture.addEventListener("input",()=>{
-    if(scanInputMode!=="external")return;
-    // 外部HIDの文字列は hidden input に保持し、Enterで確定する
-  });
-
 }
 
 async function startScanner(){
