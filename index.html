@@ -307,10 +307,39 @@
       }
     }
 
+
+    .printOnlySheet{display:none;}
+
+    @media print {
+      #qrPagerRow,
+      #prevQrPageBtn,
+      #nextQrPageBtn,
+      #qrPageStatus,
+      #qrStatus,
+      #printRangeControls,
+      #printBtn,
+      #pptBtn,
+      #makeSelectedQrBtn,
+      #makeRangeQrBtn {
+        display:none !important;
+      }
+
+      #qrSheet {
+        display:none !important;
+      }
+
+      #printQrSheet {
+        display:grid !important;
+        grid-template-columns:repeat(2,1fr) !important;
+        gap:10mm !important;
+        margin:0 !important;
+      }
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.2.5 / 更新 2026-08-11 15:45</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.2.6 / 更新 2026-08-11 15:55</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -545,16 +574,28 @@
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
         <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
         <button id="printBtn" class="secondary">印刷／PDF保存</button>
+      </div>
+      <div class="grid2" id="printRangeControls" style="margin-top:10px;">
+        <label>
+          <span>印刷範囲</span>
+          <input id="printRange" type="text" placeholder="例：1-50 または 1,2,4">
+        </label>
+        <div class="hint" style="align-self:end;">
+          空欄なら現在表示中のページを印刷します。
+        </div>
+      </div>
+      <div class="row" style="display:none;">
         <button id="pptBtn" class="secondary">PowerPoint保存</button>
       </div>
       </div>
-      <div class="row">
+      <div class="row" id="qrPagerRow">
         <button id="prevQrPageBtn" class="secondary">前のページ</button>
         <button id="nextQrPageBtn" class="secondary">次のページ</button>
       </div>
       <p id="qrPageStatus" class="hint"></p>
       <p id="qrStatus" class="status"></p>
       <div id="qrSheet" class="qrSheet"></div>
+      <div id="printQrSheet" class="qrSheet printOnlySheet"></div>
     </div>
   </section>
 </main>
@@ -565,8 +606,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.2.5";
-const APP_UPDATED="2026-08-11 15:45";
+const APP_VERSION="v2.2.6";
+const APP_UPDATED="2026-08-11 15:55";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1507,7 +1548,120 @@ async function exportCurrentQrPageToPowerPoint(){
 
 $("pptBtn").addEventListener("click",exportCurrentQrPageToPowerPoint);
 
-$("printBtn").addEventListener("click",()=>window.print());
+
+function parsePrintRange(spec,total){
+  const s=String(spec||"").trim();
+  if(!s)return null;
+
+  const out=[];
+  const seen=new Set();
+
+  for(const rawPart of s.split(",")){
+    const part=rawPart.trim();
+    if(!part)continue;
+
+    let m=part.match(/^(\d+)\s*-\s*(\d+)$/);
+    if(m){
+      let a=Number(m[1]), b=Number(m[2]);
+      if(a>b)[a,b]=[b,a];
+      for(let n=a;n<=b;n++){
+        if(n>=1&&n<=total&&!seen.has(n)){seen.add(n);out.push(n);}
+      }
+      continue;
+    }
+
+    if(/^\d+$/.test(part)){
+      const n=Number(part);
+      if(n>=1&&n<=total&&!seen.has(n)){seen.add(n);out.push(n);}
+      continue;
+    }
+
+    throw new Error("印刷範囲の形式が正しくありません。");
+  }
+  return out;
+}
+
+function renderPrintQr(records){
+  const sheet=$("printQrSheet");
+  sheet.innerHTML="";
+
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+
+  records.forEach(r=>{
+    const card=document.createElement("div");
+    card.className="qrCard";
+
+    const q=document.createElement("div");
+    card.appendChild(q);
+    new QRCode(q,{text:r.id,width:132,height:132,correctLevel:QRCode.CorrectLevel.M});
+
+    if(showId){
+      const id=document.createElement("div");
+      id.className="qrId";
+      id.textContent=r.id;
+      card.appendChild(id);
+    }
+    if(showEnglish){
+      const en=document.createElement("div");
+      en.className="qrEnglish";
+      en.textContent=r.english;
+      card.appendChild(en);
+    }
+    if(showIpa&&r.ipa){
+      const ipa=document.createElement("div");
+      ipa.className="qrIpa";
+      ipa.textContent=r.ipa;
+      card.appendChild(ipa);
+    }
+    if(showJapanese&&r.japanese){
+      const ja=document.createElement("div");
+      ja.className="qrJapanese";
+      ja.textContent=r.japanese;
+      card.appendChild(ja);
+    }
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese)){
+      const jr=document.createElement("div");
+      jr.className="qrJapanese";
+      jr.textContent=r.japaneseRead||r.japanese;
+      card.appendChild(jr);
+    }
+    sheet.appendChild(card);
+  });
+}
+
+function prepareAndPrint(){
+  if(!qrPageSource.length){
+    setStatus($("qrStatus"),"先にQRコードを作成してください。",false);
+    return;
+  }
+
+  try{
+    const range=parsePrintRange($("printRange")?.value,qrPageSource.length);
+    let records;
+
+    if(range===null){
+      records=qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize);
+    }else{
+      if(!range.length){
+        setStatus($("qrStatus"),"印刷対象がありません。",false);
+        return;
+      }
+      records=range.map(n=>qrPageSource[n-1]).filter(Boolean);
+    }
+
+    renderPrintQr(records);
+    setTimeout(()=>window.print(),80);
+  }catch(err){
+    setStatus($("qrStatus"),err.message||"印刷範囲を確認してください。",false);
+  }
+}
+
+$("printBtn").addEventListener("click",prepareAndPrint);
+
 
 (async()=>{
   updateVersionBadge("");
