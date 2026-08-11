@@ -286,7 +286,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.2.2 / 更新 2026-08-11 15:30</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.2.3 / 更新 2026-08-11 15:35</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -523,16 +523,6 @@
         <button id="printBtn" class="secondary">印刷／PDF保存</button>
         <button id="pptBtn" class="secondary">PowerPoint保存</button>
       </div>
-      <div class="grid2" style="margin-top:10px;">
-        <label><span>PowerPoint配置</span>
-          <select id="pptPerSlide">
-            <option value="1">1枚に1個</option>
-            <option value="4" selected>1枚に4個</option>
-            <option value="6">1枚に6個</option>
-          </select>
-        </label>
-      </div>
-      <div class="row" style="display:none;">
       </div>
       <div class="row">
         <button id="prevQrPageBtn" class="secondary">前のページ</button>
@@ -549,9 +539,10 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="./jszip.min.js"></script>
 <script src="./pptxgen.min.js"></script>
+<script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.2.2";
-const APP_UPDATED="2026-08-11 15:30";
+const APP_VERSION="v2.2.3";
+const APP_UPDATED="2026-08-11 15:35";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
