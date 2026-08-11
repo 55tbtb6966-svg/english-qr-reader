@@ -332,10 +332,16 @@
       }
     }
 
+
+    .qrEnglish,.qrIpa,.qrJapanese,.qrJapaneseRead,.qrId{
+      overflow-wrap:anywhere;
+      white-space:normal;
+      max-width:100%;
+    }
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.2.8 / 更新 2026-08-11 16:09</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.2.9 / 更新 2026-08-11 16:18</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -603,8 +609,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.2.8";
-const APP_UPDATED="2026-08-11 16:09";
+const APP_VERSION="v2.2.9";
+const APP_UPDATED="2026-08-11 16:18";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1327,6 +1333,35 @@ function resetSizeSettings(){
   setStatus($("qrStatus"),"サイズ設定を初期値に戻しました。");
 }
 
+
+function autoFitQrCard(card){
+  if(!card)return;
+  const textEls=[...card.querySelectorAll(".qrEnglish,.qrIpa,.qrJapanese,.qrJapaneseRead")];
+  const minPx=10;
+  const maxHeight=420;
+  let guard=0;
+  while(card.scrollHeight>maxHeight && guard<28){
+    let changed=false;
+    for(const el of textEls){
+      const px=parseFloat(getComputedStyle(el).fontSize)||16;
+      if(px>minPx){el.style.fontSize=Math.max(minPx,px-0.5)+"px";changed=true;}
+    }
+    if(!changed)break;
+    guard++;
+  }
+  if(card.scrollHeight>maxHeight){
+    const img=card.querySelector("canvas,img");
+    if(img){
+      const w=img.getBoundingClientRect().width||132;
+      const nw=Math.max(92,w-18);
+      img.style.width=nw+"px"; img.style.height=nw+"px";
+    }
+  }
+}
+function autoFitAllQrCards(root){
+  requestAnimationFrame(()=>root.querySelectorAll(".qrCard").forEach(autoFitQrCard));
+}
+
 function renderQr(records){
   const sheet=$("qrSheet");sheet.innerHTML="";
   const showEnglish=$("qrShowEnglish")?.checked!==false;
@@ -1373,6 +1408,8 @@ function renderQr(records){
     }
     sheet.appendChild(card);
   });
+
+  autoFitAllQrCards(sheet);
 
   const labels=[];
   if(showEnglish)labels.push("英語");
@@ -1639,6 +1676,7 @@ function renderPrintQr(records){
     }
     sheet.appendChild(card);
   });
+  autoFitAllQrCards(sheet);
 }
 
 function prepareAndPrint(){

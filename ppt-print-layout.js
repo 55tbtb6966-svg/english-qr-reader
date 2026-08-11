@@ -121,7 +121,7 @@
           ty = addText(slide, r.id, tx, ty, tw, 0.22, 9.5, true, "222222") + 0.01;
         }
         if(showEnglish){
-          ty = addText(slide, r.english, tx, ty, tw, 0.30, 12.2, true, "222222") + 0.02;
+          ty = addText(slide, r.english, tx, ty, tw, 0.38, 12.2, true, "222222") + 0.02;
         }
         if(showIpa && r.ipa){
           ty = addText(slide, r.ipa, tx, ty, tw, 0.25, 9.8, false, "40506A") + 0.01;
