@@ -27,9 +27,9 @@
     const isA6=mode==="a6_1";
 
     // A4 portrait 210 x 297 mm; A6 portrait 105 x 148 mm.
-    const W=isA6?4.1339:8.2677, H=isA6?5.8268:11.6929;
-    pptx.defineLayout({name:isA6?"A6P":"A4P",width:W,height:H});
-    pptx.layout=isA6?"A6P":"A4P";
+    const W=isA6?5.8268:8.2677, H=isA6?4.1339:11.6929;
+    pptx.defineLayout({name:isA6?"A6L":"A4P",width:W,height:H});
+    pptx.layout=isA6?"A6L":"A4P";
     pptx.author="English QR Reader"; pptx.title="QR Cards";
 
     const showId=ck("qrShowId",true),showEn=ck("qrShowEnglish",true),showIpa=ck("qrShowIpa",true),
@@ -42,7 +42,7 @@
 
     let per, cols, rows, mx,my,gx,gy,cw,ch;
     if(isA6){
-      per=1; cols=1; rows=1; mx=.24; my=.24; gx=0; gy=0;
+      per=1; cols=1; rows=1; mx=.28; my=.22; gx=0; gy=0;
       cw=W-2*mx; ch=H-2*my;
     }else{
       per=6; cols=2; rows=3; mx=.38; my=.36; gx=.394; gy=.394;
