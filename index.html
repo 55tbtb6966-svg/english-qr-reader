@@ -286,7 +286,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.1.9 / 更新 2026-08-11 15:17</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.2.0 / 更新 2026-08-11 15:21</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -536,9 +536,10 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="./pptxgen.min.js"></script>
 <script>
-const APP_VERSION="v2.1.9";
-const APP_UPDATED="2026-08-11 15:17";
+const APP_VERSION="v2.2.0";
+const APP_UPDATED="2026-08-11 15:21";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1402,6 +1403,84 @@ document.addEventListener("click",e=>{
   setTimeout(resumeExternalScannerFocus,180);
 });
 
+
+function qrDataUrlForPpt(id,size=600){
+  const holder=document.createElement("div");
+  holder.style.position="fixed";holder.style.left="-10000px";holder.style.top="-10000px";
+  document.body.appendChild(holder);
+  new QRCode(holder,{text:id,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
+  const canvas=holder.querySelector("canvas");
+  const img=holder.querySelector("img");
+  const data=canvas?canvas.toDataURL("image/png"):(img?.src||"");
+  holder.remove();
+  return data;
+}
+
+async function exportCurrentQrPageToPowerPoint(){
+  if(typeof PptxGenJS==="undefined"){
+    setStatus($("qrStatus"),"PowerPoint作成ライブラリを読み込めませんでした。",false);return;
+  }
+  const records=qrPageSource.length?qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize):[];
+  if(!records.length){setStatus($("qrStatus"),"先にQRコードを表示してください。",false);return;}
+  try{
+    setStatus($("qrStatus"),"PowerPointを作成中です…");
+    const pptx=new PptxGenJS();
+    pptx.layout="LAYOUT_WIDE";
+    pptx.author="English QR Reader";
+    pptx.subject="QR cards";
+    pptx.title="QR cards";
+    pptx.company="";
+    pptx.lang="ja-JP";
+    pptx.theme={
+      headFontFace:"Aptos", bodyFontFace:"Aptos", lang:"ja-JP"
+    };
+    const slide=pptx.addSlide();
+    slide.background={color:"FFFFFF"};
+
+    const showId=$("qrShowId")?.checked!==false;
+    const showEnglish=$("qrShowEnglish")?.checked!==false;
+    const showIpa=$("qrShowIpa")?.checked!==false;
+    const showJapanese=$("qrShowJapanese")?.checked===true;
+    const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+
+    const n=records.length;
+    const cols=n<=6?2:n<=12?3:4;
+    const rows=Math.ceil(n/cols);
+    const slideW=13.333, slideH=7.5;
+    const mx=.35,my=.28,gx=.14,gy=.12;
+    const cw=(slideW-2*mx-(cols-1)*gx)/cols;
+    const ch=(slideH-2*my-(rows-1)*gy)/rows;
+
+    records.forEach((r,i)=>{
+      const col=i%cols,row=Math.floor(i/cols);
+      const x=mx+col*(cw+gx), y=my+row*(ch+gy);
+      const qr=Math.min(cw*.40,ch*.56,1.18);
+      const qx=x+(cw-qr)/2, qy=y+.05;
+      const data=qrDataUrlForPpt(r.id,600);
+      if(data) slide.addImage({data,x:qx,y:qy,w:qr,h:qr});
+      let ty=qy+qr+.03;
+      const add=(txt,fs,bold=false,color="222222")=>{
+        if(!txt)return;
+        slide.addText(String(txt),{x:x+.05,y:ty,w:cw-.10,h:.24,fontFace:"Aptos",fontSize:fs,bold,color,align:"center",margin:0,breakLine:false,fit:"shrink"});
+        ty+=.24;
+      };
+      if(showId)add(r.id,9,false,"666666");
+      if(showEnglish)add(r.english,14,true,"111111");
+      if(showIpa&&r.ipa)add(r.ipa,10,false,"40506A");
+      if(showJapanese&&r.japanese)add(r.japanese,11,false,"333333");
+      if(showJapaneseRead&&(r.japaneseRead||r.japanese))add(r.japaneseRead||r.japanese,11,false,"333333");
+    });
+
+    await pptx.writeFile({fileName:`qr_cards_${new Date().toISOString().slice(0,10)}.pptx`});
+    setStatus($("qrStatus"),`PowerPointを作成しました（${records.length}件）。`);
+  }catch(err){
+    console.error(err);
+    setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
+  }
+}
+
+$("pptBtn").addEventListener("click",exportCurrentQrPageToPowerPoint);
+
 $("printBtn").addEventListener("click",()=>window.print());
 
 (async()=>{
@@ -1427,6 +1506,5 @@ $("printBtn").addEventListener("click",()=>window.print());
   if(status)status.textContent="アプリの起動に失敗しました。ページを再読み込みしてください。";
 });
 </script>
-<script src="./ppt-export.js"></script>
 </body>
 </html>
