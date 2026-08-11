@@ -382,3 +382,8 @@ QR読み取り方法の初期状態と選択UIを変更しました。
 ## v2.2.0（更新 2026-08-11 15:21）
 
 PowerPoint出力を自作OOXMLからPptxGenJS 4.0.0（ローカル同梱）へ変更。外部CDNへデータを送らず、Safari内で標準PPTXを生成します。
+
+
+## v2.2.1（更新 2026-08-11 15:25）
+
+PowerPoint生成に必要な JSZip をローカル同梱。読み込み順を jszip.min.js → pptxgen.min.js に修正。
