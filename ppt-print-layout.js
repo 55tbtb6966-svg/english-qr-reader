@@ -58,10 +58,12 @@
           x,y,w:cw,h:ch,fill:{color:"FFFFFF"},line:{color:"000000",width:.75}
         });
 
-        // Match configured QR size, constrained to PDF card.
-        const q=Math.min(1.55,Math.max(.95,(Number(s.qrSize)||132)/100));
+        // Match the current detailed QR size setting to the print/PDF layout.
+        // 124 px is the print reference size; convert proportionally to inches.
+        const qrPx=Number(s.qrSize)||132;
+        const q=Math.min(1.55,Math.max(.75,1.30*(qrPx/124)));
         const qx=x+(cw-q)/2,qy=y+.14;
-        const data=qrData(r.id,Math.max(300,Number(s.qrSize)||132));
+        const data=qrData(r.id,Math.max(300,qrPx));
         if(data)slide.addImage({data,x:qx,y:qy,w:q,h:q});
 
         let ty=qy+q+.07, tx=x+.10, tw=cw-.20;
