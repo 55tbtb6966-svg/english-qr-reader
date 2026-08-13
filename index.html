@@ -338,7 +338,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.3.5 / 更新 2026-08-13 09:56</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.3.6 / 更新 2026-08-14 02:27</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -534,7 +534,7 @@
         <label><span>件数</span>
           <select id="qrCount"><option>6</option><option>8</option><option selected>10</option><option>12</option><option>20</option><option>30</option><option>50</option></select>
         </label>
-        <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英文・日本語"></label>
+        <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英語・日本語・日本語読み・Commentを検索"></label>
       </div>
       <div class="grid2" style="margin-top:10px;">
         
@@ -617,8 +617,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.3.5";
-const APP_UPDATED="2026-08-13 09:56";
+const APP_VERSION="v2.3.6";
+const APP_UPDATED="2026-08-14 02:27";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -709,7 +709,7 @@ function csvToRecords(rows) {
   const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iIpa=idx(["ipa","phonetic","発音記号"]), iJa=idx(["japanese","日本語","和訳"]), iJaRead=idx(["japaneseread","japanese_read","日本語読み","読み"]);
   const iMode=idx(["mode","読み方"]), iER=idx(["englishrate","english_rate","英語速度"]);
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
-  const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]);
+  const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
   if(iId<0||iEn<0) throw new Error("ID列とEnglish列が必要です。");
   const out=[]; let version="";
   for(let i=1;i<rows.length;i++){
@@ -721,7 +721,8 @@ function csvToRecords(rows) {
       mode,englishRate:iER>=0?Number(c[iER])||1:1,japaneseRate:iJR>=0?Number(c[iJR])||1:1,
       repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1,
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
-      version:iVer>=0?String(c[iVer]||"").trim():""};
+      version:iVer>=0?String(c[iVer]||"").trim():"",
+      comment:iComment>=0?String(c[iComment]||"").trim():""};
     if(rec.version) version=rec.version;
     out.push(rec);
   }
@@ -745,10 +746,17 @@ async function importCsv(replace) {
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getAllRecords()).sort((a,b)=>a.id.localeCompare(b.id));
-  const lines=["ID,English,IPA,Japanese,JapaneseRead,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version"];
-  all.forEach(r=>lines.push([r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||""].map(csvEscape).join(",")));
+  const lines=["ID,English,IPA,Japanese,JapaneseRead,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment"];
+  all.forEach(r=>lines.push([
+    r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",r.mode,
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||""
+  ].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="words.csv";a.click();URL.revokeObjectURL(a.href);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="words.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 async function refreshSummary(){
   try{
@@ -1221,9 +1229,15 @@ async function editRecord(id){
   $("editGap").value=String(r.gap);$("editVersion").value=r.version||"";
 }
 async function filteredAll(searchId){
-  const q=$(searchId).value.trim().toLowerCase();
+  const q=String($(searchId)?.value||"").trim().toLowerCase();
   const all=await getAllRecords();
-  return all.sort((a,b)=>a.id.localeCompare(b.id)).filter(r=>!q||[r.id,r.english,r.ipa,r.japanese].some(v=>String(v).toLowerCase().includes(q)));
+  return all
+    .filter(r=>{
+      if(!q)return true;
+      return [r.id,r.english,r.ipa,r.japanese,r.japaneseRead,r.comment]
+        .some(v=>String(v??"").toLowerCase().includes(q));
+    })
+    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
 }
 async function renderPage(){
   const all=await filteredAll("searchText"),size=Number($("pageSize").value),start=currentPage*size;
