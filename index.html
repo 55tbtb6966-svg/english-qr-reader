@@ -282,6 +282,7 @@
 
     @media print {
       #qrStatus,
+      #exportSourceHint,
       #qrPageStatus,
       .status,
       .scannerModeStatus,
@@ -337,7 +338,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.3.5 / 更新 2026-08-11 16:53</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.3.5 / 更新 2026-08-13 09:56</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -572,6 +573,7 @@
       <div class="row">
         <button id="makeSelectedQrBtn">選択したQRを作る</button>
         <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
+        <button id="makeSearchQrBtn" class="secondary">検索結果から作る</button>
         <button id="printBtn" class="secondary">印刷／PDF保存</button>
       </div>
       <div class="grid2" id="printRangeControls" style="margin-top:10px;">
@@ -580,7 +582,7 @@
           <input id="printRange" type="text" placeholder="例：1-50 または 1,2,4">
         </label>
         <div class="hint" style="align-self:end;">
-          空欄なら現在表示中のページを印刷します。
+          空欄なら現在の検索結果・選択結果をすべてID順で印刷します。
         </div>
       </div>
       <div class="grid2" id="pptLayoutControls" style="margin-top:10px;">
@@ -601,6 +603,7 @@
         <button id="nextQrPageBtn" class="secondary">次のページ</button>
       </div>
       <p id="qrPageStatus" class="hint"></p>
+      <p id="exportSourceHint" class="hint">PDF／PPTは現在の検索結果・選択結果を対象に作成します。</p>
       <p id="qrStatus" class="status"></p>
       <div id="qrSheet" class="qrSheet"></div>
       <div id="printQrSheet" class="qrSheet printOnlySheet"></div>
@@ -615,7 +618,7 @@
 <script src="./ppt-print-layout.js"></script>
 <script>
 const APP_VERSION="v2.3.5";
-const APP_UPDATED="2026-08-11 16:53";
+const APP_UPDATED="2026-08-13 09:56";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1441,8 +1444,19 @@ $("makeSelectedQrBtn").addEventListener("click",async()=>{
   qrPageStart=0;
   renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
 });
+
+$("makeSearchQrBtn").addEventListener("click",async()=>{
+  qrPageSource=await filteredAll("qrSearch");
+  qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+  qrPageStart=0;
+  qrPageSize=Number($("qrCount").value)||10;
+  renderQr(qrPageSource.slice(0,qrPageSize));
+  setStatus($("qrStatus"),`検索結果 ${qrPageSource.length}件をID順で表示しています。`);
+});
+
 $("makeRangeQrBtn").addEventListener("click",async()=>{
   qrPageSource=await filteredAll("qrSearch");
+  qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
   qrPageStart=Math.max(1,Number($("qrStart").value)||1)-1;
   qrPageSize=Number($("qrCount").value)||10;
   renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
@@ -1663,7 +1677,7 @@ function prepareAndPrint(){
     let records;
 
     if(range===null){
-      records=qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize);
+      records=qrPageSource.slice().sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
     }else{
       if(!range.length){
         setStatus($("qrStatus"),"印刷対象がありません。",false);

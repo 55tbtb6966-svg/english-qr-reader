@@ -1,6 +1,6 @@
 // v2.3.3 PowerPoint export: A4 6-up or A6 1-up, matching print/PDF appearance.
 (function(){
-  function recs(){try{return qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize);}catch{return [];}}
+  function recs(){try{return qrPageSource.slice().sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));}catch{return [];}}catch{return [];}}
   function ck(id,d){const e=document.getElementById(id);return e?e.checked:d;}
   function qrData(id,size){
     const h=document.createElement("div"); h.style.cssText="position:fixed;left:-9999px;top:-9999px";
@@ -14,33 +14,6 @@
     slide.addText(String(text),{x,y,w,h,fontFace:"Arial",fontSize:fs,bold:!!bold,color:color||"222222",
       align:"center",valign:"mid",margin:0,fit:"shrink",breakLine:false});
     return y+h;
-  }
-
-  function saveBlob(blob, fileName){
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  }
-
-  async function writePptxWithForcedSlideSize(pptx, fileName, wEmu, hEmu){
-    // PptxGenJS custom layout can be interpreted inconsistently by some viewers.
-    // Force the final OOXML slide size in ppt/presentation.xml.
-    const blob=await pptx.write({outputType:"blob"});
-    if(typeof JSZip==="undefined"){
-      saveBlob(blob,fileName);
-      return;
-    }
-    const zip=await JSZip.loadAsync(blob);
-    const path="ppt/presentation.xml";
-    let xml=await zip.file(path).async("string");
-    xml=xml.replace(/<p:sldSz[^>]*\/>/,`<p:sldSz cx="${wEmu}" cy="${hEmu}" type="custom"/>`);
-    zip.file(path,xml);
-    const fixed=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.presentationml.presentation"});
-    saveBlob(fixed,fileName);
   }
   async function makePpt(){
     const P=(typeof pptxgen!=="undefined")?pptxgen:(typeof PptxGenJS!=="undefined")?PptxGenJS:
@@ -100,12 +73,8 @@
       });
     }
     setStatus($("qrStatus"),"PowerPointを作成中です…");
-    const fileName=`qr_cards_${isA6?"A6_landscape_1up":"A4_portrait_6up"}_${new Date().toISOString().slice(0,10)}.pptx`;
-    // EMU: 1mm = 36000. A6 landscape = 148 x 105 mm. A4 portrait = 210 x 297 mm.
-    const wEmu=isA6?5328000:7560000;
-    const hEmu=isA6?3780000:10692000;
-    await writePptxWithForcedSlideSize(pptx,fileName,wEmu,hEmu);
-    setStatus($("qrStatus"),`PowerPointを作成しました（${isA6?"A6横・1枚1個":"A4縦・1枚6個"}）。`);
+    await pptx.writeFile({fileName:`qr_cards_${isA6?"A6_1up":"A4_6up"}_${new Date().toISOString().slice(0,10)}.pptx`});
+    setStatus($("qrStatus"),`PowerPointを作成しました（${isA6?"A6・1枚1個":"A4・1枚6個"}）。`);
   }
   window.addEventListener("load",()=>{
     const old=document.getElementById("pptBtn");if(!old)return;
