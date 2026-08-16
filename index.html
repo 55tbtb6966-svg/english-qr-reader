@@ -599,10 +599,16 @@
       color:#667085;
     }
 
+
+    #cameraControlsPanel.hiddenScanPanel,
+    #externalScannerPanel.hiddenScanPanel{
+      display:none !important;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.7.8 / 更新 2026-08-16 23:53</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.7.9 / 更新 2026-08-16 23:55</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -636,7 +642,7 @@
         </div>
 
       <div id="reader"></div>
-      <div id="cameraControlsPanel" class="scanModePanel">
+      <div id="cameraControlsPanel" class="scanModePanel hiddenScanPanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
         <div class="hint">カメラ映像は広く表示し、中央のカギ括弧付き枠だけをQR読み取り範囲として使用します。</div>
         <div class="qrOptionBox" style="margin-top:8px;">
@@ -980,8 +986,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.7.8";
-const APP_UPDATED="2026-08-16 23:53";
+const APP_VERSION="v2.7.9";
+const APP_UPDATED="2026-08-16 23:55";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2018,6 +2024,9 @@ $("useExternalScannerModeBtn").addEventListener("click",()=>speakScanModeName?.(
 setupExternalScannerCapture();
 scanInputMode="none";
 externalScannerArmed=false;
+externalScannerStartedOnce=false;
+scannerTextEditing=false;
+qrScanLocked=false;
 updateScanInputModeUi();
 
 document.addEventListener("click",e=>{
