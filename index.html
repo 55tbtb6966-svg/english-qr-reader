@@ -599,10 +599,19 @@
       color:#667085;
     }
 
+
+    #idBadge,
+    #modeBadge{
+      font-size:inherit !important;
+      font-weight:inherit !important;
+      padding:4px 8px !important;
+      line-height:inherit !important;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.0 / 更新 2026-08-16 23:58</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.1 / 更新 2026-08-17 00:08</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -690,6 +699,14 @@
           <select id="manualEnglishRate">
             <option value="0.6">0.6倍</option><option value="0.8">0.8倍</option>
             <option value="1" selected>1.0倍</option><option value="1.2">1.2倍</option>
+            <option value="1.4">1.4倍</option>
+          </select>
+        </label><label><span>日本語読み速度</span>
+          <select id="manualJapaneseRate">
+            <option value="0.6">0.6倍</option>
+            <option value="0.8" selected>0.8倍</option>
+            <option value="1">1.0倍</option>
+            <option value="1.2">1.2倍</option>
             <option value="1.4">1.4倍</option>
           </select>
         </label>
@@ -980,8 +997,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.0";
-const APP_UPDATED="2026-08-16 23:58";
+const APP_VERSION="v2.8.1";
+const APP_UPDATED="2026-08-17 00:08";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1266,6 +1283,7 @@ async function lookup(id,auto=true){
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
   $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
+  $("manualJapaneseRate").value=String(r.japaneseRate);
   setStatus($("scanStatus"),id+" を読み取りました。");
   if(auto)await playRecord();
 }
@@ -1910,6 +1928,7 @@ $("playEnglishBtn").addEventListener("click",()=>playRecord("english"));
 $("playJapaneseBtn").addEventListener("click",()=>playRecord("japanese"));
 $("playBothBtn").addEventListener("click",()=>playRecord("both"));
 $("manualEnglishRate").addEventListener("change",()=>{if(currentRecord)currentRecord.englishRate=Number($("manualEnglishRate").value);});
+$("manualJapaneseRate").addEventListener("change",()=>{if(currentRecord)currentRecord.japaneseRate=Number($("manualJapaneseRate").value);});
 $("saveBtn").addEventListener("click",saveEditor);$("clearEditorBtn").addEventListener("click",clearEditor);
 $("searchText").addEventListener("input",()=>{currentPage=0;renderPage();});
 $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
