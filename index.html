@@ -573,7 +573,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.7.1 / 更新 2026-08-16 21:38</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.7.2 / 更新 2026-08-16 21:43</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -607,7 +607,7 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
-        <div class="hint">カメラ映像の全域をQR読み取り範囲として使用します。</div>
+        <div class="hint">カメラ映像は広く表示し、中央のカギ括弧付き枠だけをQR読み取り範囲として使用します。</div>
         <div class="qrOptionBox" style="margin-top:8px;">
           <div class="qrOptionTitle">カメラ読み取りモード</div>
           <div class="qrOptionRow">
@@ -949,8 +949,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.7.1";
-const APP_UPDATED="2026-08-16 21:38";
+const APP_VERSION="v2.7.2";
+const APP_UPDATED="2026-08-16 21:43";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1602,7 +1602,7 @@ async function startScanner(){
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
   try{
-    await scanner.start({facingMode:"environment"},{fps:10},
+    await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
       async text=>{
         const continuous=$("cameraScanContinuous")?.checked===true;
         const now=Date.now();
