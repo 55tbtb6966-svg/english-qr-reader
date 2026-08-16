@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.5.9 / 更新 2026-08-16 20:51</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.0 / 更新 2026-08-16 20:55</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -586,6 +586,7 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
+        <div class="hint">iPhoneカメラを選ぶと、音声準備として小さく「Ready」と読み上げます。</div>
         <div class="cameraActionRow">
           <button id="startBtn" type="button">QRコードを読み取る</button>
           <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
@@ -913,8 +914,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.5.9";
-const APP_UPDATED="2026-08-16 20:51";
+const APP_VERSION="v2.6.0";
+const APP_UPDATED="2026-08-16 20:55";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -940,6 +941,7 @@ let hidBuffer="";
 let externalScannerArmed=false;
 let externalScannerStartedOnce=false;
 let speechUnlockedByScannerStart=false;
+let cameraSpeechUnlocked=false;
 let scannerTextEditing=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
@@ -1242,6 +1244,7 @@ async function setScanInputMode(mode){
     speechUnlockedByScannerStart=false;
   }
   scanInputMode=nextMode;
+  if(nextMode!=="camera")cameraSpeechUnlocked=false;
   hidBuffer="";
   try{await stopScanner();}catch{}
   updateScanInputModeUi();
@@ -1500,6 +1503,34 @@ function setupExternalScannerCapture(){
     scannerTextEditing=false;
     setTimeout(resumeExternalScannerFocus,80);
   });
+}
+
+
+function unlockSpeechForCameraMode(){
+  if(cameraSpeechUnlocked)return;
+  if(!("speechSynthesis" in window))return;
+
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance("Ready");
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.22;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=window.speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    u.onend=()=>{cameraSpeechUnlocked=true;};
+    u.onerror=()=>{};
+    window.speechSynthesis.speak(u);
+  }catch{}
 }
 
 async function startScanner(){
@@ -1824,7 +1855,10 @@ $("nextQrPageBtn").addEventListener("click",()=>{
 });
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
-$("useCameraModeBtn").addEventListener("click",()=>setScanInputMode("camera"));
+$("useCameraModeBtn").addEventListener("click",()=>{
+  unlockSpeechForCameraMode();
+  setScanInputMode("camera");
+});
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
 
 
