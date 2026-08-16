@@ -335,10 +335,42 @@
       }
     }
 
+
+    .qrMethodGuide{
+      margin-top:12px;
+      display:grid;
+      gap:10px;
+    }
+    .qrMethodCard{
+      border:1px solid #d9dee7;
+      border-radius:12px;
+      padding:12px 14px;
+      background:#fff;
+    }
+    .qrMethodCard h3{
+      margin:0 0 6px;
+      font-size:1rem;
+    }
+    .qrMethodCard p{
+      margin:0 0 8px;
+      color:#5b6575;
+      font-size:.9rem;
+    }
+    .qrMethodTag{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      background:#eef2f7;
+      font-size:.82rem;
+      font-weight:700;
+      color:#465266;
+      margin-bottom:8px;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.3.9 / 更新 2026-08-16 19:14</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.0 / 更新 2026-08-16 19:18</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -529,9 +561,31 @@
   <section id="qrPanel" class="panel">
     <div class="card">
       <h2>一括QRコード作成</h2>
+
+      <div class="qrOptionBox">
+        <div class="qrOptionTitle">作成方法</div>
+        <div class="qrMethodGuide">
+          <div class="qrMethodCard">
+            <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
+            <h3>指定位置から作る</h3>
+            <p>データをID順に並べ、指定した開始位置から表示件数分のQRを作ります。</p>
+          </div>
+          <div class="qrMethodCard">
+            <div class="qrMethodTag">検索 ＋ 表示件数</div>
+            <h3>検索結果から作る</h3>
+            <p>ID・英語・日本語・日本語読み・Commentで検索し、その結果をID順に表示します。</p>
+          </div>
+          <div class="qrMethodCard">
+            <div class="qrMethodTag">一覧チェック ＋ 表示件数</div>
+            <h3>データ管理で選択したQRを作る</h3>
+            <p>データ管理の一覧でチェックした項目だけをQRにします。</p>
+          </div>
+        </div>
+      </div>
+
       <div class="grid3">
-        <label><span>開始位置</span><input id="qrStart" type="number" min="1" value="1"></label>
-        <label><span>件数</span>
+        <label><span>開始位置（指定位置から作る用）</span><input id="qrStart" type="number" min="1" value="1"></label>
+        <label><span>表示件数（共通）</span>
           <select id="qrCount">
             <option>6</option>
             <option>8</option>
@@ -544,7 +598,7 @@
             <option>100</option>
           </select>
         </label>
-        <label><span>検索</span><input id="qrSearch" type="text" placeholder="ID・英語・日本語・日本語読み・Commentを検索"></label>
+        <label><span>検索（検索結果から作る用）</span><input id="qrSearch" type="text" placeholder="ID・英語・日本語・日本語読み・Commentを検索"></label>
       </div>
       <div class="grid2" style="margin-top:10px;">
         
@@ -627,8 +681,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.3.9";
-const APP_UPDATED="2026-08-16 19:14";
+const APP_VERSION="v2.4.0";
+const APP_UPDATED="2026-08-16 19:18";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
