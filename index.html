@@ -682,7 +682,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.3 / 更新 2026-08-17 00:20</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.4 / 更新 2026-08-17 00:32</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -888,6 +888,8 @@
         <button id="clearEditorBtn" class="secondary">入力欄を空にする</button>
       </div>
       <p id="editStatus" class="status"></p>
+        </div>
+      </details>
 
       <div class="grid2" style="margin-top:14px;">
         <label><span>検索</span><input id="searchText" type="text" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment"></label>
@@ -912,13 +914,10 @@
         </table>
       </div>
     </div>
-  </section>
-        </div>
-      </details>
     </div>
+  </section>
 
-
-  <section id="qrPanel" class="panel">
+<section id="qrPanel" class="panel">
     <div class="card">
       <h2>一括QRコード作成</h2>
 
@@ -1079,8 +1078,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.3";
-const APP_UPDATED="2026-08-17 00:20";
+const APP_VERSION="v2.8.4";
+const APP_UPDATED="2026-08-17 00:32";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
