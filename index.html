@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.0 / 更新 2026-08-16 20:55</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.1 / 更新 2026-08-16 20:59</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -914,8 +914,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.0";
-const APP_UPDATED="2026-08-16 20:55";
+const APP_VERSION="v2.6.1";
+const APP_UPDATED="2026-08-16 20:59";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1159,7 +1159,7 @@ function speakText(text,lang,rate){
       u.onend=resolve;
       u.onerror=resolve;
       speechSynthesis.speak(u);
-    },softStart?650:350);
+    },softStart?350:80);
   });
 }
 async function playRecord(modeOverride=null){
@@ -1176,7 +1176,7 @@ async function playRecord(modeOverride=null){
     speechSynthesis.cancel();
     await new Promise(r=>setTimeout(r,300));
   }else{
-    await new Promise(r=>setTimeout(r,120));
+    await new Promise(r=>setTimeout(r,30));
   }
   const mode=modeOverride||currentRecord.mode;
   for(let i=0;i<currentRecord.repeat;i++){
@@ -1507,30 +1507,35 @@ function setupExternalScannerCapture(){
 
 
 function unlockSpeechForCameraMode(){
-  if(cameraSpeechUnlocked)return;
-  if(!("speechSynthesis" in window))return;
-
-  try{
-    window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance("Ready");
-    u.lang="en-US";
-    u.rate=1.0;
-    u.pitch=1.0;
-    u.volume=0.22;
+  return new Promise(resolve=>{
+    if(cameraSpeechUnlocked){resolve();return;}
+    if(!("speechSynthesis" in window)){resolve();return;}
 
     try{
-      const selectedName=$("englishVoiceSelect")?.value||"";
-      const voices=window.speechSynthesis.getVoices();
-      const v=voices.find(x=>x.name===selectedName) ||
-              voices.find(x=>/^en-US/i.test(x.lang)) ||
-              voices.find(x=>/^en/i.test(x.lang));
-      if(v)u.voice=v;
-    }catch{}
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance("Ready");
+      u.lang="en-US";
+      u.rate=1.0;
+      u.pitch=1.0;
+      u.volume=0.22;
 
-    u.onend=()=>{cameraSpeechUnlocked=true;};
-    u.onerror=()=>{};
-    window.speechSynthesis.speak(u);
-  }catch{}
+      try{
+        const selectedName=$("englishVoiceSelect")?.value||"";
+        const voices=window.speechSynthesis.getVoices();
+        const v=voices.find(x=>x.name===selectedName) ||
+                voices.find(x=>/^en-US/i.test(x.lang)) ||
+                voices.find(x=>/^en/i.test(x.lang));
+        if(v)u.voice=v;
+      }catch{}
+
+      const done=()=>{cameraSpeechUnlocked=true;resolve();};
+      u.onend=done;
+      u.onerror=done;
+      window.speechSynthesis.speak(u);
+    }catch{
+      resolve();
+    }
+  });
 }
 
 async function startScanner(){
@@ -1544,11 +1549,12 @@ async function startScanner(){
         if(qrScanLocked)return;
         qrScanLocked=true;
         try{
-          await stopScanner();
-          await new Promise(r=>setTimeout(r,900));
+          // Start the lookup/speech immediately. Do not wait for camera shutdown.
+          const stopPromise=stopScanner().catch(()=>{});
           await lookup(text,true);
+          await stopPromise;
         }finally{
-          setTimeout(()=>{qrScanLocked=false;},700);
+          setTimeout(()=>{qrScanLocked=false;},250);
         }
       },()=>{});
     setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
@@ -1784,7 +1790,10 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
-$("startBtn").addEventListener("click",startScanner);$("stopBtn").addEventListener("click",stopScanner);
+$("startBtn").addEventListener("click",async()=>{
+  await unlockSpeechForCameraMode();
+  await startScanner();
+});$("stopBtn").addEventListener("click",stopScanner);
 $("manualLookupBtn").addEventListener("click",()=>lookup($("manualId").value,false));
 $("englishVoiceSelect").addEventListener("change",()=>{
   localStorage.setItem("selectedEnglishVoice",$("englishVoiceSelect").value);
