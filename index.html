@@ -570,10 +570,48 @@
       min-height:0 !important;
     }
 
+
+    /* Reader result emphasis */
+    #scanId,
+    #readId,
+    #currentId,
+    #resultId{
+      font-size:1.35rem !important;
+      font-weight:800 !important;
+      line-height:1.35 !important;
+    }
+
+    #readMode,
+    #modeDisplay,
+    #readingMode,
+    #scanModeDisplay{
+      font-size:1.2rem !important;
+      font-weight:700 !important;
+      line-height:1.4 !important;
+    }
+
+    /* Existing result text labels in this app */
+    #scanStatus{
+      font-size:1.08rem !important;
+      line-height:1.4 !important;
+    }
+
+
+    #idBadge{
+      font-size:1.25rem !important;
+      font-weight:800 !important;
+      padding:8px 12px !important;
+    }
+    #modeBadge{
+      font-size:1.18rem !important;
+      font-weight:700 !important;
+      padding:8px 12px !important;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.7.3 / 更新 2026-08-16 23:31</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.7.5 / 更新 2026-08-16 23:35</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -653,8 +691,8 @@
         <button id="playBothBtn" class="secondary">英語→日本語</button>
       </div>
       <div class="grid2" style="margin-top:12px;">
-<label><span>確認用ID</span><input id="manualId" type="text" placeholder="E000001"></label>
-      <div class="row"><button id="manualLookupBtn" class="secondary">IDを検索する</button></div>
+
+      
         <label><span>英語速度</span>
           <select id="manualEnglishRate">
             <option value="0.6">0.6倍</option><option value="0.8">0.8倍</option>
@@ -949,8 +987,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.7.3";
-const APP_UPDATED="2026-08-16 23:31";
+const APP_VERSION="v2.7.5";
+const APP_UPDATED="2026-08-16 23:35";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
