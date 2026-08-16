@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.7 / 更新 2026-08-16 21:19</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.8 / 更新 2026-08-16 21:23</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -913,8 +913,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.7";
-const APP_UPDATED="2026-08-16 21:19";
+const APP_VERSION="v2.6.8";
+const APP_UPDATED="2026-08-16 21:23";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1235,6 +1235,29 @@ function updateScanInputModeUi(){
   }
 }
 
+
+
+function speakScanModeName(text){
+  if(!("speechSynthesis" in window))return;
+  try{
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.28;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    speechSynthesis.speak(u);
+  }catch{}
+}
 
 function speakScanReadyOnce(){
   if(scanReadySpoken)return;
@@ -1850,7 +1873,7 @@ $("nextQrPageBtn").addEventListener("click",()=>{
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>{
-  speakScanReadyOnce();
+  speakScanModeName("Camera");
   setScanInputMode("camera");
 });
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
@@ -1892,7 +1915,7 @@ window.addEventListener("pageshow",()=>setTimeout(resumeExternalScannerFocus,120
 
 
 $("useExternalScannerModeBtn").addEventListener("click",()=>{
-  speakScanReadyOnce();
+  speakScanModeName("Scanner");
   setScanInputMode("external");
 });
 setupExternalScannerCapture();
