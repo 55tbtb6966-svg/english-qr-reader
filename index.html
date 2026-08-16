@@ -701,7 +701,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.0 / 更新 2026-08-17 00:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.1 / 更新 2026-08-17 00:59</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -712,7 +712,6 @@
 </div>
 <section class="panel active" id="readerPanel">
 <input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
-
 <div class="card">
 <h2>QRコードを読み取る</h2>
 <div class="qrOptionBox" style="margin-top:10px;">
@@ -827,23 +826,21 @@
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
-<p class="status" id="importStatus"></p>
-<div class="metric">
-<div>登録件数：<strong id="recordCount">0</strong></div>
-<div>データ版：<strong id="dataVersion">未設定</strong></div>
-<div>保存使用量：<strong id="storageUsage">確認中</strong></div>
-</div>
+
+
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
 <button id="replaceImportBtn">全置換で読み込む</button>
 <button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
 <button class="secondary" id="exportBtn">CSVを書き出す</button>
-</div>
-</div></section>
+</div><p class="status" id="importStatus"></p>
+<div class="metric">
+<div>登録件数：<strong id="recordCount">0</strong></div>
+<div>データ版：<strong id="dataVersion">未設定</strong></div>
+<div>保存使用量：<strong id="storageUsage">確認中</strong></div>
+</div></div></section>
 <section class="panel" id="dataPanel">
 <div class="card">
-
-
 <div class="grid2" style="margin-top:14px;">
 <label><span>検索</span><input id="searchText" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment" type="text"/></label>
 <label><span>1ページの件数</span>
@@ -907,7 +904,6 @@
 <p class="status" id="editStatus"></p>
 </div></div>
 </div>
-
 </section>
 <section class="panel" id="qrPanel">
 <select aria-hidden="true" id="qrCount" style="display:none;">
@@ -922,9 +918,7 @@
 <div class="row" style="width:100%; margin-top:6px;"><button class="secondary" id="makeSelectedQrBtn">選択したQRを作る</button></div>
 </div>
 </div>
-
 <div class="qrMethodGuide">
-
 </div>
 <div class="qrMethodCard qrSearchCard">
 <h3>検索結果から作る</h3>
@@ -939,11 +933,6 @@
 <button class="secondary" id="makeRangeQrBtn">指定位置から作る</button>
 </div>
 </div>
-
-
-
-
-
 <div class="grid2" style="margin-top:10px;">
 <div style="grid-column:1 / -1;">
 <div class="qrOptionBox">
@@ -1008,7 +997,6 @@
 <div class="row" id="pptSaveControls" style="margin-top:10px;">
 <button class="secondary" id="pptBtn">PowerPoint保存</button>
 </div>
-
 <div class="row" id="qrPagerRow">
 <button class="secondary" id="prevQrPageBtn">前のページ</button>
 <button class="secondary" id="nextQrPageBtn">次のページ</button>
@@ -1018,7 +1006,6 @@
 <p class="status" id="qrStatus"></p>
 <div class="qrSheet" id="qrSheet"></div>
 <div class="qrSheet printOnlySheet" id="printQrSheet"></div>
-
 </section>
 </main>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -1027,8 +1014,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.0";
-const APP_UPDATED="2026-08-17 00:54";
+const APP_VERSION="v2.9.1";
+const APP_UPDATED="2026-08-17 00:59";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
