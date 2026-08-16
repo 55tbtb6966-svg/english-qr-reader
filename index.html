@@ -338,7 +338,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.3.6 / 更新 2026-08-14 02:27</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.3.7 / 更新 2026-08-16 16:19</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -617,8 +617,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.3.6";
-const APP_UPDATED="2026-08-14 02:27";
+const APP_VERSION="v2.3.7";
+const APP_UPDATED="2026-08-16 16:19";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -644,6 +644,7 @@ let hidBuffer="";
 let externalScannerArmed=false;
 let externalScannerStartedOnce=false;
 let speechUnlockedByScannerStart=false;
+let scannerTextEditing=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
 let qrPageStart = 0;
@@ -1044,12 +1045,22 @@ function unlockSpeechForExternalScanner(){
 }
 
 function resumeExternalScannerFocus(){
-  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  if(scanInputMode!=="external" || !externalScannerStartedOnce || scannerTextEditing)return;
+
+  const active=document.activeElement;
+  if(active && active!==document.body && active!==$("hidCaptureInput")){
+    const tag=(active.tagName||"").toLowerCase();
+    if(tag==="input" || tag==="textarea" || tag==="select" || active.isContentEditable){
+      return;
+    }
+  }
+
   externalScannerArmed=true;
   const capture=$("hidCaptureInput");
   if(capture){
     capture.value="";
     setTimeout(()=>{
+      if(scannerTextEditing)return;
       try{capture.focus({preventScroll:true});}catch{}
     },20);
   }
@@ -1062,6 +1073,7 @@ function resumeExternalScannerFocus(){
 function startExternalScanner(){
   if(scanInputMode!=="external")return;
   externalScannerStartedOnce=true;
+  scannerTextEditing=false;
   externalScannerArmed=true;
   hidBuffer="";
 
@@ -1106,7 +1118,7 @@ function setupExternalScannerCapture(){
   // Hidden input gets first priority. We build E + digits from physical HID
   // key codes, so the Japanese IME never gets a chance to turn E into 「え」.
   capture.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external"||!externalScannerArmed)return;
+    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
 
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       e.preventDefault();
@@ -1138,7 +1150,7 @@ function setupExternalScannerCapture(){
 
   // Fallback for scanners/browsers that do not expose useful .code values.
   capture.addEventListener("input",()=>{
-    if(scanInputMode!=="external"||!externalScannerArmed)return;
+    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
     const normalized=normalizeScannedId(capture.value);
     if(/^E\d{6}$/.test(normalized)){
       hidBuffer=normalized;
@@ -1149,7 +1161,7 @@ function setupExternalScannerCapture(){
 
   // Global fallback when focus has moved away from our capture field.
   window.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external"||!externalScannerArmed)return;
+    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
     if(document.activeElement===capture)return;
 
     const tag=(document.activeElement?.tagName||"").toLowerCase();
@@ -1178,10 +1190,19 @@ function setupExternalScannerCapture(){
     }
   }, true);
 
-  document.addEventListener("click",()=>{
-    if(scanInputMode==="external" && externalScannerStartedOnce){
-      setTimeout(resumeExternalScannerFocus,80);
+  document.addEventListener("click",e=>{
+    if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+    const target=e.target;
+    const editable=target?.closest?.("input,textarea,select,[contenteditable='true']");
+    if(editable && editable.id!=="hidCaptureInput"){
+      scannerTextEditing=true;
+      externalScannerArmed=false;
+      const st=$("externalReadyStatus");
+      if(st)st.textContent="文字入力中です。入力後、画面の空いている場所をタップするとスキャン待機に戻ります。";
+      return;
     }
+    scannerTextEditing=false;
+    setTimeout(resumeExternalScannerFocus,80);
   });
 }
 
@@ -1489,6 +1510,35 @@ $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>setScanInputMode("camera"));
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
+
+
+document.addEventListener("focusin",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  const el=e.target;
+  if(!el || el.id==="hidCaptureInput")return;
+  const tag=(el.tagName||"").toLowerCase();
+  if(tag==="input" || tag==="textarea" || tag==="select" || el.isContentEditable){
+    scannerTextEditing=true;
+    externalScannerArmed=false;
+  }
+});
+
+document.addEventListener("focusout",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  const el=e.target;
+  if(!el || el.id==="hidCaptureInput")return;
+  const tag=(el.tagName||"").toLowerCase();
+  if(tag==="input" || tag==="textarea" || tag==="select" || el.isContentEditable){
+    setTimeout(()=>{
+      const a=document.activeElement;
+      const atag=(a?.tagName||"").toLowerCase();
+      const stillEditing=a && a.id!=="hidCaptureInput" &&
+        (atag==="input" || atag==="textarea" || atag==="select" || a.isContentEditable);
+      scannerTextEditing=!!stillEditing;
+      if(!scannerTextEditing)resumeExternalScannerFocus();
+    },150);
+  }
+});
 
 document.addEventListener("visibilitychange",()=>{
   if(!document.hidden)setTimeout(resumeExternalScannerFocus,120);
