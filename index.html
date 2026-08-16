@@ -586,10 +586,23 @@
       font-size:inherit;
     }
 
+
+    #english{
+      font-size:1.45rem !important;
+      font-weight:700 !important;
+      line-height:1.35 !important;
+      margin-top:10px;
+    }
+    #english.initialPrompt{
+      font-size:1rem !important;
+      font-weight:400 !important;
+      color:#667085;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.7.6 / 更新 2026-08-16 23:40</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.7.7 / 更新 2026-08-16 23:46</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -658,7 +671,7 @@
     <div class="card">
       <span id="idBadge" class="badge">ID：未選択</span>
       <span id="modeBadge" class="badge">読み方：未選択</span>
-      <div id="english">CSVを登録してQRコードを読み取ってください</div>
+      <div id="english" class="initialPrompt">CSVを登録してQRコードを読み取ってください</div>
       <div id="ipaDisplay"></div>
       <div class="hint" style="margin-top:14px;">表示用日本語（漢字）</div>
       <div id="japanese"></div>
@@ -967,8 +980,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.7.6";
-const APP_UPDATED="2026-08-16 23:40";
+const APP_VERSION="v2.7.7";
+const APP_UPDATED="2026-08-16 23:46";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1251,7 +1264,7 @@ async function lookup(id,auto=true){
   const r=await getRecord(id);
   if(!r){$("japaneseReadDisplay").textContent="";$("ipaDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
-  $("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
+  $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
   setStatus($("scanStatus"),id+" を読み取りました。");
   if(auto)await playRecord();
@@ -1342,21 +1355,37 @@ function speakScanReadyOnce(){
 
 async function setScanInputMode(mode){
   const nextMode=mode==="external"?"external":"camera";
-  if(nextMode!==scanInputMode){
-    externalScannerStartedOnce=false;
-    externalScannerArmed=false;
-    speechUnlockedByScannerStart=true;
-  }
-  scanInputMode=nextMode;
-  hidBuffer="";
+
+  // Stop/clear the previous mode completely before switching.
   try{await stopScanner();}catch{}
+  externalScannerArmed=false;
+  externalScannerStartedOnce=false;
+  scannerTextEditing=false;
+  hidBuffer="";
+  qrScanLocked=false;
+
+  const capture=$("hidCaptureInput");
+  if(capture){
+    try{capture.blur();}catch{}
+    capture.value="";
+  }
+
+  scanInputMode=nextMode;
   updateScanInputModeUi();
-{
-  const savedMode=localStorage.getItem("cameraScanMode")||"single";
-  if(savedMode==="continuous"){
-    $("cameraScanContinuous").checked=true;
+
+  if(scanInputMode==="external"){
+    const st=$("externalReadyStatus");
+    if(st)st.textContent="「スキャナーを開始」を1回タップしてください。";
+    const btn=$("startExternalScannerBtn");
+    if(btn){
+      btn.textContent="スキャナーを開始";
+      btn.disabled=false;
+    }
   }else{
-    $("cameraScanSingle").checked=true;
+    const btn=$("startBtn");
+    if(btn)btn.disabled=false;
+    const stop=$("stopBtn");
+    if(stop)stop.disabled=true;
   }
 }
 
@@ -1482,6 +1511,7 @@ function resumeExternalScannerFocus(){
 
 function startExternalScanner(){
   if(scanInputMode!=="external")return;
+  try{stopScanner();}catch{}
   externalScannerStartedOnce=true;
   scannerTextEditing=false;
   externalScannerArmed=true;
@@ -1616,6 +1646,8 @@ function setupExternalScannerCapture(){
 
 async function startScanner(){
   if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部スキャナーモードです。",false);return;}
+  externalScannerArmed=false;
+  externalScannerStartedOnce=false;
   qrScanLocked=false;
   if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
   await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
