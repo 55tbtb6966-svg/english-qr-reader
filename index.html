@@ -700,7 +700,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.5 / 更新 2026-08-17 00:38</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.6 / 更新 2026-08-17 00:41</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -864,12 +864,7 @@
 <section id="dataPanel" class="panel">
     <div class="card">
       
-      <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
-      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
-        <div class="grid2">
-        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
-        <label><span>日本語</span><input id="editJapanese" type="text"></label>
-      </div>
+      
       <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
       <label style="margin-top:10px;"><span>発音記号 IPA（単語のみ・任意）</span><input id="editIpa" type="text" placeholder="/ˈæpəl/"></label>
       <label style="margin-top:10px;"><span>日本語読み（任意・ひらがな推奨）</span><textarea id="editJapaneseRead" placeholder="これは りんご です。"></textarea></label>
@@ -923,6 +918,13 @@
         <button id="selectAllFilteredBtn" class="secondary">検索結果をすべてチェック</button>
         <button id="clearAllFilteredBtn" class="secondary">検索結果のチェックを解除</button>
       </div>
+      <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
+      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
+        <div class="grid2">
+        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
+        <label><span>日本語</span><input id="editJapanese" type="text"></label>
+      </div>
+
       <p id="pageStatus" class="hint"></p>
 
       <div class="tableWrap">
@@ -1096,8 +1098,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.5";
-const APP_UPDATED="2026-08-17 00:38";
+const APP_VERSION="v2.8.6";
+const APP_UPDATED="2026-08-17 00:41";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
