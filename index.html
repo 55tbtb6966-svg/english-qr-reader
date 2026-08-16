@@ -531,7 +531,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.5.0 / 更新 2026-08-16 20:02</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.5.1 / 更新 2026-08-16 20:06</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -708,6 +708,10 @@
         <button id="prevBtn" class="secondary">前のページ</button>
         <button id="nextBtn" class="secondary">次のページ</button>
       </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="selectAllFilteredBtn" class="secondary">検索結果をすべてチェック</button>
+        <button id="clearAllFilteredBtn" class="secondary">検索結果のチェックを解除</button>
+      </div>
       <p id="pageStatus" class="hint"></p>
 
       <div class="tableWrap">
@@ -877,8 +881,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.5.0";
-const APP_UPDATED="2026-08-16 20:02";
+const APP_VERSION="v2.5.1";
+const APP_UPDATED="2026-08-16 20:06";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1734,6 +1738,21 @@ $("manualEnglishRate").addEventListener("change",()=>{if(currentRecord)currentRe
 $("saveBtn").addEventListener("click",saveEditor);$("clearEditorBtn").addEventListener("click",clearEditor);
 $("searchText").addEventListener("input",()=>{currentPage=0;renderPage();});
 $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
+
+$("selectAllFilteredBtn").addEventListener("click",async()=>{
+  const all=await filteredAll("searchText");
+  all.forEach(r=>selectedIds.add(r.id));
+  await renderPage();
+  setStatus($("editStatus"),`${all.length}件をチェックしました。`);
+});
+
+$("clearAllFilteredBtn").addEventListener("click",async()=>{
+  const all=await filteredAll("searchText");
+  all.forEach(r=>selectedIds.delete(r.id));
+  await renderPage();
+  setStatus($("editStatus"),`${all.length}件のチェックを解除しました。`);
+});
+
 $("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;renderPage();}});
 $("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
