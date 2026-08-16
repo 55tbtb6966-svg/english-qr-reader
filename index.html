@@ -469,7 +469,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.6 / 更新 2026-08-16 19:44</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.7 / 更新 2026-08-16 19:49</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -660,14 +660,7 @@
   <section id="qrPanel" class="panel">
     <div class="card">
       <h2>一括QRコード作成</h2>
-<div class="qrMethodCard compactCard">
-          <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
-          <h3>指定位置から作る</h3>
-          <p>CSVの通し番号を基準に、指定した開始位置から表示件数分のQRを作ります。</p>
-          <div class="qrInlineCompact">
-            <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="number" min="1" value="1"></label>
-            <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
-          </div>
+
         </div>
       <select id="qrCount" style="display:none;" aria-hidden="true">
       <option>6</option><option>8</option><option>10</option><option>12</option>
@@ -677,11 +670,7 @@
 
       
 
-      <div class="qrCompactBar">
-        <div class="qrCompactNote">指定位置から作る</div>
-        <label><span>開始位置</span><input id="qrStart" type="number" min="1" value="1"></label>
-        <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
-      </div>
+      
 
       <div class="qrCompactBar">
         <div class="qrCompactNote">データ管理でチェックした項目</div>
@@ -697,12 +686,21 @@
       <div class="qrMethodGuide">
         
           <h3>指定位置から作る</h3>
-          <p>データをID順に並べ、指定した位置から表示件数分のQRを作ります。</p>
+          
           
           <div class="row" style="margin-top:10px;"></div>
         </div>
 
-        <div class="qrMethodCard qrSearchCard">
+        
+      <div class="qrMethodCard compactCard">
+        <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
+        <h3>指定位置から作る</h3>
+        <div class="qrInlineCompact">
+          <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="number" min="1" value="1"></label>
+          <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
+        </div>
+      </div>
+<div class="qrMethodCard qrSearchCard">
           <div class="qrMethodTag">検索 ＋ 表示件数</div>
           <h3>検索結果から作る</h3>
           <p>ID・英語・日本語・日本語読み・Commentで検索し、結果をID順に表示します。</p>
@@ -814,8 +812,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.6";
-const APP_UPDATED="2026-08-16 19:44";
+const APP_VERSION="v2.4.7";
+const APP_UPDATED="2026-08-16 19:49";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
