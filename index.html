@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.6 / 更新 2026-08-16 21:16</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.7 / 更新 2026-08-16 21:19</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -586,7 +586,6 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
-        <div class="hint">読み取り方法を選んだ最初の1回だけ「Ready」と読み上げます。</div>
         <div class="cameraActionRow">
           <button id="startBtn" type="button">QRコードを読み取る</button>
           <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
@@ -914,8 +913,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.6";
-const APP_UPDATED="2026-08-16 21:16";
+const APP_VERSION="v2.6.7";
+const APP_UPDATED="2026-08-16 21:19";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -940,9 +939,8 @@ let scanInputMode="none";
 let hidBuffer="";
 let externalScannerArmed=false;
 let externalScannerStartedOnce=false;
-let speechUnlockedByScannerStart=true;
-let cameraSpeechUnlocked=false;
-let speechUnlockedForScanSession=false;
+let speechUnlockedByScannerStart=false;
+let scanReadySpoken=false;
 let scannerTextEditing=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
@@ -1160,7 +1158,7 @@ function speakText(text,lang,rate){
       u.onend=resolve;
       u.onerror=resolve;
       speechSynthesis.speak(u);
-    },softStart?350:80);
+    },softStart?650:350);
   });
 }
 async function playRecord(modeOverride=null){
@@ -1177,7 +1175,7 @@ async function playRecord(modeOverride=null){
     speechSynthesis.cancel();
     await new Promise(r=>setTimeout(r,300));
   }else{
-    await new Promise(r=>setTimeout(r,30));
+    await new Promise(r=>setTimeout(r,120));
   }
   const mode=modeOverride||currentRecord.mode;
   for(let i=0;i<currentRecord.repeat;i++){
@@ -1237,22 +1235,47 @@ function updateScanInputModeUi(){
   }
 }
 
+
+function speakScanReadyOnce(){
+  if(scanReadySpoken)return;
+  if(!("speechSynthesis" in window))return;
+
+  scanReadySpoken=true;
+  try{
+    const u=new SpeechSynthesisUtterance("Ready");
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.25;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    speechSynthesis.speak(u);
+  }catch{}
+}
+
 async function setScanInputMode(mode){
   const nextMode=mode==="external"?"external":"camera";
   if(nextMode!==scanInputMode){
     externalScannerStartedOnce=false;
     externalScannerArmed=false;
-    speechUnlockedByScannerStart=false;
+    speechUnlockedByScannerStart=true;
   }
   scanInputMode=nextMode;
-  if(nextMode!=="camera")cameraSpeechUnlocked=false;
   hidBuffer="";
   try{await stopScanner();}catch{}
   updateScanInputModeUi();
 
   if(scanInputMode==="external"){
     const st=$("externalReadyStatus");
-    if(st)st.textContent="開始ボタンを1回タップすると音声も準備し、その後は自動でスキャン待機に戻ります。";
+    if(st)st.textContent="「スキャナーを開始」を1回タップすると、その後は自動でスキャン待機に戻ります。";
     const btn=$("startExternalScannerBtn");
     if(btn)btn.textContent="スキャナーを開始";
   }
@@ -1384,12 +1407,10 @@ function startExternalScanner(){
   }
 
   const st=$("externalReadyStatus");
-  if(st)st.textContent="音声を準備しています…";
+  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
   const btn=$("startExternalScannerBtn");
   if(btn)btn.textContent="スキャン待機中";
 
-  // Use this explicit tap to unlock iOS Safari speech synthesis.
-  unlockSpeechForExternalScanner();
 
   // Fallback: if onend is delayed/not fired, restore scanner focus anyway.
   setTimeout(resumeExternalScannerFocus,700);
@@ -1506,88 +1527,6 @@ function setupExternalScannerCapture(){
   });
 }
 
-
-function unlockSpeechForCameraMode(){
-  return new Promise(resolve=>{
-    if(cameraSpeechUnlocked){resolve();return;}
-    if(!("speechSynthesis" in window)){resolve();return;}
-
-    try{
-      window.speechSynthesis.cancel();
-      const u=new SpeechSynthesisUtterance("Ready");
-      u.lang="en-US";
-      u.rate=1.0;
-      u.pitch=1.0;
-      u.volume=0.22;
-
-      try{
-        const selectedName=$("englishVoiceSelect")?.value||"";
-        const voices=window.speechSynthesis.getVoices();
-        const v=voices.find(x=>x.name===selectedName) ||
-                voices.find(x=>/^en-US/i.test(x.lang)) ||
-                voices.find(x=>/^en/i.test(x.lang));
-        if(v)u.voice=v;
-      }catch{}
-
-      const done=()=>{cameraSpeechUnlocked=true;resolve();};
-      u.onend=done;
-      u.onerror=done;
-      window.speechSynthesis.speak(u);
-    }catch{
-      resolve();
-    }
-  });
-}
-
-
-
-function speakReadyOnceForScanMode(){
-  if(speechUnlockedForScanSession)return;
-  if(!("speechSynthesis" in window))return;
-
-  speechUnlockedForScanSession=true;
-  try{
-    window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance("Ready");
-    u.lang="en-US";
-    u.rate=1.0;
-    u.pitch=1.0;
-    u.volume=0.35;
-    try{
-      const selectedName=$("englishVoiceSelect")?.value||"";
-      const voices=window.speechSynthesis.getVoices();
-      const v=voices.find(x=>x.name===selectedName) ||
-              voices.find(x=>/^en-US/i.test(x.lang)) ||
-              voices.find(x=>/^en/i.test(x.lang));
-      if(v)u.voice=v;
-    }catch{}
-    window.speechSynthesis.speak(u);
-  }catch{}
-}
-
-function speakCameraReadyNow(){
-  if(!("speechSynthesis" in window))return;
-  try{
-    window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance("Ready");
-    u.lang="en-US";
-    u.rate=1.0;
-    u.pitch=1.0;
-    u.volume=0.35;
-    try{
-      const selectedName=$("englishVoiceSelect")?.value||"";
-      const voices=window.speechSynthesis.getVoices();
-      const v=voices.find(x=>x.name===selectedName) ||
-              voices.find(x=>/^en-US/i.test(x.lang)) ||
-              voices.find(x=>/^en/i.test(x.lang));
-      if(v)u.voice=v;
-    }catch{}
-    u.onend=()=>{cameraSpeechUnlocked=true;};
-    u.onerror=()=>{};
-    window.speechSynthesis.speak(u);
-  }catch{}
-}
-
 async function startScanner(){
   if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部QRスキャナーモードです。",false);return;}
   qrScanLocked=false;
@@ -1599,12 +1538,11 @@ async function startScanner(){
         if(qrScanLocked)return;
         qrScanLocked=true;
         try{
-          // Start the lookup/speech immediately. Do not wait for camera shutdown.
-          const stopPromise=stopScanner().catch(()=>{});
+          await stopScanner();
+          await new Promise(r=>setTimeout(r,900));
           await lookup(text,true);
-          await stopPromise;
         }finally{
-          setTimeout(()=>{qrScanLocked=false;},250);
+          setTimeout(()=>{qrScanLocked=false;},700);
         }
       },()=>{});
     setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
@@ -1912,9 +1850,7 @@ $("nextQrPageBtn").addEventListener("click",()=>{
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>{
-  speakReadyOnceForScanMode();
-  setScanInputMode("camera");
-});
+  speakScanReadyOnce();
   setScanInputMode("camera");
 });
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
@@ -1956,9 +1892,7 @@ window.addEventListener("pageshow",()=>setTimeout(resumeExternalScannerFocus,120
 
 
 $("useExternalScannerModeBtn").addEventListener("click",()=>{
-  speakReadyOnceForScanMode();
-  setScanInputMode("external");
-});
+  speakScanReadyOnce();
   setScanInputMode("external");
 });
 setupExternalScannerCapture();
