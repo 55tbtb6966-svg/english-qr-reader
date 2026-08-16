@@ -700,7 +700,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.6 / 更新 2026-08-17 00:41</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.7 / 更新 2026-08-17 00:44</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -918,13 +918,6 @@
         <button id="selectAllFilteredBtn" class="secondary">検索結果をすべてチェック</button>
         <button id="clearAllFilteredBtn" class="secondary">検索結果のチェックを解除</button>
       </div>
-      <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
-      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
-        <div class="grid2">
-        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
-        <label><span>日本語</span><input id="editJapanese" type="text"></label>
-      </div>
-
       <p id="pageStatus" class="hint"></p>
 
       <div class="tableWrap">
@@ -933,6 +926,15 @@
           <tbody id="recordBody"></tbody>
         </table>
       </div>
+      <div class="editorBlockBottom" style="margin-top:16px;">
+        <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
+      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
+        <div class="grid2">
+        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
+        <label><span>日本語</span><input id="editJapanese" type="text"></label>
+      </div>
+      </div>
+
     </div>
     </div>
   </section>
@@ -1098,8 +1100,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.6";
-const APP_UPDATED="2026-08-17 00:41";
+const APP_VERSION="v2.8.7";
+const APP_UPDATED="2026-08-17 00:44";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
