@@ -698,10 +698,33 @@
       margin-bottom:14px;
     }
 
+
+    .qrCombinedSettingsBox{
+      border:1px solid #d9dee7;
+      border-radius:12px;
+      padding:12px;
+      background:#fff;
+      margin-top:10px;
+    }
+    .qrCombinedSettingsBox .qrOptionBox{
+      border:none !important;
+      box-shadow:none !important;
+      background:transparent !important;
+      padding:0 !important;
+      margin:0 !important;
+    }
+    .qrCombinedSettingsBox .advancedSettings{
+      border:none !important;
+      box-shadow:none !important;
+      background:transparent !important;
+      margin-top:10px !important;
+      padding-top:8px;
+      border-top:1px solid #e5e7eb !important;
+    }
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.1 / 更新 2026-08-17 00:59</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.2 / 更新 2026-08-17 01:05</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -826,8 +849,6 @@
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
-
-
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
 <button id="replaceImportBtn">全置換で読み込む</button>
@@ -935,7 +956,7 @@
 </div>
 <div class="grid2" style="margin-top:10px;">
 <div style="grid-column:1 / -1;">
-<div class="qrOptionBox">
+<div class="qrCombinedSettingsBox"><div class="qrOptionBox">
 <div class="qrOptionTitle">QRカードに表示する項目</div>
 <div class="qrOptionRow">
 <label class="qrCheckLabel"><input checked="" id="qrShowId" type="checkbox"/><span>ID</span></label>
@@ -945,10 +966,7 @@
 <label class="qrCheckLabel"><input checked="" id="qrShowJapaneseRead" type="checkbox"/><span>日本語読み</span></label>
 </div>
 <p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
-</div>
-</div>
-</div>
-<details class="advancedSettings">
+</div><details class="advancedSettings">
 <summary>詳細設定（表示件数、QR・文字サイズ）</summary>
 <div class="advancedSettingsBody">
 <div class="sizeSettingGrid">
@@ -972,7 +990,10 @@
 </div>
 <p class="hint">設定はこのiPhoneのSafari内に保存されます。</p>
 </div>
-</details>
+</details></div>
+</div>
+</div>
+
 <div class="row">
 <button class="secondary" id="printBtn">印刷／PDF保存</button>
 </div>
@@ -1014,8 +1035,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.1";
-const APP_UPDATED="2026-08-17 00:59";
+const APP_VERSION="v2.9.2";
+const APP_UPDATED="2026-08-17 01:05";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
