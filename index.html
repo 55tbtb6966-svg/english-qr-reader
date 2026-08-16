@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.5 / 更新 2026-08-16 21:14</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.6 / 更新 2026-08-16 21:16</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -586,7 +586,7 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
-        <div class="hint">iPhoneカメラまたは外部QRスキャナーを選んだ最初の1回だけ「Ready」と読み上げます。</div>
+        <div class="hint">読み取り方法を選んだ最初の1回だけ「Ready」と読み上げます。</div>
         <div class="cameraActionRow">
           <button id="startBtn" type="button">QRコードを読み取る</button>
           <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
@@ -914,8 +914,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.5";
-const APP_UPDATED="2026-08-16 21:14";
+const APP_VERSION="v2.6.6";
+const APP_UPDATED="2026-08-16 21:16";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
