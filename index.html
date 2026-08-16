@@ -655,10 +655,34 @@
       }
     }
 
+
+    .dataEditorDetails > summary{
+      cursor:pointer;
+      font-size:1.05rem;
+      font-weight:700;
+      list-style:none;
+      padding:2px 0;
+    }
+    .dataEditorDetails > summary::-webkit-details-marker{
+      display:none;
+    }
+    .dataEditorDetails > summary::after{
+      content:"＋";
+      float:right;
+      font-weight:700;
+      color:#667085;
+    }
+    .dataEditorDetails[open] > summary::after{
+      content:"－";
+    }
+    .dataEditorBody{
+      margin-top:12px;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.2 / 更新 2026-08-17 00:12</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.3 / 更新 2026-08-17 00:20</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -821,8 +845,10 @@
 
 <section id="dataPanel" class="panel">
     <div class="card">
-      <h2>データ追加・書き換え</h2>
-      <div class="grid2">
+      <details class="dataEditorDetails">
+        <summary>データ追加・書き換え</summary>
+        <div class="dataEditorBody">
+          <div class="grid2">
         <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
         <label><span>日本語</span><input id="editJapanese" type="text"></label>
       </div>
@@ -887,6 +913,10 @@
       </div>
     </div>
   </section>
+        </div>
+      </details>
+    </div>
+
 
   <section id="qrPanel" class="panel">
     <div class="card">
@@ -1049,8 +1079,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.2";
-const APP_UPDATED="2026-08-17 00:12";
+const APP_VERSION="v2.8.3";
+const APP_UPDATED="2026-08-17 00:20";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
