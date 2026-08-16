@@ -1,13 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>English QR Reader IndexedDB</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<meta content="#ffffff" name="theme-color"/>
+<meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
+<title>English QR Reader IndexedDB</title>
+<link href="./manifest.webmanifest" rel="manifest"/>
+<style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin:0; background:#f5f6f8; color:#111; }
     main { max-width:920px; margin:0 auto; padding:18px; }
@@ -700,408 +701,338 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.7 / 更新 2026-08-17 00:44</div>
-
+<div class="appVersionBadge" id="appVersionBadge">App v2.8.5 / 更新 2026-08-17 00:38</div>
 <main>
-  <h1>English QR Reader</h1>
+<h1>English QR Reader</h1>
+<div class="tabs">
+<button class="tabBtn active" data-target="readerPanel">読み取り</button>
+<button class="tabBtn" data-target="csvPanel">CSV</button>
+<button class="tabBtn" data-target="dataPanel">データ管理</button>
+<button class="tabBtn" data-target="qrPanel">QR作成</button>
+</div>
+<section class="panel active" id="readerPanel">
+<input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
 
-  <div class="tabs">
-    <button class="tabBtn active" data-target="readerPanel">読み取り</button>
-    <button class="tabBtn" data-target="csvPanel">CSV</button>
-    <button class="tabBtn" data-target="dataPanel">データ管理</button>
-    <button class="tabBtn" data-target="qrPanel">QR作成</button>
-  </div>
-
-  <section id="readerPanel" class="panel active">
-<input id="manualId" type="hidden" value=""><button id="manualLookupBtn" type="button" style="display:none;"></button>
-
-    
-      
-      
-    </div>
-
-    <div class="card">
-      <h2>QRコードを読み取る</h2>
-        <div class="qrOptionBox" style="margin-top:10px;">
-          <div class="qrOptionTitle">読み取り方法</div>
-          <div class="scanSourceSwitch">
-          <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
-          <button id="useExternalScannerModeBtn" type="button" class="secondary">外部スキャナー</button>
-        </div>
-        <div id="scanChoiceHint" class="scanChoiceHint">読み取り方法を選んでください。</div>
-<div id="scannerModeStatus" class="scannerModeStatus"></div>
-        <input id="hidCaptureInput" class="hidCapture" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" lang="en">
-        </div>
-
-      <div id="reader"></div>
-      <div id="cameraControlsPanel" class="scanModePanel">
-        <div class="scanModePanelTitle">iPhoneカメラ操作</div>
-        <div class="hint">カメラ映像は広く表示し、中央のカギ括弧付き枠だけをQR読み取り範囲として使用します。</div>
-        <div class="qrOptionBox" style="margin-top:8px;">
-          <div class="qrOptionTitle">カメラ読み取りモード</div>
-          <div class="qrOptionRow">
-            <label class="qrCheckLabel">
-              <input type="radio" name="cameraScanMode" id="cameraScanSingle" value="single" checked>
-              <span>1回ずつ</span>
-            </label>
-            <label class="qrCheckLabel">
-              <input type="radio" name="cameraScanMode" id="cameraScanContinuous" value="continuous">
-              <span>連続読み取り</span>
-            </label>
-          </div>
-          <p class="hint" style="margin:6px 0 0;">1回ずつ：読み取り後にカメラ停止。連続読み取り：そのまま次のQRを待ちます。</p>
-        </div>
-        <div class="cameraActionRow">
-          <button id="startBtn" type="button">QRコードを読み取る</button>
-          <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
-        </div>
-      </div>
-      <div id="externalScannerPanel" class="scanModePanel hiddenScanPanel">
-        <div class="scanModePanelTitle">外部スキャナー</div>
-        <button id="startExternalScannerBtn" type="button">スキャナーを開始</button>
-        <div id="externalReadyStatus" class="externalReady" style="margin-top:10px;">
+<div class="card">
+<h2>QRコードを読み取る</h2>
+<div class="qrOptionBox" style="margin-top:10px;">
+<div class="qrOptionTitle">読み取り方法</div>
+<div class="scanSourceSwitch">
+<button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
+<button class="secondary" id="useExternalScannerModeBtn" type="button">外部スキャナー</button>
+</div>
+<div class="scanChoiceHint" id="scanChoiceHint">読み取り方法を選んでください。</div>
+<div class="scannerModeStatus" id="scannerModeStatus"></div>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" class="hidCapture" id="hidCaptureInput" inputmode="latin" lang="en" spellcheck="false" type="text"/>
+</div>
+<div id="reader"></div>
+<div class="scanModePanel" id="cameraControlsPanel">
+<div class="scanModePanelTitle">iPhoneカメラ操作</div>
+<div class="hint">カメラ映像は広く表示し、中央のカギ括弧付き枠だけをQR読み取り範囲として使用します。</div>
+<div class="qrOptionBox" style="margin-top:8px;">
+<div class="qrOptionTitle">カメラ読み取りモード</div>
+<div class="qrOptionRow">
+<label class="qrCheckLabel">
+<input checked="" id="cameraScanSingle" name="cameraScanMode" type="radio" value="single"/>
+<span>1回ずつ</span>
+</label>
+<label class="qrCheckLabel">
+<input id="cameraScanContinuous" name="cameraScanMode" type="radio" value="continuous"/>
+<span>連続読み取り</span>
+</label>
+</div>
+<p class="hint" style="margin:6px 0 0;">1回ずつ：読み取り後にカメラ停止。連続読み取り：そのまま次のQRを待ちます。</p>
+</div>
+<div class="cameraActionRow">
+<button id="startBtn" type="button">QRコードを読み取る</button>
+<button class="secondary" id="stopBtn" type="button">カメラを止める</button>
+</div>
+</div>
+<div class="scanModePanel hiddenScanPanel" id="externalScannerPanel">
+<div class="scanModePanelTitle">外部スキャナー</div>
+<button id="startExternalScannerBtn" type="button">スキャナーを開始</button>
+<div class="externalReady" id="externalReadyStatus" style="margin-top:10px;">
           最初に1回だけ開始してください。音声準備として小さく「Ready」と読み上げ、その後は自動でスキャン待機に戻ります。
         </div>
-      </div>
-      <p id="scanStatus" class="status"></p>
-    </div>
-
-    <div class="card">
-      <span id="idBadge" class="badge">ID：未選択</span>
-      <span id="modeBadge" class="badge">読み方：未選択</span>
-      <div id="english" class="initialPrompt">CSVを登録してQRコードを読み取ってください</div>
-      <div id="ipaDisplay"></div>
-      <div class="hint" style="margin-top:14px;">表示用日本語（漢字）</div>
-      <div id="japanese"></div>
-      <div class="hint" style="margin-top:14px;">日本語読み</div>
-      <div id="japaneseReadDisplay"></div>
-      <div class="row">
-        <button id="playConfiguredBtn">▶ 設定どおり読む</button>
-        <button id="playEnglishBtn" class="secondary">英語だけ</button>
-        <button id="playJapaneseBtn" class="secondary">日本語だけ</button>
-        <button id="playBothBtn" class="secondary">英語→日本語</button>
-      </div>
-      <div class="grid2" style="margin-top:12px;">
-
-      <div class="row"></div>
-        
-        <div class="readerRateGrid">
-          <label><span>英語速度</span>
-          <select id="manualEnglishRate">
-            <option value="0.6">0.6倍</option><option value="0.8">0.8倍</option>
-            <option value="1" selected>1.0倍</option><option value="1.2">1.2倍</option>
-            <option value="1.4">1.4倍</option>
-          </select>
-        </label>
-          <label><span>日本語読み速度</span>
-          <select id="manualJapaneseRate">
-            <option value="0.6">0.6倍</option>
-            <option value="0.8" selected>0.8倍</option>
-            <option value="1">1.0倍</option>
-            <option value="1.2">1.2倍</option>
-            <option value="1.4">1.4倍</option>
-          </select>
-        </label>
-        </div>
-
-        
-      </div>
-      <div class="qrOptionBox" style="margin-top:12px;">
-        <div class="qrOptionTitle">読み上げ設定</div>
-
-        <details class="advancedSettings" style="margin-top:10px;">
-          <summary>詳細設定</summary>
-          <div class="advancedSettingsBody">
-            <p class="hint" style="margin:0 0 12px;">
+</div>
+<p class="status" id="scanStatus"></p>
+</div>
+<div class="card">
+<span class="badge" id="idBadge">ID：未選択</span>
+<span class="badge" id="modeBadge">読み方：未選択</span>
+<div class="initialPrompt" id="english">CSVを登録してQRコードを読み取ってください</div>
+<div id="ipaDisplay"></div>
+<div class="hint" style="margin-top:14px;">表示用日本語（漢字）</div>
+<div id="japanese"></div>
+<div class="hint" style="margin-top:14px;">日本語読み</div>
+<div id="japaneseReadDisplay"></div>
+<div class="row">
+<button id="playConfiguredBtn">▶ 設定どおり読む</button>
+<button class="secondary" id="playEnglishBtn">英語だけ</button>
+<button class="secondary" id="playJapaneseBtn">日本語だけ</button>
+<button class="secondary" id="playBothBtn">英語→日本語</button>
+</div>
+<div class="grid2" style="margin-top:12px;">
+<div class="row"></div>
+<div class="readerRateGrid">
+<label><span>英語速度</span>
+<select id="manualEnglishRate">
+<option value="0.6">0.6倍</option><option value="0.8">0.8倍</option>
+<option selected="" value="1">1.0倍</option><option value="1.2">1.2倍</option>
+<option value="1.4">1.4倍</option>
+</select>
+</label>
+<label><span>日本語読み速度</span>
+<select id="manualJapaneseRate">
+<option value="0.6">0.6倍</option>
+<option selected="" value="0.8">0.8倍</option>
+<option value="1">1.0倍</option>
+<option value="1.2">1.2倍</option>
+<option value="1.4">1.4倍</option>
+</select>
+</label>
+</div>
+</div>
+<div class="qrOptionBox" style="margin-top:12px;">
+<div class="qrOptionTitle">読み上げ設定</div>
+<details class="advancedSettings" style="margin-top:10px;">
+<summary>詳細設定</summary>
+<div class="advancedSettingsBody">
+<p class="hint" style="margin:0 0 12px;">
               短い単語や短い表現では、最初の音が欠けたり強く聞こえたりすることがあります。必要に応じて開始待機を調整できます。
             </p>
-
-            <div class="qrOptionRow" style="margin-bottom:12px;">
-              <label class="qrCheckLabel">
-                <input id="settingSoftWordStart" type="checkbox" checked>
-                <span>短い英語の開始待機</span>
-              </label>
-              <label class="qrCheckLabel">
-                <input id="showIpa" type="checkbox" checked>
-                <span>発音記号を表示</span>
-              </label>
-            </div>
-
-            <p class="hint" style="margin:0 0 12px;">
+<div class="qrOptionRow" style="margin-bottom:12px;">
+<label class="qrCheckLabel">
+<input checked="" id="settingSoftWordStart" type="checkbox"/>
+<span>短い英語の開始待機</span>
+</label>
+<label class="qrCheckLabel">
+<input checked="" id="showIpa" type="checkbox"/>
+<span>発音記号を表示</span>
+</label>
+</div>
+<p class="hint" style="margin:0 0 12px;">
               「短い英語の開始待機」をONにすると、短い英語を読む前に少し待ち、先頭音の欠けや強い立ち上がりを抑えます。発音記号はIPAデータがある単語・語彙項目だけ表示されます。
             </p>
-
-            <div class="sizeSettingGrid">
-              <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
-              <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
-            </div>
-            <p class="hint">選択した設定と音声はこのiPhoneのSafariに保存されます。</p>
-          </div>
-        </details>
-      </div>
-      
-    </div>
-  </section>
-
-  
-  <section id="csvPanel" class="panel">
-    <div class="card">
-      <h2>CSVをIndexedDBへ登録</h2>
-      <p id="importStatus" class="status"></p>
-      <div class="metric">
-        <div>登録件数：<strong id="recordCount">0</strong></div>
-        <div>データ版：<strong id="dataVersion">未設定</strong></div>
-        <div>保存使用量：<strong id="storageUsage">確認中</strong></div>
-      </div>
-      <input id="csvFile" type="file" accept=".csv,text/csv,text/plain">
-      <div class="row">
-        <button id="replaceImportBtn">全置換で読み込む</button>
-        <button id="mergeImportBtn" class="secondary">追加・上書きで読み込む</button>
-        <button id="exportBtn" class="secondary">CSVを書き出す</button>
-      </div>
-  </section>
-
-<section id="dataPanel" class="panel">
-    <div class="card">
-      
-      
-      <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
-      <label style="margin-top:10px;"><span>発音記号 IPA（単語のみ・任意）</span><input id="editIpa" type="text" placeholder="/ˈæpəl/"></label>
-      <label style="margin-top:10px;"><span>日本語読み（任意・ひらがな推奨）</span><textarea id="editJapaneseRead" placeholder="これは りんご です。"></textarea></label>
-      <div class="grid3" style="margin-top:10px;">
-        <label><span>読み方</span>
-          <select id="editMode">
-            <option value="english">英語のみ</option>
-            <option value="japanese">日本語のみ</option>
-            <option value="both" selected>英語→日本語</option>
-          </select>
-        </label>
-        <label><span>英語速度</span>
-          <select id="editEnglishRate">
-            <option value="0.6">0.6</option><option value="0.8">0.8</option>
-            <option value="1" selected>1.0</option><option value="1.2">1.2</option>
-            <option value="1.4">1.4</option>
-          </select>
-        </label>
-        <label><span>日本語速度</span>
-          <select id="editJapaneseRate">
-            <option value="0.6">0.6</option><option value="0.8">0.8</option>
-            <option value="1" selected>1.0</option><option value="1.2">1.2</option>
-            <option value="1.4">1.4</option>
-          </select>
-        </label>
-      </div>
-      <div class="grid3" style="margin-top:10px;">
-        <label><span>繰り返し回数</span><input id="editRepeat" type="number" min="1" max="10" value="1"></label>
-        <label><span>英語→日本語の間隔（秒）</span><input id="editGap" type="number" min="0" max="10" step="0.1" value="0.5"></label>
-        <label><span>データ版</span><input id="editVersion" type="text" placeholder="2026-08-01"></label>
-      </div>
-      <div class="row">
-        <button id="saveBtn">追加／上書き</button>
-        <button id="clearEditorBtn" class="secondary">入力欄を空にする</button>
-      </div>
-      <p id="editStatus" class="status"></p>
-      </div>
+<div class="sizeSettingGrid">
+<label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
+<label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+</div>
+<p class="hint">選択した設定と音声はこのiPhoneのSafariに保存されます。</p>
+</div>
+</details>
+</div>
+</div>
+</section>
+<section class="panel" id="csvPanel">
+<div class="card">
+<h2>CSVをIndexedDBへ登録</h2>
+<p class="status" id="importStatus"></p>
+<div class="metric">
+<div>登録件数：<strong id="recordCount">0</strong></div>
+<div>データ版：<strong id="dataVersion">未設定</strong></div>
+<div>保存使用量：<strong id="storageUsage">確認中</strong></div>
+</div>
+<input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
+<div class="row">
+<button id="replaceImportBtn">全置換で読み込む</button>
+<button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
+<button class="secondary" id="exportBtn">CSVを書き出す</button>
+</div>
+</div></section>
+<section class="panel" id="dataPanel">
+<div class="card">
 
 
-      <div class="grid2" style="margin-top:14px;">
-        <label><span>検索</span><input id="searchText" type="text" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment"></label>
-        <label><span>1ページの件数</span>
-          <select id="pageSize"><option>25</option><option selected>50</option><option>100</option></select>
-        </label>
-      </div>
-      <div class="row">
-        <button id="prevBtn" class="secondary">前のページ</button>
-        <button id="nextBtn" class="secondary">次のページ</button>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <button id="selectAllFilteredBtn" class="secondary">検索結果をすべてチェック</button>
-        <button id="clearAllFilteredBtn" class="secondary">検索結果のチェックを解除</button>
-      </div>
-      <p id="pageStatus" class="hint"></p>
+<div class="grid2" style="margin-top:14px;">
+<label><span>検索</span><input id="searchText" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment" type="text"/></label>
+<label><span>1ページの件数</span>
+<select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
+</label>
+</div>
+<div class="row">
+<button class="secondary" id="prevBtn">前のページ</button>
+<button class="secondary" id="nextBtn">次のページ</button>
+</div>
+<div class="row" style="margin-top:8px;">
+<button class="secondary" id="selectAllFilteredBtn">検索結果をすべてチェック</button>
+<button class="secondary" id="clearAllFilteredBtn">検索結果のチェックを解除</button>
+</div>
+<p class="hint" id="pageStatus"></p>
+<div class="tableWrap">
+<table>
+<thead><tr><th>選択</th><th>ID</th><th>英文</th><th>発音記号</th><th>日本語</th><th>日本語読み</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
+<tbody id="recordBody"></tbody>
+</table>
+</div><div class="editorBlockBottom" style="margin-top:16px;"><button class="secondary dataEditorToggleBtn" id="toggleDataEditorBtn" type="button">データ追加・書き換え</button><div class="dataEditorBody dataEditorHidden" id="dataEditorPanel">
+<div class="grid2">
+<label><span>ID</span><input id="editId" placeholder="E000001" type="text"/></label>
+<label><span>日本語</span><input id="editJapanese" type="text"/></label>
+</div>
+<label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
+<label style="margin-top:10px;"><span>発音記号 IPA（単語のみ・任意）</span><input id="editIpa" placeholder="/ˈæpəl/" type="text"/></label>
+<label style="margin-top:10px;"><span>日本語読み（任意・ひらがな推奨）</span><textarea id="editJapaneseRead" placeholder="これは りんご です。"></textarea></label>
+<div class="grid3" style="margin-top:10px;">
+<label><span>読み方</span>
+<select id="editMode">
+<option value="english">英語のみ</option>
+<option value="japanese">日本語のみ</option>
+<option selected="" value="both">英語→日本語</option>
+</select>
+</label>
+<label><span>英語速度</span>
+<select id="editEnglishRate">
+<option value="0.6">0.6</option><option value="0.8">0.8</option>
+<option selected="" value="1">1.0</option><option value="1.2">1.2</option>
+<option value="1.4">1.4</option>
+</select>
+</label>
+<label><span>日本語速度</span>
+<select id="editJapaneseRate">
+<option value="0.6">0.6</option><option value="0.8">0.8</option>
+<option selected="" value="1">1.0</option><option value="1.2">1.2</option>
+<option value="1.4">1.4</option>
+</select>
+</label>
+</div>
+<div class="grid3" style="margin-top:10px;">
+<label><span>繰り返し回数</span><input id="editRepeat" max="10" min="1" type="number" value="1"/></label>
+<label><span>英語→日本語の間隔（秒）</span><input id="editGap" max="10" min="0" step="0.1" type="number" value="0.5"/></label>
+<label><span>データ版</span><input id="editVersion" placeholder="2026-08-01" type="text"/></label>
+</div>
+<div class="row">
+<button id="saveBtn">追加／上書き</button>
+<button class="secondary" id="clearEditorBtn">入力欄を空にする</button>
+</div>
+<p class="status" id="editStatus"></p>
+</div></div>
+</div>
 
-      <div class="tableWrap">
-        <table>
-          <thead><tr><th>選択</th><th>ID</th><th>英文</th><th>発音記号</th><th>日本語</th><th>日本語読み</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
-          <tbody id="recordBody"></tbody>
-        </table>
-      </div>
-      <div class="editorBlockBottom" style="margin-top:16px;">
-        <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
-      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
-        <div class="grid2">
-        <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
-        <label><span>日本語</span><input id="editJapanese" type="text"></label>
-      </div>
-      </div>
-
-    </div>
-    </div>
-  </section>
-
-<section id="qrPanel" class="panel">
-    <div class="card">
-      <h2>一括QRコード作成</h2>
-
-        </div>
-      <select id="qrCount" style="display:none;" aria-hidden="true">
-      <option>6</option><option>8</option><option>10</option><option>12</option>
-      <option>20</option><option>30</option><option selected>50</option>
-      <option>75</option><option>100</option>
-    </select>
-
-      
-
-      
-
-      
+</section>
+<section class="panel" id="qrPanel">
+<div class="card">
+<h2>一括QRコード作成</h2>
+</div>
+<select aria-hidden="true" id="qrCount" style="display:none;">
+<option>6</option><option>8</option><option>10</option><option>12</option>
+<option>20</option><option>30</option><option selected="">50</option>
+<option>75</option><option>100</option>
+</select>
 <div class="qrCompactBar" style="background:#fff;">
-        <div style="width:100%;">
-          <div style="font-weight:700; font-size:.95rem; margin-bottom:3px;">データ管理でチェックした項目から作る</div>
-          <div style="font-size:.84rem; color:#667085; margin-bottom:6px;">データ管理の一覧でチェックした項目だけをQRにします。</div>
-          <div class="row" style="width:100%; margin-top:6px;"><button id="makeSelectedQrBtn" class="secondary">選択したQRを作る</button></div>
-        </div>
-      </div>
+<div style="width:100%;">
+<div style="font-weight:700; font-size:.95rem; margin-bottom:3px;">データ管理でチェックした項目から作る</div>
+<div style="font-size:.84rem; color:#667085; margin-bottom:6px;">データ管理の一覧でチェックした項目だけをQRにします。</div>
+<div class="row" style="width:100%; margin-top:6px;"><button class="secondary" id="makeSelectedQrBtn">選択したQRを作る</button></div>
+</div>
+</div>
 
-
-      
-        
-        
-      </div>
-
-      <div class="qrMethodGuide">
-        
-          
-          
-          
-          <div class="row" style="margin-top:10px;"></div>
-        </div>
+<div class="qrMethodGuide">
+<div class="row" style="margin-top:10px;"></div>
+</div>
 <div class="qrMethodCard qrSearchCard">
-          
-          <h3>検索結果から作る</h3>
-          <p>ID・英語・日本語・日本語読み・Commentで検索し、結果をID順に表示します。</p>
-          <label><span>検索（検索結果から作る用）</span><input id="qrSearch" type="text" placeholder="ID・英語・日本語・日本語読み・Commentを検索"></label>
-          <div class="row" style="margin-top:10px;"><button id="makeSearchQrBtn" class="secondary">検索結果から作る</button></div>
-        </div>
-
-      <div style="font-weight:700; font-size:.95rem; margin:10px 2px 5px;">開始位置を指定</div>
-      <div class="qrMethodCard compactCard">
-        
-        
-        <div class="qrInlineCompact">
-          <label><span>開始指定位置（チェック項目、検索結果の通し番号）</span><input id="qrStart" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1"></label>
-          <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
-        </div>
-      </div>
-
-        
-          
-          
-          <div class="row" style="margin-top:10px;"></div>
-        </div>
-      </div>
+<h3>検索結果から作る</h3>
+<p>ID・英語・日本語・日本語読み・Commentで検索し、結果をID順に表示します。</p>
+<label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/></label>
+<div class="row" style="margin-top:10px;"><button class="secondary" id="makeSearchQrBtn">検索結果から作る</button></div>
+</div>
+<div style="font-weight:700; font-size:.95rem; margin:10px 2px 5px;">開始位置を指定</div>
+<div class="qrMethodCard compactCard">
+<div class="qrInlineCompact">
+<label><span>開始指定位置（チェック項目、検索結果の通し番号）</span><input id="qrStart" inputmode="numeric" min="1" pattern="[0-9]*" type="text" value="1"/></label>
+<button class="secondary" id="makeRangeQrBtn">指定位置から作る</button>
+</div>
+</div>
+<div class="row" style="margin-top:10px;"></div>
 
 
-      
-      </div>
 
-      <div class="grid3">
-        
-        
-        
-      </div>
-      <div class="grid2" style="margin-top:10px;">
-        
-        <div style="grid-column:1 / -1;">
-        <div class="qrOptionBox">
-          <div class="qrOptionTitle">QRカードに表示する項目</div>
-          <div class="qrOptionRow">
-            <label class="qrCheckLabel"><input id="qrShowId" type="checkbox" checked><span>ID</span></label>
-            <label class="qrCheckLabel"><input id="qrShowEnglish" type="checkbox" checked><span>英語</span></label>
-            <label class="qrCheckLabel"><input id="qrShowIpa" type="checkbox" checked><span>発音記号</span></label>
-            <label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox"><span>日本語</span></label>
-            <label class="qrCheckLabel"><input id="qrShowJapaneseRead" type="checkbox" checked><span>日本語読み</span></label>
-          </div>
-          <p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
-        </div>
-      </div>
-      </div>
-      <details class="advancedSettings">
-        <summary>詳細設定（表示件数、QR・文字サイズ）</summary>
-        <div class="advancedSettingsBody">
-          <div class="sizeSettingGrid">
-            <label><span>QR表示件数の初期値</span>
-            <select id="settingQrDefaultCount">
-              <option>6</option><option>8</option><option>10</option><option>12</option>
-              <option>20</option><option>30</option><option selected>50</option>
-              <option>75</option><option>100</option>
-            </select>
-          </label>
-          <label><span>QRコードサイズ（px）</span><input id="settingQrSize" type="number" min="80" max="220" step="2" value="132"></label>
-            <label><span>ID文字サイズ（rem）</span><input id="settingIdSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
-            <label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" type="number" min="0.7" max="2.5" step="0.05" value="1.18"></label>
-            <label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
-            <label><span>日本語文字サイズ（rem）</span><input id="settingJapaneseSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
-            <label><span>日本語読み文字サイズ（rem）</span><input id="settingJapaneseReadSize" type="number" min="0.7" max="2.5" step="0.05" value="1.12"></label>
-          </div>
-          <div class="row" style="margin-top:10px;">
-            <button id="applySizeSettingsBtn" type="button">サイズを適用</button>
-            <button id="resetSizeSettingsBtn" type="button" class="secondary">初期値に戻す</button>
-          </div>
-          <p class="hint">設定はこのiPhoneのSafari内に保存されます。</p>
-        </div>
-      </details>
-      <div class="row">
-        
-        
-        
-        <button id="printBtn" class="secondary">印刷／PDF保存</button>
-      </div>
-      <div class="grid2" id="printRangeControls" style="margin-top:10px;">
-        <label>
-          <span>印刷範囲</span>
-          <input id="printRange" type="text" placeholder="例：1-50 または 1,2,4">
-        </label>
-        <div class="hint" style="align-self:end;">
+<div class="grid3">
+</div>
+<div class="grid2" style="margin-top:10px;">
+<div style="grid-column:1 / -1;">
+<div class="qrOptionBox">
+<div class="qrOptionTitle">QRカードに表示する項目</div>
+<div class="qrOptionRow">
+<label class="qrCheckLabel"><input checked="" id="qrShowId" type="checkbox"/><span>ID</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowEnglish" type="checkbox"/><span>英語</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowIpa" type="checkbox"/><span>発音記号</span></label>
+<label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox"/><span>日本語</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowJapaneseRead" type="checkbox"/><span>日本語読み</span></label>
+</div>
+<p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
+</div>
+</div>
+</div>
+<details class="advancedSettings">
+<summary>詳細設定（表示件数、QR・文字サイズ）</summary>
+<div class="advancedSettingsBody">
+<div class="sizeSettingGrid">
+<label><span>QR表示件数の初期値</span>
+<select id="settingQrDefaultCount">
+<option>6</option><option>8</option><option>10</option><option>12</option>
+<option>20</option><option>30</option><option selected="">50</option>
+<option>75</option><option>100</option>
+</select>
+</label>
+<label><span>QRコードサイズ（px）</span><input id="settingQrSize" max="220" min="80" step="2" type="number" value="132"/></label>
+<label><span>ID文字サイズ（rem）</span><input id="settingIdSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label>
+<label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" max="2.5" min="0.7" step="0.05" type="number" value="1.18"/></label>
+<label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label>
+<label><span>日本語文字サイズ（rem）</span><input id="settingJapaneseSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label>
+<label><span>日本語読み文字サイズ（rem）</span><input id="settingJapaneseReadSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label>
+</div>
+<div class="row" style="margin-top:10px;">
+<button id="applySizeSettingsBtn" type="button">サイズを適用</button>
+<button class="secondary" id="resetSizeSettingsBtn" type="button">初期値に戻す</button>
+</div>
+<p class="hint">設定はこのiPhoneのSafari内に保存されます。</p>
+</div>
+</details>
+<div class="row">
+<button class="secondary" id="printBtn">印刷／PDF保存</button>
+</div>
+<div class="grid2" id="printRangeControls" style="margin-top:10px;">
+<label>
+<span>印刷範囲</span>
+<input id="printRange" placeholder="例：1-50 または 1,2,4" type="text"/>
+</label>
+<div class="hint" style="align-self:end;">
           空欄なら現在の検索結果・選択結果をすべてID順で印刷します。
         </div>
-      </div>
-      <div class="grid2" id="pptLayoutControls" style="margin-top:10px;">
-        <label>
-          <span>PowerPointレイアウト</span>
-          <select id="pptLayoutMode">
-            <option value="a4_6" selected>A4縦・1枚に6個</option>
-            <option value="a6_1">A6横・1枚に1個</option>
-          </select>
-        </label>
-      </div>
-      <div class="row" id="pptSaveControls" style="margin-top:10px;">
-        <button id="pptBtn" class="secondary">PowerPoint保存</button>
-      </div>
-      </div>
-      <div class="row" id="qrPagerRow">
-        <button id="prevQrPageBtn" class="secondary">前のページ</button>
-        <button id="nextQrPageBtn" class="secondary">次のページ</button>
-      </div>
-      <p id="qrPageStatus" class="hint"></p>
-      <p id="exportSourceHint" class="hint">PDF／PPTは現在の検索結果・選択結果を対象に作成します。</p>
-      <p id="qrStatus" class="status"></p>
-      <div id="qrSheet" class="qrSheet"></div>
-      <div id="printQrSheet" class="qrSheet printOnlySheet"></div>
-    </div>
-  </section>
+</div>
+<div class="grid2" id="pptLayoutControls" style="margin-top:10px;">
+<label>
+<span>PowerPointレイアウト</span>
+<select id="pptLayoutMode">
+<option selected="" value="a4_6">A4縦・1枚に6個</option>
+<option value="a6_1">A6横・1枚に1個</option>
+</select>
+</label>
+</div>
+<div class="row" id="pptSaveControls" style="margin-top:10px;">
+<button class="secondary" id="pptBtn">PowerPoint保存</button>
+</div>
 
+<div class="row" id="qrPagerRow">
+<button class="secondary" id="prevQrPageBtn">前のページ</button>
+<button class="secondary" id="nextQrPageBtn">次のページ</button>
+</div>
+<p class="hint" id="qrPageStatus"></p>
+<p class="hint" id="exportSourceHint">PDF／PPTは現在の検索結果・選択結果を対象に作成します。</p>
+<p class="status" id="qrStatus"></p>
+<div class="qrSheet" id="qrSheet"></div>
+<div class="qrSheet printOnlySheet" id="printQrSheet"></div>
 
+</section>
 </main>
-
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="./jszip.min.js"></script>
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.7";
-const APP_UPDATED="2026-08-17 00:44";
+const APP_VERSION="v2.8.8";
+const APP_UPDATED="2026-08-17 00:46";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
