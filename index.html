@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.5.8 / 更新 2026-08-16 20:46</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.5.9 / 更新 2026-08-16 20:51</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -566,7 +566,7 @@
 
   <section id="readerPanel" class="panel active">
     
-      <p id="importStatus" class="status"></p>
+      
       
     </div>
 
@@ -669,6 +669,7 @@
   <section id="csvPanel" class="panel">
     <div class="card">
       <h2>CSVをIndexedDBへ登録</h2>
+      <p id="importStatus" class="status"></p>
       <div class="metric">
         <div>登録件数：<strong id="recordCount">0</strong></div>
         <div>データ版：<strong id="dataVersion">未設定</strong></div>
@@ -912,8 +913,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.5.8";
-const APP_UPDATED="2026-08-16 20:46";
+const APP_VERSION="v2.5.9";
+const APP_UPDATED="2026-08-16 20:51";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
