@@ -443,10 +443,33 @@
       margin-top:10px;
     }
 
+
+    .qrInlineCompact{
+      display:flex;
+      gap:8px;
+      align-items:end;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+    .qrInlineCompact label{
+      margin:0;
+      flex:0 1 180px;
+    }
+    .qrInlineCompact button{
+      margin:0;
+      min-height:36px;
+      padding:7px 10px;
+    }
+    #makeSelectedQrBtn{
+      background:#e5e7eb !important;
+      color:#111827 !important;
+      border:1px solid #c9ced6 !important;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.5 / 更新 2026-08-16 19:37</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.6 / 更新 2026-08-16 19:44</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -536,7 +559,7 @@
         <div class="qrOptionTitle">読み上げ設定</div>
 
         <details class="advancedSettings" style="margin-top:10px;">
-          <summary>詳細設定（表示・開始待機・読む人）</summary>
+          <summary>詳細設定（表示件数、QR・文字サイズ）</summary>
           <div class="advancedSettingsBody">
             <p class="hint" style="margin:0 0 12px;">
               短い単語や短い表現では、最初の音が欠けたり強く聞こえたりすることがあります。必要に応じて開始待機を調整できます。
@@ -637,6 +660,15 @@
   <section id="qrPanel" class="panel">
     <div class="card">
       <h2>一括QRコード作成</h2>
+<div class="qrMethodCard compactCard">
+          <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
+          <h3>指定位置から作る</h3>
+          <p>CSVの通し番号を基準に、指定した開始位置から表示件数分のQRを作ります。</p>
+          <div class="qrInlineCompact">
+            <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="number" min="1" value="1"></label>
+            <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
+          </div>
+        </div>
       <select id="qrCount" style="display:none;" aria-hidden="true">
       <option>6</option><option>8</option><option>10</option><option>12</option>
       <option>20</option><option>30</option><option selected>50</option>
@@ -653,7 +685,7 @@
 
       <div class="qrCompactBar">
         <div class="qrCompactNote">データ管理でチェックした項目</div>
-        <button id="makeSelectedQrBtn">選択したQRを作る</button>
+        <button id="makeSelectedQrBtn" class="secondary">選択したQRを作る</button>
       </div>
 
 
@@ -679,7 +711,7 @@
         </div>
 
         
-          <h3>選択したQRを作る</h3>
+          <h3>データ管理でチェックした項目から作る</h3>
           <p>データ管理の一覧でチェックした項目だけをQRにします。</p>
           <div class="row" style="margin-top:10px;"></div>
         </div>
@@ -782,8 +814,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.5";
-const APP_UPDATED="2026-08-16 19:37";
+const APP_VERSION="v2.4.6";
+const APP_UPDATED="2026-08-16 19:44";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
