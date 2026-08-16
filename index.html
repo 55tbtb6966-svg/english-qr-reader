@@ -523,10 +523,15 @@
       }
     }
 
+
+    #qrPanel .qrInlineCompact label span{
+      font-size:.9rem !important;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.9 / 更新 2026-08-16 19:57</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.5.0 / 更新 2026-08-16 20:02</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -730,8 +735,11 @@
       
 
       <div class="qrCompactBar" style="background:#fff;">
-        <div class="qrCompactNote">データ管理でチェックした項目</div>
-        <button id="makeSelectedQrBtn" class="secondary">選択したQRを作る</button>
+        <div style="width:100%;">
+          <div style="font-weight:700; font-size:.95rem; margin-bottom:3px;">データ管理でチェックした項目から作る</div>
+          <div style="font-size:.84rem; color:#667085; margin-bottom:6px;">データ管理の一覧でチェックした項目だけをQRにします。</div>
+          <button id="makeSelectedQrBtn" class="secondary">選択したQRを作る</button>
+        </div>
       </div>
 
 
@@ -766,8 +774,8 @@
         </div>
 
         
-          <h3>データ管理でチェックした項目から作る</h3>
-          <p>データ管理の一覧でチェックした項目だけをQRにします。</p>
+          
+          
           <div class="row" style="margin-top:10px;"></div>
         </div>
       </div>
@@ -869,8 +877,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.9";
-const APP_UPDATED="2026-08-16 19:57";
+const APP_VERSION="v2.5.0";
+const APP_UPDATED="2026-08-16 20:02";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
