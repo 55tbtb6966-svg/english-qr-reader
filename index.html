@@ -446,7 +446,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.3 / 更新 2026-08-16 19:29</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.4 / 更新 2026-08-16 19:34</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -644,11 +644,11 @@
           <select id="qrCount">
             <option>6</option>
             <option>8</option>
-            <option selected>10</option>
+            <option>10</option>
             <option>12</option>
             <option>20</option>
             <option>30</option>
-            <option>50</option>
+            <option selected>50</option>
             <option>75</option>
             <option>100</option>
           </select>
@@ -724,7 +724,14 @@
         <summary>詳細設定（QR・文字サイズ）</summary>
         <div class="advancedSettingsBody">
           <div class="sizeSettingGrid">
-            <label><span>QRコードサイズ（px）</span><input id="settingQrSize" type="number" min="80" max="220" step="2" value="132"></label>
+            <label><span>QR表示件数の初期値</span>
+            <select id="settingQrDefaultCount">
+              <option>6</option><option>8</option><option>10</option><option>12</option>
+              <option>20</option><option>30</option><option selected>50</option>
+              <option>75</option><option>100</option>
+            </select>
+          </label>
+          <label><span>QRコードサイズ（px）</span><input id="settingQrSize" type="number" min="80" max="220" step="2" value="132"></label>
             <label><span>ID文字サイズ（rem）</span><input id="settingIdSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
             <label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" type="number" min="0.7" max="2.5" step="0.05" value="1.18"></label>
             <label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" type="number" min="0.6" max="2.0" step="0.05" value="1.05"></label>
@@ -785,8 +792,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.3";
-const APP_UPDATED="2026-08-16 19:29";
+const APP_VERSION="v2.4.4";
+const APP_UPDATED="2026-08-16 19:34";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1476,7 +1483,8 @@ const DEFAULT_SIZE_SETTINGS={
   ipaSize:1.05,
   japaneseSize:1.12,
   japaneseReadSize:1.12,
-  softWordStart:true
+  softWordStart:true,
+  qrDefaultCount:50
 };
 
 function getSizeSettings(){
@@ -1496,8 +1504,11 @@ function loadSizeSettingsControls(){
   $("settingIpaSize").value=s.ipaSize;
   $("settingJapaneseSize").value=s.japaneseSize;
   $("settingJapaneseReadSize").value=s.japaneseReadSize;
+  if($("settingQrDefaultCount"))$("settingQrDefaultCount").value=String(s.qrDefaultCount||50);
+  if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
   $("settingSoftWordStart").checked=s.softWordStart!==false;
   applySizeSettingsToCss(s);
+  if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
 }
 
 function readSizeSettingsControls(){
@@ -1512,6 +1523,7 @@ function readSizeSettingsControls(){
     ipaSize:clamp($("settingIpaSize").value,0.6,2,1.05),
     japaneseSize:clamp($("settingJapaneseSize").value,0.7,2.5,1.12),
     japaneseReadSize:clamp($("settingJapaneseReadSize").value,0.7,2.5,1.12),
+    qrDefaultCount:Number($("settingQrDefaultCount")?.value||50),
     softWordStart:$("settingSoftWordStart").checked
   };
 }
