@@ -721,10 +721,56 @@
       padding-top:8px;
       border-top:1px solid #e5e7eb !important;
     }
+
+    /* Print/PDF: print QR cards only. Hide all app headers, tabs, controls and status text. */
+    @media print {
+      html, body {
+        margin:0 !important;
+        padding:0 !important;
+        background:#fff !important;
+      }
+
+      body > header,
+      body > nav,
+      body > .tabs,
+      #topTabs,
+      #appVersionBadge,
+      main > section:not(#qrPanel),
+      #qrPanel > *:not(#printQrSheet) {
+        display:none !important;
+      }
+
+      main,
+      #qrPanel {
+        display:block !important;
+        margin:0 !important;
+        padding:0 !important;
+        max-width:none !important;
+        width:100% !important;
+        background:#fff !important;
+        box-shadow:none !important;
+        border:0 !important;
+      }
+
+      #printQrSheet {
+        display:grid !important;
+        grid-template-columns:repeat(2,1fr) !important;
+        gap:10mm !important;
+        margin:0 !important;
+        padding:0 !important;
+        width:100% !important;
+      }
+
+      #printQrSheet .qrCard {
+        break-inside:avoid !important;
+        page-break-inside:avoid !important;
+      }
+    }
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.4 / 更新 2026-08-17 01:15</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.5 / 更新 2026-08-17 01:22</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1034,8 +1080,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.4";
-const APP_UPDATED="2026-08-17 01:15";
+const APP_VERSION="v2.9.5";
+const APP_UPDATED="2026-08-17 01:22";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
