@@ -469,7 +469,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.7 / 更新 2026-08-16 19:49</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.8 / 更新 2026-08-16 19:52</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -679,13 +679,13 @@
 
 
       
-        <p class="hint">下の3つの作成方法すべてに適用されます。</p>
+        
         
       </div>
 
       <div class="qrMethodGuide">
         
-          <h3>指定位置から作る</h3>
+          
           
           
           <div class="row" style="margin-top:10px;"></div>
@@ -694,7 +694,7 @@
         
       <div class="qrMethodCard compactCard">
         <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
-        <h3>指定位置から作る</h3>
+        
         <div class="qrInlineCompact">
           <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="number" min="1" value="1"></label>
           <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
@@ -812,8 +812,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.7";
-const APP_UPDATED="2026-08-16 19:49";
+const APP_VERSION="v2.4.8";
+const APP_UPDATED="2026-08-16 19:52";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
