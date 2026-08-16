@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.9 / 更新 2026-08-16 21:27</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.7.0 / 更新 2026-08-16 21:33</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -586,6 +586,20 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
+        <div class="qrOptionBox" style="margin-top:8px;">
+          <div class="qrOptionTitle">カメラ読み取りモード</div>
+          <div class="qrOptionRow">
+            <label class="qrCheckLabel">
+              <input type="radio" name="cameraScanMode" id="cameraScanSingle" value="single" checked>
+              <span>1回ずつ</span>
+            </label>
+            <label class="qrCheckLabel">
+              <input type="radio" name="cameraScanMode" id="cameraScanContinuous" value="continuous">
+              <span>連続読み取り</span>
+            </label>
+          </div>
+          <p class="hint" style="margin:6px 0 0;">1回ずつ：読み取り後にカメラ停止。連続読み取り：そのまま次のQRを待ちます。</p>
+        </div>
         <div class="cameraActionRow">
           <button id="startBtn" type="button">QRコードを読み取る</button>
           <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
@@ -913,8 +927,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.9";
-const APP_UPDATED="2026-08-16 21:27";
+const APP_VERSION="v2.7.0";
+const APP_UPDATED="2026-08-16 21:33";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -944,6 +958,8 @@ let scanReadySpoken=false;
 let scannerTextEditing=false;
 let hidLastKeyAt=0;
 let qrScanLocked=false;
+let lastCameraScanText="";
+let lastCameraScanAt=0;
 let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
@@ -1295,6 +1311,14 @@ async function setScanInputMode(mode){
   hidBuffer="";
   try{await stopScanner();}catch{}
   updateScanInputModeUi();
+{
+  const savedMode=localStorage.getItem("cameraScanMode")||"single";
+  if(savedMode==="continuous"){
+    $("cameraScanContinuous").checked=true;
+  }else{
+    $("cameraScanSingle").checked=true;
+  }
+}
 
   if(scanInputMode==="external"){
     const st=$("externalReadyStatus");
@@ -1558,17 +1582,29 @@ async function startScanner(){
   try{
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
       async text=>{
+        const continuous=$("cameraScanContinuous")?.checked===true;
+        const now=Date.now();
+
+        // In continuous mode, ignore repeated detections of the same QR for a short time.
+        if(continuous && text===lastCameraScanText && now-lastCameraScanAt<1800)return;
         if(qrScanLocked)return;
+
         qrScanLocked=true;
+        lastCameraScanText=text;
+        lastCameraScanAt=now;
+
         try{
-          await stopScanner();
-          await new Promise(r=>setTimeout(r,900));
-          await lookup(text,true);
+          if(continuous){
+            await lookup(text,true);
+          }else{
+            await stopScanner();
+            await lookup(text,true);
+          }
         }finally{
-          setTimeout(()=>{qrScanLocked=false;},700);
+          setTimeout(()=>{qrScanLocked=false;},continuous?500:700);
         }
       },()=>{});
-    setStatus($("scanStatus"),"カメラをQRコードへ向けてください。");
+    setStatus($("scanStatus"),$("cameraScanContinuous")?.checked ? "連続読み取り中です。次のQRコードへ向けてください。" : "カメラをQRコードへ向けてください。");
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
 function clearEditor(){
@@ -1801,7 +1837,13 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
-$("startBtn").addEventListener("click",startScanner);$("stopBtn").addEventListener("click",stopScanner);
+$("startBtn").addEventListener("click",startScanner);
+$("cameraScanSingle").addEventListener("change",()=>{
+  if($("cameraScanSingle").checked)localStorage.setItem("cameraScanMode","single");
+});
+$("cameraScanContinuous").addEventListener("change",()=>{
+  if($("cameraScanContinuous").checked)localStorage.setItem("cameraScanMode","continuous");
+});$("stopBtn").addEventListener("click",stopScanner);
 $("manualLookupBtn").addEventListener("click",()=>lookup($("manualId").value,false));
 $("englishVoiceSelect").addEventListener("change",()=>{
   localStorage.setItem("selectedEnglishVoice",$("englishVoiceSelect").value);
