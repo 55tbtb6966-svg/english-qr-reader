@@ -679,10 +679,28 @@
       margin-top:12px;
     }
 
+
+    .dataEditorToggleBtn{
+      width:100%;
+      display:block;
+      text-align:left;
+      font-weight:700;
+      color:#111827 !important;
+      background:#e5e7eb !important;
+      border:1px solid #c9ced6 !important;
+      margin-bottom:10px;
+    }
+    .dataEditorHidden{
+      display:none;
+    }
+    #dataEditorPanel{
+      margin-bottom:14px;
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.8.4 / 更新 2026-08-17 00:32</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.8.5 / 更新 2026-08-17 00:38</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -845,10 +863,10 @@
 
 <section id="dataPanel" class="panel">
     <div class="card">
-      <details class="dataEditorDetails">
-        <summary>データ追加・書き換え</summary>
-        <div class="dataEditorBody">
-          <div class="grid2">
+      
+      <button id="toggleDataEditorBtn" type="button" class="secondary dataEditorToggleBtn">データ追加・書き換え</button>
+      <div id="dataEditorPanel" class="dataEditorBody dataEditorHidden">
+        <div class="grid2">
         <label><span>ID</span><input id="editId" type="text" placeholder="E000001"></label>
         <label><span>日本語</span><input id="editJapanese" type="text"></label>
       </div>
@@ -888,8 +906,8 @@
         <button id="clearEditorBtn" class="secondary">入力欄を空にする</button>
       </div>
       <p id="editStatus" class="status"></p>
-        </div>
-      </details>
+      </div>
+
 
       <div class="grid2" style="margin-top:14px;">
         <label><span>検索</span><input id="searchText" type="text" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment"></label>
@@ -1078,8 +1096,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.8.4";
-const APP_UPDATED="2026-08-17 00:32";
+const APP_VERSION="v2.8.5";
+const APP_UPDATED="2026-08-17 00:38";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1775,6 +1793,7 @@ async function saveEditor(){
   setStatus($("editStatus"),id+" を保存しました。");await refreshSummary();await renderPage();
 }
 async function editRecord(id){
+  $("dataEditorPanel")?.classList.remove("dataEditorHidden");
   const r=await getRecord(id);if(!r)return;
   $("editId").value=r.id;$("editEnglish").value=r.english;$("editIpa").value=r.ipa||"";$("editJapanese").value=r.japanese;$("editJapaneseRead").value=r.japaneseRead||"";
   $("editMode").value=r.mode;$("editEnglishRate").value=String(r.englishRate);
@@ -2011,6 +2030,9 @@ $("playBothBtn").addEventListener("click",()=>playRecord("both"));
 $("manualEnglishRate").addEventListener("change",()=>{if(currentRecord)currentRecord.englishRate=Number($("manualEnglishRate").value);});
 $("manualJapaneseRate").addEventListener("change",()=>{if(currentRecord)currentRecord.japaneseRate=Number($("manualJapaneseRate").value);});
 $("saveBtn").addEventListener("click",saveEditor);$("clearEditorBtn").addEventListener("click",clearEditor);
+$("toggleDataEditorBtn").addEventListener("click",()=>{
+  $("dataEditorPanel").classList.toggle("dataEditorHidden");
+});
 $("searchText").addEventListener("input",()=>{currentPage=0;renderPage();});
 $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
 
