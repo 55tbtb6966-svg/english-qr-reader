@@ -466,10 +466,67 @@
       border:1px solid #c9ced6 !important;
     }
 
+
+    /* QR creation UI refinements */
+    #qrPanel .qrCompactBar{
+      background:#fff !important;
+    }
+
+    #qrPanel .qrInlineCompact{
+      display:flex;
+      align-items:end;
+      gap:8px;
+      flex-wrap:nowrap;
+    }
+
+    #qrPanel .qrInlineCompact label{
+      flex:0 0 auto;
+      margin:0;
+      min-width:0;
+    }
+
+    #qrPanel .qrInlineCompact label span{
+      display:block;
+      white-space:nowrap;
+      word-break:keep-all;
+      overflow-wrap:normal;
+      font-size:.84rem;
+      margin-bottom:3px;
+    }
+
+    #qrStart{
+      width:120px;
+      min-width:120px;
+    }
+
+    /* Hide number spinners for the start-position input */
+    #qrStart::-webkit-outer-spin-button,
+    #qrStart::-webkit-inner-spin-button{
+      -webkit-appearance:none;
+      margin:0;
+    }
+    #qrStart{
+      -moz-appearance:textfield;
+      appearance:textfield;
+    }
+
+    @media(max-width:520px){
+      #qrPanel .qrInlineCompact{
+        gap:6px;
+      }
+      #qrStart{
+        width:100px;
+        min-width:100px;
+      }
+      #qrPanel .qrInlineCompact label span{
+        font-size:.78rem;
+      }
+    }
+
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.8 / 更新 2026-08-16 19:52</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.9 / 更新 2026-08-16 19:57</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -672,7 +729,7 @@
 
       
 
-      <div class="qrCompactBar">
+      <div class="qrCompactBar" style="background:#fff;">
         <div class="qrCompactNote">データ管理でチェックした項目</div>
         <button id="makeSelectedQrBtn" class="secondary">選択したQRを作る</button>
       </div>
@@ -696,7 +753,7 @@
         <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
         
         <div class="qrInlineCompact">
-          <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="number" min="1" value="1"></label>
+          <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1"></label>
           <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
         </div>
       </div>
@@ -812,8 +869,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.8";
-const APP_UPDATED="2026-08-16 19:52";
+const APP_VERSION="v2.4.9";
+const APP_UPDATED="2026-08-16 19:57";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
