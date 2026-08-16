@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.5.2 / 更新 2026-08-16 20:11</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.5.4 / 更新 2026-08-16 20:22</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -783,15 +783,15 @@
 
         
       <div class="qrMethodCard compactCard">
-        <div class="qrMethodTag">開始位置 ＋ 表示件数</div>
+        
         
         <div class="qrInlineCompact">
-          <label><span>開始位置（CSVの通し番号）</span><input id="qrStart" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1"></label>
+          <label><span>開始指定位置（チェック項目、検索結果の通し番号）</span><input id="qrStart" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1"></label>
           <button id="makeRangeQrBtn" class="secondary">指定位置から作る</button>
         </div>
       </div>
 <div class="qrMethodCard qrSearchCard">
-          <div class="qrMethodTag">検索 ＋ 表示件数</div>
+          
           <h3>検索結果から作る</h3>
           <p>ID・英語・日本語・日本語読み・Commentで検索し、結果をID順に表示します。</p>
           <label><span>検索（検索結果から作る用）</span><input id="qrSearch" type="text" placeholder="ID・英語・日本語・日本語読み・Commentを検索"></label>
@@ -902,8 +902,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.5.2";
-const APP_UPDATED="2026-08-16 20:11";
+const APP_VERSION="v2.5.4";
+const APP_UPDATED="2026-08-16 20:22";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
