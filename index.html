@@ -446,7 +446,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.4.4 / 更新 2026-08-16 19:34</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.4.5 / 更新 2026-08-16 19:37</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -637,23 +637,13 @@
   <section id="qrPanel" class="panel">
     <div class="card">
       <h2>一括QRコード作成</h2>
+      <select id="qrCount" style="display:none;" aria-hidden="true">
+      <option>6</option><option>8</option><option>10</option><option>12</option>
+      <option>20</option><option>30</option><option selected>50</option>
+      <option>75</option><option>100</option>
+    </select>
 
-      <div class="qrCompactBar">
-        <div class="qrCompactNote">共通設定</div>
-        <label><span>表示件数</span>
-          <select id="qrCount">
-            <option>6</option>
-            <option>8</option>
-            <option>10</option>
-            <option>12</option>
-            <option>20</option>
-            <option>30</option>
-            <option selected>50</option>
-            <option>75</option>
-            <option>100</option>
-          </select>
-        </label>
-      </div>
+      
 
       <div class="qrCompactBar">
         <div class="qrCompactNote">指定位置から作る</div>
@@ -792,8 +782,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.4.4";
-const APP_UPDATED="2026-08-16 19:34";
+const APP_VERSION="v2.4.5";
+const APP_UPDATED="2026-08-16 19:37";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
