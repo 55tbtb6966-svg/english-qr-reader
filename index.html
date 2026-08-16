@@ -724,7 +724,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.3 / 更新 2026-08-17 01:09</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.4 / 更新 2026-08-17 01:15</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1034,8 +1034,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.3";
-const APP_UPDATED="2026-08-17 01:09";
+const APP_VERSION="v2.9.4";
+const APP_UPDATED="2026-08-17 01:15";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2102,59 +2102,110 @@ function qrDataUrlForPpt(id,size=600){
 async function exportCurrentQrPageToPowerPoint(){
   if(typeof JSZip==="undefined"){setStatus($("qrStatus"),"PowerPoint用JSZipを読み込めませんでした。GitHubに jszip.min.js があるか確認してください。",false);return;}
   if(typeof PptxGenJS==="undefined"){setStatus($("qrStatus"),"PowerPoint作成ライブラリを読み込めませんでした。GitHubに pptxgen.min.js があるか確認してください。",false);return;}
-  const records=qrPageSource.length?qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize):[];
+
+  let records=qrPageSource.length?qrPageSource.slice():[];
   if(!records.length){setStatus($("qrStatus"),"先にQRコードを表示してください。",false);return;}
+
+  const rangeSpec=$("printRange")?.value||"";
+  if(rangeSpec.trim()){
+    const positions=parsePrintRange(rangeSpec,records.length);
+    if(!positions||!positions.length){setStatus($("qrStatus"),"PPT範囲を確認してください。例：1-50 または 1,2,4",false);return;}
+    records=positions.map(n=>records[n-1]).filter(Boolean);
+  }
+
   try{
     setStatus($("qrStatus"),"PowerPointを作成中です…");
     const pptx=new PptxGenJS();
-    pptx.layout="LAYOUT_WIDE";
+    const mode=$("pptLayoutMode")?.value||"a4_6";
+
+    // Real paper-equivalent slide sizes in inches.
+    if(mode==="a6_1"){
+      pptx.defineLayout({name:"A6_LANDSCAPE",width:5.827,height:4.134});
+      pptx.layout="A6_LANDSCAPE";
+    }else{
+      pptx.defineLayout({name:"A4_PORTRAIT",width:8.267,height:11.693});
+      pptx.layout="A4_PORTRAIT";
+    }
+
     pptx.author="English QR Reader";
     pptx.subject="QR cards";
     pptx.title="QR cards";
-    pptx.company="";
     pptx.lang="ja-JP";
-    pptx.theme={
-      headFontFace:"Aptos", bodyFontFace:"Aptos", lang:"ja-JP"
-    };
-    const slide=pptx.addSlide();
-    slide.background={color:"FFFFFF"};
+    pptx.theme={headFontFace:"Aptos",bodyFontFace:"Aptos",lang:"ja-JP"};
 
     const showId=$("qrShowId")?.checked!==false;
     const showEnglish=$("qrShowEnglish")?.checked!==false;
     const showIpa=$("qrShowIpa")?.checked!==false;
     const showJapanese=$("qrShowJapanese")?.checked===true;
     const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+    const ss=getSizeSettings();
 
-    const n=records.length;
-    const cols=n<=6?2:n<=12?3:4;
-    const rows=Math.ceil(n/cols);
-    const slideW=13.333, slideH=7.5;
-    const mx=.35,my=.28,gx=.14,gy=.12;
-    const cw=(slideW-2*mx-(cols-1)*gx)/cols;
-    const ch=(slideH-2*my-(rows-1)*gy)/rows;
+    const perSlide=mode==="a6_1"?1:6;
+    const sw=mode==="a6_1"?5.827:8.267;
+    const sh=mode==="a6_1"?4.134:11.693;
 
-    records.forEach((r,i)=>{
-      const col=i%cols,row=Math.floor(i/cols);
-      const x=mx+col*(cw+gx), y=my+row*(ch+gy);
-      const qr=Math.min(cw*.40,ch*.56,1.18);
-      const qx=x+(cw-qr)/2, qy=y+.05;
-      const data=qrDataUrlForPpt(r.id,600);
-      if(data) slide.addImage({data,x:qx,y:qy,w:qr,h:qr});
-      let ty=qy+qr+.03;
-      const add=(txt,fs,bold=false,color="222222")=>{
-        if(!txt)return;
-        slide.addText(String(txt),{x:x+.05,y:ty,w:cw-.10,h:.24,fontFace:"Aptos",fontSize:fs,bold,color,align:"center",margin:0,breakLine:false,fit:"shrink"});
-        ty+=.24;
+    function addCard(slide,r,x,y,w,h){
+      slide.addShape(pptx.ShapeType.roundRect,{
+        x,y,w,h,rectRadius:.05,
+        line:{color:"BFC4CC",width:1},
+        fill:{color:"FFFFFF"}
+      });
+
+      // Match print-card proportions: QR at top, text stacked below.
+      const qrBase=mode==="a6_1"?2.0:1.38;
+      const qrScale=Math.max(.65,Math.min(1.45,ss.qrSize/132));
+      const qr=Math.min(qrBase*qrScale,w*.72,h*.48);
+      const qx=x+(w-qr)/2;
+      const qy=y+(mode==="a6_1"?.18:.16);
+      const data=qrDataUrlForPpt(r.id,700);
+      if(data)slide.addImage({data,x:qx,y:qy,w:qr,h:qr});
+
+      let ty=qy+qr+(mode==="a6_1"?.12:.08);
+      const bottom=y+h-.12;
+      const textW=w-.24;
+      const scale=mode==="a6_1"?1.15:0.92;
+
+      const add=(txt,baseSize,bold=false,color="222222")=>{
+        if(!txt||ty>=bottom)return;
+        const fs=Math.max(7,baseSize*scale);
+        const hh=mode==="a6_1"?.34:.28;
+        slide.addText(String(txt),{
+          x:x+.12,y:ty,w:textW,h:Math.min(hh,bottom-ty),
+          fontFace:"Aptos",fontSize:fs,bold,color,
+          align:"center",valign:"mid",margin:0,
+          breakLine:false,fit:"shrink"
+        });
+        ty+=hh;
       };
-      if(showId)add(r.id,9,false,"666666");
-      if(showEnglish)add(r.english,14,true,"111111");
-      if(showIpa&&r.ipa)add(r.ipa,10,false,"40506A");
-      if(showJapanese&&r.japanese)add(r.japanese,11,false,"333333");
-      if(showJapaneseRead&&(r.japaneseRead||r.japanese))add(r.japaneseRead||r.japanese,11,false,"333333");
-    });
 
-    await pptx.writeFile({fileName:`qr_cards_${new Date().toISOString().slice(0,10)}.pptx`});
-    setStatus($("qrStatus"),`PowerPointを作成しました（${records.length}件）。`);
+      if(showId)add(r.id,9*ss.idSize/1.05,false,"666666");
+      if(showEnglish)add(r.english,14*ss.englishSize/1.18,true,"111111");
+      if(showIpa&&r.ipa)add(r.ipa,10*ss.ipaSize/1.05,false,"40506A");
+      if(showJapanese&&r.japanese)add(r.japanese,11*ss.japaneseSize/1.12,false,"333333");
+      if(showJapaneseRead&&(r.japaneseRead||r.japanese))add(r.japaneseRead||r.japanese,11*ss.japaneseReadSize/1.12,false,"333333");
+    }
+
+    for(let start=0;start<records.length;start+=perSlide){
+      const slide=pptx.addSlide();
+      slide.background={color:"FFFFFF"};
+      const batch=records.slice(start,start+perSlide);
+
+      if(mode==="a6_1"){
+        addCard(slide,batch[0],.18,.18,sw-.36,sh-.36);
+      }else{
+        // A4 portrait: exactly 6 cards, 2 columns x 3 rows, like printed A4.
+        const mx=.28,my=.28,gx=.20,gy=.20;
+        const cw=(sw-2*mx-gx)/2;
+        const ch=(sh-2*my-2*gy)/3;
+        batch.forEach((r,i)=>{
+          const col=i%2,row=Math.floor(i/2);
+          addCard(slide,r,mx+col*(cw+gx),my+row*(ch+gy),cw,ch);
+        });
+      }
+    }
+
+    await pptx.writeFile({fileName:`qr_cards_${mode}_${new Date().toISOString().slice(0,10)}.pptx`});
+    setStatus($("qrStatus"),`PowerPointを作成しました（${records.length}件／${Math.ceil(records.length/perSlide)}スライド）。`);
   }catch(err){
     console.error(err);
     setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
