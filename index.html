@@ -552,7 +552,7 @@
 </style>
 </head>
 <body>
-  <div id="appVersionBadge" class="appVersionBadge">App v2.6.1 / 更新 2026-08-16 20:59</div>
+  <div id="appVersionBadge" class="appVersionBadge">App v2.6.2 / 更新 2026-08-16 21:02</div>
 
 <main>
   <h1>English QR Reader</h1>
@@ -586,7 +586,7 @@
       <div id="reader"></div>
       <div id="cameraControlsPanel" class="scanModePanel">
         <div class="scanModePanelTitle">iPhoneカメラ操作</div>
-        <div class="hint">iPhoneカメラを選ぶと、音声準備として小さく「Ready」と読み上げます。</div>
+        <div class="hint">「QRコードを読み取る」を押すと、音声準備として「Ready」と読み上げます。</div>
         <div class="cameraActionRow">
           <button id="startBtn" type="button">QRコードを読み取る</button>
           <button id="stopBtn" type="button" class="secondary">カメラを止める</button>
@@ -914,8 +914,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.6.1";
-const APP_UPDATED="2026-08-16 20:59";
+const APP_VERSION="v2.6.2";
+const APP_UPDATED="2026-08-16 21:02";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -1538,6 +1538,35 @@ function unlockSpeechForCameraMode(){
   });
 }
 
+
+function speakCameraReadyNow(){
+  return new Promise(resolve=>{
+    if(!("speechSynthesis" in window)){resolve();return;}
+    try{
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance("Ready");
+      u.lang="en-US";
+      u.rate=1.0;
+      u.pitch=1.0;
+      u.volume=0.35;
+      try{
+        const selectedName=$("englishVoiceSelect")?.value||"";
+        const voices=window.speechSynthesis.getVoices();
+        const v=voices.find(x=>x.name===selectedName) ||
+                voices.find(x=>/^en-US/i.test(x.lang)) ||
+                voices.find(x=>/^en/i.test(x.lang));
+        if(v)u.voice=v;
+      }catch{}
+      const done=()=>{cameraSpeechUnlocked=true;resolve();};
+      u.onend=done;
+      u.onerror=done;
+      window.speechSynthesis.speak(u);
+    }catch{
+      resolve();
+    }
+  });
+}
+
 async function startScanner(){
   if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部QRスキャナーモードです。",false);return;}
   qrScanLocked=false;
@@ -1791,7 +1820,7 @@ $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
 $("startBtn").addEventListener("click",async()=>{
-  await unlockSpeechForCameraMode();
+  await speakCameraReadyNow();
   await startScanner();
 });$("stopBtn").addEventListener("click",stopScanner);
 $("manualLookupBtn").addEventListener("click",()=>lookup($("manualId").value,false));
