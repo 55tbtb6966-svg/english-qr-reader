@@ -776,10 +776,22 @@
 .masterPreviewCard{position:absolute;inset:0;background:#fff;box-sizing:border-box;overflow:hidden}
 .masterPreviewCard .qrCard{position:absolute;margin:0!important;box-sizing:border-box;background:#fff;width:44%;max-width:44%;border:1px solid #bbb;border-radius:10px}
 @media(max-width:650px){.masterPreviewControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.masterMarginGuideBox{
+  position:absolute;
+  pointer-events:none;
+  border:1px solid rgba(120,130,145,.45);
+  border-radius:6px;
+  box-sizing:border-box;
+  z-index:2;
+}
+.masterPreviewCard{z-index:3;}
+.masterGuideToggle select{width:100%;}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.6 / 更新 2026-08-17 18:48</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.7 / 更新 2026-08-17 18:55</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1055,9 +1067,15 @@
 <label><span>上下位置</span><select id="masterVAlign"><option value="top">上</option><option value="middle" selected>中</option><option value="bottom">下</option></select></label>
 <label><span>横余白（%）</span><input id="masterMarginX" type="number" min="0" max="50" step="1" value="8"></label>
 <label><span>縦余白（%）</span><input id="masterMarginY" type="number" min="0" max="50" step="1" value="8"></label>
+<label class="masterGuideToggle"><span>余白ガイド</span>
+  <select id="masterMarginGuide">
+    <option value="on" selected>ON</option>
+    <option value="off">OFF</option>
+  </select>
+</label>
 </div>
 <div class="masterPreviewHint">現在表示中の先頭QRカードをA4横の比率で確認できます。設定変更はすぐに反映されます。</div>
-<div class="masterPreviewCanvas"><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
+<div class="masterPreviewCanvas"><div id="masterMarginGuideBox" class="masterMarginGuideBox"></div><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
 </div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
@@ -1100,8 +1118,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.6";
-const APP_UPDATED="2026-08-17 18:48";
+const APP_VERSION="v2.9.7";
+const APP_UPDATED="2026-08-17 18:55";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2433,11 +2451,19 @@ function updateMasterPreview(){
  host.appendChild(c);
  const ha=$("masterHAlign")?.value||"center",va=$("masterVAlign")?.value||"middle";
  const mx=Math.max(0,Math.min(50,Number($("masterMarginX")?.value)||0)),my=Math.max(0,Math.min(50,Number($("masterMarginY")?.value)||0));
+ const guide=$("masterMarginGuideBox");
+ if(guide){
+   guide.style.left=mx+"%";
+   guide.style.right=mx+"%";
+   guide.style.top=my+"%";
+   guide.style.bottom=my+"%";
+   guide.style.display=$("masterMarginGuide")?.value==="off"?"none":"block";
+ }
  c.style.left=ha==="left"?mx+"%":ha==="right"?"auto":"50%";c.style.right=ha==="right"?mx+"%":"auto";
  c.style.top=va==="top"?my+"%":va==="bottom"?"auto":"50%";c.style.bottom=va==="bottom"?my+"%":"auto";
  c.style.transform="translate("+(ha==="center"?"-50%":"0")+","+(va==="middle"?"-50%":"0")+")";
 }
-["masterHAlign","masterVAlign","masterMarginX","masterMarginY"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 </script>
 </body>
