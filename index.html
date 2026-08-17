@@ -1057,28 +1057,27 @@
 }
 
 
+
+
+
 .qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap{
-  max-width:none !important;
-  max-height:none !important;
-  min-width:0 !important;
-  min-height:0 !important;
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
 }
-.qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap > canvas,
-.qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap > img,
-.qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap > table{
+.qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap canvas,
+.qrSheet.masterLayoutSheet .masterOutputInner .qrCodeWrap img{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
   width:100% !important;
   height:100% !important;
-  max-width:100% !important;
-  max-height:100% !important;
-  margin:0 !important;
-  padding:0 !important;
-  display:block !important;
 }
 
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.7 / 更新 2026-08-17 23:24</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.8 / 更新 2026-08-17 23:28</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1412,8 +1411,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.7";
-const APP_UPDATED="2026-08-17 23:24";
+const APP_VERSION="v3.1.8";
+const APP_UPDATED="2026-08-17 23:28";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2942,14 +2941,12 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
 
   const qr=inner.querySelector(".qrCodeWrap");
   if(qr){
-    // Same normalized master-card sizing used by the master preview.
     const pct=Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28));
 
     qr.style.position="absolute";
     qr.style.left=state.qr.x+"%";
     qr.style.top=state.qr.y+"%";
     qr.style.width=pct+"%";
-    qr.style.height="auto";
     qr.style.aspectRatio="1 / 1";
     qr.style.transform="translate(-50%,-50%)";
     qr.style.margin="0";
@@ -2958,23 +2955,26 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
     qr.style.overflow="hidden";
     qr.style.lineHeight="0";
 
-    // qrcode.js leaves explicit pixel dimensions on descendants.
-    // Remove those dimensions so the QR always scales to the master percentage.
-    qr.querySelectorAll("canvas,img,table").forEach(el=>{
-      el.removeAttribute("width");
-      el.removeAttribute("height");
+    // Keep the QR bitmap/canvas intact. Scale it only visually inside the wrapper.
+    qr.querySelectorAll("canvas,img").forEach(el=>{
       el.style.width="100%";
       el.style.height="100%";
       el.style.maxWidth="100%";
       el.style.maxHeight="100%";
-      el.style.minWidth="0";
-      el.style.minHeight="0";
       el.style.display="block";
       el.style.margin="0";
       el.style.padding="0";
       el.style.objectFit="contain";
       el.style.boxSizing="border-box";
     });
+
+    const table=qr.querySelector("table");
+    if(table){
+      table.style.width="100%";
+      table.style.height="100%";
+      table.style.margin="0";
+      table.style.borderCollapse="collapse";
+    }
   }
 
   const defs=[
