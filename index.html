@@ -1009,10 +1009,25 @@
   background:#fff !important;
 }
 
+
+.masterPlainText,
+.qrTextBox .qrTextInner{
+  white-space:normal !important;
+  word-break:normal !important;
+  overflow-wrap:break-word !important;
+  text-overflow:clip !important;
+  overflow:visible !important;
+  max-height:none !important;
+}
+.masterTextContent,
+.qrTextBox{
+  overflow:hidden !important;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.0 / 更新 2026-08-17 20:29</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.1 / 更新 2026-08-17 20:36</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1341,8 +1356,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.0";
-const APP_UPDATED="2026-08-17 20:29";
+const APP_VERSION="v3.1.1";
+const APP_UPDATED="2026-08-17 20:36";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2713,7 +2728,7 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey){
     wrap.classList.remove("dragging");
     window.removeEventListener("pointermove",move);
     window.removeEventListener("pointerup",up);
-    try{updateMasterPreview();applyMasterLayoutToAllRendered();}catch{}
+    try{updateMasterPreview();applyMasterLayoutToAllRendered();setTimeout(()=>{updateMasterPreview();applyMasterLayoutToAllRendered();},30);}catch{}
   };
 
   wrap.addEventListener("pointerdown",e=>{
@@ -2794,32 +2809,60 @@ function fitTextBox(box,baseRem,enabled){
 }
 
 function fitMasterPlainText(box,text,baseRem,enabled){
-  const minRem=0.72;
+  const minRem=0.55;
   const requested=Math.max(minRem,Number(baseRem)||1);
 
-  text.style.fontSize=requested+"rem";
+  // Always allow natural wrapping first.
+  text.style.display="block";
+  text.style.width="100%";
+  text.style.height="auto";
+  text.style.maxWidth="100%";
+  text.style.whiteSpace="normal";
+  text.style.wordBreak="normal";
+  text.style.overflowWrap="break-word";
+  text.style.hyphens="auto";
+  text.style.lineHeight="1.18";
+  text.style.boxSizing="border-box";
   text.style.visibility="visible";
   text.style.opacity="1";
+  text.style.overflow="visible";
+  text.style.fontSize=requested+"rem";
+
+  // Keep vertical centering with the outer box, not with the text itself.
+  box.style.display="flex";
+  box.style.alignItems="center";
+  box.style.overflow="hidden";
 
   if(!enabled)return;
 
-  const bw=box.clientWidth;
-  const bh=box.clientHeight;
-  if(bw<20||bh<16)return;
+  const fitNow=()=>{
+    const cs=getComputedStyle(box);
+    const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+    const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+    const availableW=Math.max(8,box.clientWidth-padX);
+    const availableH=Math.max(8,box.clientHeight-padY);
 
-  let size=requested;
-  let guard=0;
-
-  while(guard<24){
-    const tooWide=text.scrollWidth>bw+1;
-    const tooTall=text.scrollHeight>bh+1;
-    if(!tooWide&&!tooTall)break;
-    if(size<=minRem)break;
-
-    size=Math.max(minRem,size*0.92);
+    let size=requested;
+    let guard=0;
     text.style.fontSize=size+"rem";
-    guard++;
-  }
+
+    // Measure the fully wrapped text after each size change.
+    while(guard<60){
+      const tooWide=text.scrollWidth>availableW+1;
+      const tooTall=text.scrollHeight>availableH+1;
+      if(!tooWide&&!tooTall)break;
+      if(size<=minRem+0.001)break;
+
+      size=Math.max(minRem,size*0.94);
+      text.style.fontSize=size+"rem";
+      // force layout measurement after font-size change
+      void text.offsetHeight;
+      guard++;
+    }
+  };
+
+  // Two frames ensures the resized card has its final pixel dimensions.
+  requestAnimationFrame(()=>requestAnimationFrame(fitNow));
 }
 
 function applyMasterLayoutToCard(card,state=readMasterState()){
@@ -2864,7 +2907,9 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
       inner.style.padding="2px 4px";
       inner.style.boxSizing="border-box";
       inner.style.whiteSpace="normal";
-      inner.style.overflowWrap="anywhere";
+      inner.style.wordBreak="normal";
+      inner.style.overflowWrap="break-word";
+      inner.style.hyphens="auto";
       inner.style.color="#222";
       if(sel===".qrEnglish")inner.style.fontWeight="700";
       el.appendChild(inner);
@@ -2931,7 +2976,9 @@ function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,a
   text.style.padding="2px 4px";
   text.style.lineHeight="1.2";
   text.style.whiteSpace="normal";
-  text.style.overflowWrap="anywhere";
+  text.style.wordBreak="normal";
+  text.style.overflowWrap="break-word";
+  text.style.hyphens="auto";
   text.style.color="#222";
 
   const align=$(alignId)?.value||"center";
