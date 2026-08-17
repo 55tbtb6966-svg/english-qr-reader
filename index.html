@@ -988,10 +988,31 @@
   opacity:1 !important;
 }
 
+
+.masterTextContent{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+.masterPlainText,
+.qrTextBox .qrTextInner{
+  font-family:Arial,"Helvetica Neue",sans-serif !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  transform:none !important;
+  max-width:none !important;
+  max-height:none !important;
+  min-width:0 !important;
+  min-height:0 !important;
+}
+.masterTextObject{
+  background:#fff !important;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.8 / 更新 2026-08-17 20:13</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.9 / 更新 2026-08-17 20:17</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1320,8 +1341,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.8";
-const APP_UPDATED="2026-08-17 20:13";
+const APP_VERSION="v3.0.9";
+const APP_UPDATED="2026-08-17 20:17";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2752,13 +2773,16 @@ function applyMasterStateToControls(s){
 }
 
 function fitTextBox(box,baseRem,enabled){
-  const text=box.querySelector(".qrTextInner")||box.firstElementChild;
+  const text=box.querySelector(".qrTextInner")||box.querySelector(".masterPlainText")||box.firstElementChild;
   if(!text)return;
+  fitMasterPlainText(box,text,baseRem,enabled);
+}
 
+function fitMasterPlainText(box,text,baseRem,enabled){
   const minRem=0.72;
   const requested=Math.max(minRem,Number(baseRem)||1);
+
   text.style.fontSize=requested+"rem";
-  text.style.lineHeight="1.2";
   text.style.visibility="visible";
   text.style.opacity="1";
 
@@ -2766,19 +2790,18 @@ function fitTextBox(box,baseRem,enabled){
 
   const bw=box.clientWidth;
   const bh=box.clientHeight;
-  if(bw<8||bh<8){
-    requestAnimationFrame(()=>fitTextBox(box,requested,true));
-    return;
-  }
+  if(bw<20||bh<16)return;
 
   let size=requested;
   let guard=0;
-  while(
-    (text.scrollWidth>bw+1 || text.scrollHeight>bh+1) &&
-    size>minRem &&
-    guard<30
-  ){
-    size=Math.max(minRem,size*0.94);
+
+  while(guard<24){
+    const tooWide=text.scrollWidth>bw+1;
+    const tooTall=text.scrollHeight>bh+1;
+    if(!tooWide&&!tooTall)break;
+    if(size<=minRem)break;
+
+    size=Math.max(minRem,size*0.92);
     text.style.fontSize=size+"rem";
     guard++;
   }
@@ -2811,12 +2834,27 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
     el.style.textAlign=v.align;el.style.justifyContent=v.align==="left"?"flex-start":"center";
     el.style.fontSize=v.size+"rem";
     if(!el.querySelector(".qrTextInner")){
-      const txt=el.textContent;el.textContent="";
-      const inner=document.createElement("div");inner.className="qrTextInner";inner.textContent=txt;
-      inner.style.width="100%";inner.style.lineHeight="1.2";inner.style.fontWeight=getComputedStyle(el).fontWeight;inner.style.color=getComputedStyle(el).color||"#222";inner.style.visibility="visible";inner.style.opacity="1";
+      const txt=el.textContent;
+      el.textContent="";
+      const inner=document.createElement("div");
+      inner.className="qrTextInner";
+      inner.textContent=txt;
+      inner.style.width="100%";
+      inner.style.height="100%";
+      inner.style.display="flex";
+      inner.style.alignItems="center";
+      inner.style.justifyContent=v.align==="left"?"flex-start":"center";
+      inner.style.textAlign=v.align;
+      inner.style.lineHeight="1.2";
+      inner.style.padding="2px 4px";
+      inner.style.boxSizing="border-box";
+      inner.style.whiteSpace="normal";
+      inner.style.overflowWrap="anywhere";
+      inner.style.color="#222";
+      if(sel===".qrEnglish")inner.style.fontWeight="700";
       el.appendChild(inner);
     }
-    requestAnimationFrame(()=>fitTextBox(el,v.size,v.autoFit==="on"));
+    requestAnimationFrame(()=>fitMasterPlainText(el,el.querySelector(".qrTextInner"),v.size,v.autoFit==="on"));
   });
 }
 
@@ -2844,26 +2882,63 @@ function loadSavedMasterState(){
 }
 
 function createMasterTextObject(card,src,selector,leftId,topId,alignId,autoFitId,sizeId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
-  const el=src.querySelector(selector);if(!el)return;
-  const wrap=document.createElement("div");wrap.className="masterTextObject";
+  const el=src.querySelector(selector);
+  if(!el)return;
+
+  const wrap=document.createElement("div");
+  wrap.className="masterTextObject";
+
   const cx=Math.max(0,Math.min(100,Number($(leftId)?.value)||defaultLeft));
   const cy=Math.max(0,Math.min(100,Number($(topId)?.value)||defaultTop));
-  wrap.style.left=cx+"%";wrap.style.top=cy+"%";wrap.style.width=defaultWidth+"%";wrap.style.height=defaultHeight+"%";
+  wrap.style.left=cx+"%";
+  wrap.style.top=cy+"%";
+  wrap.style.width=defaultWidth+"%";
+  wrap.style.height=defaultHeight+"%";
   wrap.style.transform="translate(-50%,-50%)";
 
-  const content=document.createElement("div");content.className="masterTextContent";
-  const c=el.cloneNode(true);c.classList.add("qrTextInner");
-  c.style.margin="0";c.style.width="100%";c.style.height="100%";c.style.boxSizing="border-box";c.style.color=getComputedStyle(el).color||"#222";c.style.visibility="visible";c.style.opacity="1";
-  c.style.display="flex";c.style.alignItems="center";
-  const align=$(alignId)?.value||"center";c.style.textAlign=align;c.style.justifyContent=align==="left"?"flex-start":"center";
-  const size=Number($(sizeId)?.value)||1;c.style.fontSize=size+"rem";
-  content.appendChild(c);wrap.appendChild(content);
+  const content=document.createElement("div");
+  content.className="masterTextContent";
 
-  const note=document.createElement("div");note.className="masterTextPositionNote";
-  note.textContent=`中心X ${cx.toFixed(1)}% / 中心Y ${cy.toFixed(1)}%`;wrap.appendChild(note);
-  const handle=document.createElement("div");handle.className="masterTextResizeHandle";wrap.appendChild(handle);
+  const text=document.createElement("div");
+  text.className="masterPlainText";
+  text.textContent=el.textContent||"";
+  text.style.width="100%";
+  text.style.height="100%";
+  text.style.display="flex";
+  text.style.alignItems="center";
+  text.style.boxSizing="border-box";
+  text.style.padding="2px 4px";
+  text.style.lineHeight="1.2";
+  text.style.whiteSpace="normal";
+  text.style.overflowWrap="anywhere";
+  text.style.color="#222";
+
+  const align=$(alignId)?.value||"center";
+  text.style.textAlign=align;
+  text.style.justifyContent=align==="left"?"flex-start":"center";
+
+  const size=Number($(sizeId)?.value)||1;
+  text.style.fontSize=size+"rem";
+  if(selector===".qrEnglish")text.style.fontWeight="700";
+
+  content.appendChild(text);
+  wrap.appendChild(content);
+
+  const note=document.createElement("div");
+  note.className="masterTextPositionNote";
+  note.textContent=`中心X ${cx.toFixed(1)}% / 中心Y ${cy.toFixed(1)}%`;
+  wrap.appendChild(note);
+
+  const handle=document.createElement("div");
+  handle.className="masterTextResizeHandle";
+  wrap.appendChild(handle);
+
   card.appendChild(wrap);
-  requestAnimationFrame(()=>fitTextBox(content,size,($(autoFitId)?.value||"on")==="on"));
+
+  requestAnimationFrame(()=>{
+    fitMasterPlainText(content,text,size,($(autoFitId)?.value||"on")==="on");
+  });
+
   attachMasterTextInteractions(wrap,card,leftId,topId);
 }
 
