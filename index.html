@@ -777,21 +777,24 @@
 .masterPreviewCard .qrCard{position:absolute;margin:0!important;box-sizing:border-box;background:#fff;width:44%;max-width:44%;border:1px solid #bbb;border-radius:10px}
 @media(max-width:650px){.masterPreviewControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.masterMarginGuideBox{
-  position:absolute;
-  pointer-events:none;
-  border:1px solid rgba(120,130,145,.45);
-  border-radius:6px;
-  box-sizing:border-box;
-  z-index:2;
-}
-.masterPreviewCard{z-index:3;}
+
 .masterGuideToggle select{width:100%;}
+
+
+.masterPreviewCard .qrCard{
+  border:1px solid #b8bec7 !important;
+  border-radius:14px !important;
+  overflow:hidden;
+  background:#fff;
+}
+.masterPreviewCard.noCardBorder .qrCard{
+  border-color:transparent !important;
+}
 
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.7 / 更新 2026-08-17 18:55</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.8 / 更新 2026-08-17 19:00</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1067,7 +1070,7 @@
 <label><span>上下位置</span><select id="masterVAlign"><option value="top">上</option><option value="middle" selected>中</option><option value="bottom">下</option></select></label>
 <label><span>横余白（%）</span><input id="masterMarginX" type="number" min="0" max="50" step="1" value="8"></label>
 <label><span>縦余白（%）</span><input id="masterMarginY" type="number" min="0" max="50" step="1" value="8"></label>
-<label class="masterGuideToggle"><span>余白ガイド</span>
+<label class="masterGuideToggle"><span>カード外枠</span>
   <select id="masterMarginGuide">
     <option value="on" selected>ON</option>
     <option value="off">OFF</option>
@@ -1075,7 +1078,7 @@
 </label>
 </div>
 <div class="masterPreviewHint">現在表示中の先頭QRカードをA4横の比率で確認できます。設定変更はすぐに反映されます。</div>
-<div class="masterPreviewCanvas"><div id="masterMarginGuideBox" class="masterMarginGuideBox"></div><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
+<div class="masterPreviewCanvas"><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
 </div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
@@ -1118,8 +1121,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.7";
-const APP_UPDATED="2026-08-17 18:55";
+const APP_VERSION="v2.9.8";
+const APP_UPDATED="2026-08-17 19:00";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2445,23 +2448,48 @@ $("printBtn").addEventListener("click",prepareAndPrint);
 function updateMasterPreview(){
  const host=$("masterPreviewCard");if(!host)return;host.innerHTML="";
  const src=$("qrSheet")?.querySelector(".qrCard");
- if(!src){host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667085;font-size:.9rem;padding:20px;text-align:center">QRカードを作成すると、ここにプレビューが表示されます。</div>';return;}
- const c=src.cloneNode(true),sc=src.querySelectorAll("canvas");
- c.querySelectorAll("canvas").forEach((cv,i)=>{if(sc[i]){const im=document.createElement("img");try{im.src=sc[i].toDataURL("image/png")}catch{};cv.replaceWith(im)}});
- host.appendChild(c);
- const ha=$("masterHAlign")?.value||"center",va=$("masterVAlign")?.value||"middle";
- const mx=Math.max(0,Math.min(50,Number($("masterMarginX")?.value)||0)),my=Math.max(0,Math.min(50,Number($("masterMarginY")?.value)||0));
- const guide=$("masterMarginGuideBox");
- if(guide){
-   guide.style.left=mx+"%";
-   guide.style.right=mx+"%";
-   guide.style.top=my+"%";
-   guide.style.bottom=my+"%";
-   guide.style.display=$("masterMarginGuide")?.value==="off"?"none":"block";
+ if(!src){
+   host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667085;font-size:.9rem;padding:20px;text-align:center">QRカードを作成すると、ここにプレビューが表示されます。</div>';
+   return;
  }
- c.style.left=ha==="left"?mx+"%":ha==="right"?"auto":"50%";c.style.right=ha==="right"?mx+"%":"auto";
- c.style.top=va==="top"?my+"%":va==="bottom"?"auto":"50%";c.style.bottom=va==="bottom"?my+"%":"auto";
- c.style.transform="translate("+(ha==="center"?"-50%":"0")+","+(va==="middle"?"-50%":"0")+")";
+ const c=src.cloneNode(true),sc=src.querySelectorAll("canvas");
+ c.querySelectorAll("canvas").forEach((cv,i)=>{
+   if(sc[i]){
+     const im=document.createElement("img");
+     try{im.src=sc[i].toDataURL("image/png")}catch{}
+     cv.replaceWith(im);
+   }
+ });
+ host.appendChild(c);
+
+ const ha=$("masterHAlign")?.value||"center";
+ const va=$("masterVAlign")?.value||"middle";
+ const mx=Math.max(0,Math.min(45,Number($("masterMarginX")?.value)||0));
+ const my=Math.max(0,Math.min(45,Number($("masterMarginY")?.value)||0));
+
+ // The gray rounded line is the actual card edge.
+ // Its left/right/top/bottom are placed exactly at the requested margins.
+ c.style.position="absolute";
+ c.style.left=mx+"%";
+ c.style.right=mx+"%";
+ c.style.top=my+"%";
+ c.style.bottom=my+"%";
+ c.style.width="auto";
+ c.style.maxWidth="none";
+ c.style.height="auto";
+ c.style.transform="none";
+ c.style.borderRadius="14px";
+
+ // Content alignment inside that card.
+ c.style.display="flex";
+ c.style.flexDirection="column";
+ c.style.justifyContent=va==="top"?"flex-start":va==="bottom"?"flex-end":"center";
+ c.style.alignItems=ha==="left"?"flex-start":ha==="right"?"flex-end":"center";
+ c.style.padding="12px";
+ c.style.boxSizing="border-box";
+
+ const borderOn=$("masterMarginGuide")?.value!=="off";
+ c.style.border=borderOn?"1px solid #b8bec7":"1px solid transparent";
 }
 ["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
