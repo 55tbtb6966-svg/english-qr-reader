@@ -843,10 +843,58 @@
   pointer-events:none;
 }
 
+
+.masterTextObject{
+  position:absolute;
+  box-sizing:border-box;
+  border:1px dashed rgba(120,130,145,.55);
+  border-radius:8px;
+  background:rgba(255,255,255,.90);
+  cursor:grab;
+  touch-action:none;
+  user-select:none;
+  z-index:4;
+  min-width:12%;
+  min-height:28px;
+  padding:4px 6px;
+}
+.masterTextObject.dragging{cursor:grabbing;}
+.masterTextObject .masterTextContent{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  pointer-events:none;
+  box-sizing:border-box;
+}
+.masterTextResizeHandle{
+  position:absolute;
+  width:14px;
+  height:14px;
+  right:-7px;
+  bottom:-7px;
+  border:1px solid #7b8491;
+  border-radius:4px;
+  background:#fff;
+  cursor:nwse-resize;
+  touch-action:none;
+}
+.masterTextPositionNote{
+  position:absolute;
+  left:4px;
+  top:-22px;
+  white-space:nowrap;
+  font-size:.68rem;
+  color:#667085;
+  background:rgba(255,255,255,.94);
+  padding:1px 4px;
+  border-radius:4px;
+  pointer-events:none;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.0 / 更新 2026-08-17 19:14</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.1 / 更新 2026-08-17 19:20</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1134,6 +1182,17 @@
 <label><span>QR 上から（%）</span>
   <input id="masterQrTop" type="number" min="0" max="100" step="0.1" value="28">
 </label>
+<label><span>ID 左（%）</span><input id="masterIdLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
+<label><span>ID 上（%）</span><input id="masterIdTop" type="number" min="0" max="100" step="0.1" value="8"></label>
+<label><span>英語 左（%）</span><input id="masterEnglishLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
+<label><span>英語 上（%）</span><input id="masterEnglishTop" type="number" min="0" max="100" step="0.1" value="20"></label>
+<label><span>発音記号 左（%）</span><input id="masterIpaLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
+<label><span>発音記号 上（%）</span><input id="masterIpaTop" type="number" min="0" max="100" step="0.1" value="34"></label>
+<label><span>日本語 左（%）</span><input id="masterJapaneseLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
+<label><span>日本語 上（%）</span><input id="masterJapaneseTop" type="number" min="0" max="100" step="0.1" value="50"></label>
+<label><span>日本語読み 左（%）</span><input id="masterJapaneseReadLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
+<label><span>日本語読み 上（%）</span><input id="masterJapaneseReadTop" type="number" min="0" max="100" step="0.1" value="64"></label>
+
 
 
 
@@ -1197,8 +1256,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.0";
-const APP_UPDATED="2026-08-17 19:14";
+const APP_VERSION="v3.0.1";
+const APP_UPDATED="2026-08-17 19:20";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2522,6 +2581,109 @@ $("printBtn").addEventListener("click",prepareAndPrint);
   if(status)status.textContent="アプリの起動に失敗しました。ページを再読み込みしてください。";
 });
 
+
+function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
+  const handle=wrap.querySelector(".masterTextResizeHandle");
+  let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0,startH=0;
+
+  const updateNote=()=>{
+    const l=parseFloat(wrap.style.left)||0;
+    const t=parseFloat(wrap.style.top)||0;
+    const note=wrap.querySelector(".masterTextPositionNote");
+    if(note)note.textContent=`左 ${l.toFixed(1)}% / 上 ${t.toFixed(1)}%`;
+    if($(leftInputId))$(leftInputId).value=l.toFixed(1);
+    if($(topInputId))$(topInputId).value=t.toFixed(1);
+  };
+
+  const move=e=>{
+    if(!mode)return;
+    const r=card.getBoundingClientRect();
+    const dx=(e.clientX-startX)/r.width*100;
+    const dy=(e.clientY-startY)/r.height*100;
+    if(mode==="drag"){
+      const w=parseFloat(wrap.style.width)||40;
+      const h=parseFloat(wrap.style.height)||10;
+      const nl=Math.max(0,Math.min(100-w,startLeft+dx));
+      const nt=Math.max(0,Math.min(100-h,startTop+dy));
+      wrap.style.left=nl+"%";
+      wrap.style.top=nt+"%";
+      updateNote();
+    }else{
+      const nw=Math.max(12,Math.min(90,startW+dx));
+      const nh=Math.max(5,Math.min(70,startH+dy));
+      wrap.style.width=nw+"%";
+      wrap.style.height=nh+"%";
+    }
+  };
+
+  const up=()=>{
+    mode="";
+    wrap.classList.remove("dragging");
+    window.removeEventListener("pointermove",move);
+    window.removeEventListener("pointerup",up);
+  };
+
+  wrap.addEventListener("pointerdown",e=>{
+    if(e.target===handle)return;
+    e.preventDefault();
+    mode="drag";
+    wrap.classList.add("dragging");
+    startX=e.clientX; startY=e.clientY;
+    startLeft=parseFloat(wrap.style.left)||0;
+    startTop=parseFloat(wrap.style.top)||0;
+    wrap.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+  });
+
+  handle?.addEventListener("pointerdown",e=>{
+    e.preventDefault();e.stopPropagation();
+    mode="resize";
+    startX=e.clientX; startY=e.clientY;
+    startW=parseFloat(wrap.style.width)||40;
+    startH=parseFloat(wrap.style.height)||10;
+    handle.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+  });
+}
+
+function createMasterTextObject(card,src,selector,leftId,topId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
+  const el=src.querySelector(selector);
+  if(!el)return;
+
+  const wrap=document.createElement("div");
+  wrap.className="masterTextObject";
+  const left=Math.max(0,Math.min(95,Number($(leftId)?.value)||defaultLeft));
+  const top=Math.max(0,Math.min(95,Number($(topId)?.value)||defaultTop));
+  wrap.style.left=left+"%";
+  wrap.style.top=top+"%";
+  wrap.style.width=defaultWidth+"%";
+  wrap.style.height=defaultHeight+"%";
+
+  const content=document.createElement("div");
+  content.className="masterTextContent";
+  const c=el.cloneNode(true);
+  c.style.margin="0";
+  c.style.width="100%";
+  c.style.height="100%";
+  c.style.boxSizing="border-box";
+  content.appendChild(c);
+  wrap.appendChild(content);
+
+  const note=document.createElement("div");
+  note.className="masterTextPositionNote";
+  note.textContent=`左 ${left.toFixed(1)}% / 上 ${top.toFixed(1)}%`;
+  wrap.appendChild(note);
+
+  const handle=document.createElement("div");
+  handle.className="masterTextResizeHandle";
+  wrap.appendChild(handle);
+
+  card.appendChild(wrap);
+  attachMasterTextInteractions(wrap,card,leftId,topId);
+}
+
 function attachMasterQrInteractions(wrap,card){
   const handle=wrap.querySelector("#masterQrResizeHandle");
   let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0;
@@ -2663,35 +2825,13 @@ function updateMasterPreview(){
    attachMasterQrInteractions(wrap,card);
  }
 
- const textWrap=document.createElement("div");
- textWrap.style.position="absolute";
- textWrap.style.width="58%";
- textWrap.style.maxHeight="78%";
- textWrap.style.overflow="hidden";
- textWrap.style.display="flex";
- textWrap.style.flexDirection="column";
- textWrap.style.gap="4px";
-
- const th=$("masterTextHAlign")?.value||"left";
- const tv=$("masterTextVAlign")?.value||"middle";
- textWrap.style.left=th==="left"?"6%":th==="right"?"auto":"50%";
- textWrap.style.right=th==="right"?"6%":"auto";
- textWrap.style.top=tv==="top"?"8%":tv==="bottom"?"auto":"50%";
- textWrap.style.bottom=tv==="bottom"?"8%":"auto";
- textWrap.style.transform="translate("+(th==="center"?"-50%":"0")+","+(tv==="middle"?"-50%":"0")+")";
- textWrap.style.textAlign=th==="left"?"left":th==="right"?"right":"center";
-
- [".qrId",".qrEnglish",".qrIpa",".qrJapanese",".qrJapaneseRead"].forEach(sel=>{
-   const el=src.querySelector(sel);
-   if(!el)return;
-   const c=el.cloneNode(true);
-   c.style.margin="0";
-   c.style.width="100%";
-   textWrap.appendChild(c);
- });
- card.appendChild(textWrap);
+ createMasterTextObject(card,src,".qrId","masterIdLeft","masterIdTop",10,8,36,9);
+ createMasterTextObject(card,src,".qrEnglish","masterEnglishLeft","masterEnglishTop",10,20,55,13);
+ createMasterTextObject(card,src,".qrIpa","masterIpaLeft","masterIpaTop",10,34,55,10);
+ createMasterTextObject(card,src,".qrJapanese","masterJapaneseLeft","masterJapaneseTop",10,50,55,12);
+ createMasterTextObject(card,src,".qrJapaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop",10,64,55,12);
 }
-["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrLeft","masterQrTop","masterTextHAlign","masterTextVAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrLeft","masterQrTop","masterTextHAlign","masterTextVAlign","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 </script>
 </body>
