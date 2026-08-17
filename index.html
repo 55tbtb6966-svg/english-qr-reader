@@ -1101,10 +1101,24 @@
   }
 }
 
+
+@media print{
+  body *{visibility:hidden!important;}
+  #printQrSheet,#printQrSheet *{visibility:visible!important;}
+  #printQrSheet{
+    position:absolute!important;
+    left:0!important;
+    top:0!important;
+    width:100%!important;
+    display:grid!important;
+    background:#fff!important;
+  }
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.1 / 更新 2026-08-17 23:58</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.2 / 更新 2026-08-18 00:35</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1425,8 +1439,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.1";
-const APP_UPDATED="2026-08-17 23:58";
+const APP_VERSION="v3.2.2";
+const APP_UPDATED="2026-08-18 00:35";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2502,109 +2516,50 @@ async function exportCurrentQrPageToPowerPoint(){
     return;
   }
 
-  let records=qrPageSource.length?qrPageSource.slice():[];
-  if(!records.length){
+  const urls = await getPreviewCardImagesForOutput();
+  if(!urls.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
 
-  const spec=$("printRange")?.value||"";
+  const spec = $("printRange")?.value || "";
+  let selected = urls.slice();
   if(spec.trim()){
-    const pos=parsePrintRange(spec,records.length);
-    if(!pos||!pos.length){
+    const pos = parsePrintRange(spec, urls.length);
+    if(!pos || !pos.length){
       setStatus($("qrStatus"),"PPT範囲を確認してください。",false);
       return;
     }
-    records=pos.map(n=>records[n-1]).filter(Boolean);
+    selected = pos.map(n=>urls[n-1]).filter(Boolean);
   }
 
   try{
-    const pptx=new PptxGenJS();
-    const count=8;
-    let sw,sh,cols,rows,layoutName;
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({name:"A4P", width:8.267, height:11.693});
+    pptx.layout = "A4P";
+    pptx.author = "English QR Reader";
 
-    if(count===1||count===4){
-      sw=11.693; sh=8.267; layoutName="MASTER_A4_LANDSCAPE";
-      cols=count===1?1:2; rows=count===1?1:2;
-    }else{
-      sw=8.267; sh=11.693; layoutName="MASTER_A4_PORTRAIT";
-      cols=count===2?1:2; rows=count===2?2:4;
-    }
+    const sw = 8.267, sh = 11.693;
+    const cols = 2, rows = 4, perSlide = 8;
+    const gap = 0.08, mx = 0.15, my = 0.15;
+    const cw = (sw - 2*mx - gap*(cols-1)) / cols;
+    const ch = (sh - 2*my - gap*(rows-1)) / rows;
 
-    pptx.defineLayout({name:layoutName,width:sw,height:sh});
-    pptx.layout=layoutName;
-    pptx.author="English QR Reader";
-
-    const state=readMasterState();
-    const showId=$("qrShowId")?.checked!==false;
-    const showEnglish=$("qrShowEnglish")?.checked!==false;
-    const showIpa=$("qrShowIpa")?.checked!==false;
-    const showJapanese=$("qrShowJapanese")?.checked===true;
-    const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
-
-    const gap=.08;
-    const mx=.15,my=.15;
-    const cw=(sw-2*mx-gap*(cols-1))/cols;
-    const ch=(sh-2*my-gap*(rows-1))/rows;
-    const perSlide=cols*rows;
-
-    const addText=(slide,txt,v,x,y,w,h,bold=false)=>{
-      if(!txt)return;
-      const bx=x+w*(state.marginX/100)+(w*(1-2*state.marginX/100))*((v.x-v.w/2)/100);
-      const by=y+h*(state.marginY/100)+(h*(1-2*state.marginY/100))*((v.y-v.h/2)/100);
-      const bw=(w*(1-2*state.marginX/100))*(v.w/100);
-      const bh=(h*(1-2*state.marginY/100))*(v.h/100);
-      const fs=Math.max(4,Math.min(48,(Number(v.size)||1)*12*(w/11.693)));
-      slide.addText(String(txt),{
-        x:bx,y:by,w:bw,h:bh,
-        fontFace:"Aptos",fontSize:fs,bold,
-        align:v.align==="left"?"left":"center",
-        valign:"mid",margin:0,
-        fit:v.autoFit==="on"?"shrink":"resize"
-      });
-    };
-
-    for(let start=0;start<records.length;start+=perSlide){
-      const slide=pptx.addSlide();
-      slide.background={color:"FFFFFF"};
-      const batch=records.slice(start,start+perSlide);
-
-      batch.forEach((r,i)=>{
-        const col=i%cols,row=Math.floor(i/cols);
-        const x=mx+col*(cw+gap), y=my+row*(ch+gap);
-
-        const innerX=x+cw*(state.marginX/100);
-        const innerY=y+ch*(state.marginY/100);
-        const innerW=cw*(1-2*state.marginX/100);
-        const innerH=ch*(1-2*state.marginY/100);
-
-        if(state.border!=="off"){
-          slide.addShape(pptx.ShapeType.roundRect,{
-            x:innerX,y:innerY,w:innerW,h:innerH,
-            rectRadius:.03,
-            line:{color:"B8BEC7",width:1},
-            fill:{color:"FFFFFF",transparency:100}
-          });
-        }
-
-        const qrPct=Math.max(8,Math.min(60,(state.qr.size/132)*28))/100;
-        const qrW=innerW*qrPct;
-        const qrH=qrW;
-        const qx=innerX+innerW*(state.qr.x/100)-qrW/2;
-        const qy=innerY+innerH*(state.qr.y/100)-qrH/2;
-        const data=qrDataUrlForPpt(r.id,700);
-        if(data)slide.addImage({data,x:qx,y:qy,w:qrW,h:qrH});
-
-        if(showId)addText(slide,r.id,state.id,x,y,cw,ch,false);
-        if(showEnglish)addText(slide,r.english,state.english,x,y,cw,ch,true);
-        if(showIpa&&r.ipa)addText(slide,r.ipa,state.ipa,x,y,cw,ch,false);
-        if(showJapanese&&r.japanese)addText(slide,r.japanese,state.japanese,x,y,cw,ch,false);
-        if(showJapaneseRead&&(r.japaneseRead||r.japanese))addText(slide,r.japaneseRead||r.japanese,state.japaneseRead,x,y,cw,ch,false);
+    for(let start=0; start<selected.length; start+=perSlide){
+      const slide = pptx.addSlide();
+      slide.background = {color:"FFFFFF"};
+      const batch = selected.slice(start, start + perSlide);
+      batch.forEach((data, i)=>{
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = mx + col * (cw + gap);
+        const y = my + row * (ch + gap);
+        slide.addImage({data, x, y, w:cw, h:ch});
       });
     }
 
-    await pptx.writeFile({fileName:`qr_cards_master_${count}_${new Date().toISOString().slice(0,10)}.pptx`});
-    setStatus($("qrStatus"),`PowerPointを作成しました（${records.length}件）。`);
+    await pptx.writeFile({fileName:`qr_cards_preview_8up_${new Date().toISOString().slice(0,10)}.pptx`});
+    setStatus($("qrStatus"),`PowerPointを作成しました（${selected.length}件）。`);
   }catch(err){
     console.error(err);
     setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
@@ -3336,6 +3291,96 @@ function syncLegacySizeFromMaster(){
 
 
 
+
+async function previewCardToImageDataUrl(card, scale=2){
+  if(!card) return null;
+
+  const srcRect = card.getBoundingClientRect();
+  const width = Math.max(1, Math.round(srcRect.width || 800));
+  const height = Math.max(1, Math.round(srcRect.height || 566));
+
+  const clone = card.cloneNode(true);
+  clone.style.margin = "0";
+  clone.style.width = width + "px";
+  clone.style.height = height + "px";
+  clone.style.boxSizing = "border-box";
+  clone.style.background = "#ffffff";
+  clone.querySelectorAll("canvas").forEach(cv=>{
+    try{
+      const img = document.createElement("img");
+      img.src = cv.toDataURL("image/png");
+      img.style.width = cv.style.width || "100%";
+      img.style.height = cv.style.height || "100%";
+      img.style.display = "block";
+      img.style.maxWidth = "100%";
+      img.style.maxHeight = "100%";
+      cv.replaceWith(img);
+    }catch(e){}
+  });
+
+  const css = `
+    *{box-sizing:border-box;}
+    body{margin:0;padding:0;background:#fff;}
+    .qrCard,.printMasterCard{position:relative;overflow:hidden;background:#fff;}
+    .masterOutputInner{position:absolute;background:#fff;overflow:hidden;}
+    .qrTextBox{position:absolute;display:flex;align-items:center;overflow:hidden;}
+    .qrTextInner,.masterPlainText{
+      width:100%;
+      line-height:1.18;
+      white-space:normal;
+      word-break:normal;
+      overflow-wrap:break-word;
+      color:#222;
+      font-family:Arial,"Helvetica Neue",sans-serif;
+    }
+    img{display:block;max-width:100%;max-height:100%;}
+  `;
+
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width*scale}" height="${height*scale}" viewBox="0 0 ${width} ${height}">
+    <foreignObject x="0" y="0" width="${width}" height="${height}">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#fff;">
+        <style>${css}</style>
+        ${serialized}
+      </div>
+    </foreignObject>
+  </svg>`;
+
+  const svgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
+  return await new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const canvas = document.createElement("canvas");
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL("image/png"));
+      }catch(e){
+        resolve(svgDataUrl);
+      }
+    };
+    img.onerror = ()=>resolve(svgDataUrl);
+    img.src = svgDataUrl;
+  });
+}
+
+async function getPreviewCardImagesForOutput(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  if(!cards.length) return [];
+  const urls = [];
+  for(const card of cards){
+    const url = await previewCardToImageDataUrl(card, 2);
+    if(url) urls.push(url);
+  }
+  return urls;
+}
+
 function masterFontPxForCard(card,v){
   const inner=card.querySelector(".masterOutputInner")||card;
   const w=inner.getBoundingClientRect().width||620;
@@ -3457,29 +3502,52 @@ function applyDynamicPrintLayout(){
     '@page{size:A4 portrait;margin:8mm;}'+
     '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}'+
     '#printQrSheet .printMasterCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;}'+
+    '#printQrSheet .printMasterCard img{width:100%!important;height:100%!important;display:block!important;object-fit:contain!important;}'+
     '}';
 }
 async function printMasterCards(){
-  let records=qrPageSource.length?qrPageSource.slice():[];
-  if(!records.length){
+  const urls = await getPreviewCardImagesForOutput();
+  if(!urls.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
 
-  const spec=$("printRange")?.value||"";
+  const sheet = $("printQrSheet");
+  if(!sheet) return;
+  sheet.innerHTML = "";
+
+  const spec = $("printRange")?.value || "";
+  let selected = urls.slice();
   if(spec.trim()){
-    const pos=parsePrintRange(spec,records.length);
-    if(!pos||!pos.length){
+    const pos = parsePrintRange(spec, urls.length);
+    if(!pos || !pos.length){
       setStatus($("qrStatus"),"印刷範囲を確認してください。",false);
       return;
     }
-    records=pos.map(n=>records[n-1]).filter(Boolean);
+    selected = pos.map(n=>urls[n-1]).filter(Boolean);
   }
 
-  buildMasterPrintSheet(records);
-  applyDynamicPrintLayout();
+  selected.forEach(url=>{
+    const card = document.createElement("div");
+    card.className = "printMasterCard";
+    card.style.position = "relative";
+    card.style.aspectRatio = "297 / 210";
+    card.style.background = "#fff";
+    card.style.overflow = "hidden";
 
-  await new Promise(resolve=>setTimeout(resolve,180));
+    const img = document.createElement("img");
+    img.src = url;
+    img.style.width = "100%";
+    img.style.height = "100%";
+    img.style.display = "block";
+    img.style.objectFit = "contain";
+    card.appendChild(img);
+
+    sheet.appendChild(card);
+  });
+
+  applyDynamicPrintLayout();
+  await new Promise(resolve=>setTimeout(resolve,120));
   window.print();
 }
 
