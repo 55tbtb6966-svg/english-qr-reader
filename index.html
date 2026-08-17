@@ -891,10 +891,49 @@
   pointer-events:none;
 }
 
+
+.masterItemSettingsGrid{
+  display:grid;
+  gap:8px;
+  margin:10px 0 12px;
+}
+.masterItemSettingsRow{
+  display:grid;
+  grid-template-columns:110px repeat(3,minmax(0,1fr));
+  gap:8px;
+  align-items:end;
+  padding:8px 0;
+  border-bottom:1px solid #eef1f4;
+}
+.masterItemName{
+  font-weight:700;
+  align-self:center;
+}
+.masterItemSettingsRow label{
+  margin:0 !important;
+}
+.masterItemSettingsRow label span{
+  display:block;
+  font-size:.82rem;
+  color:#667085;
+  margin-bottom:3px;
+}
+.masterItemSettingsRow input{
+  width:100%;
+  box-sizing:border-box;
+}
+@media(max-width:700px){
+  .masterItemSettingsRow{
+    grid-template-columns:1fr 1fr 1fr;
+  }
+  .masterItemName{
+    grid-column:1 / -1;
+  }
+}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.1 / 更新 2026-08-17 19:20</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.2 / 更新 2026-08-17 19:26</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1159,74 +1198,56 @@
 <button class="secondary" id="resetSizeSettingsBtn" type="button">初期値に戻す</button>
 </div>
 <p class="hint">設定はこのiPhoneのSafari内に保存されます。</p>
-</div>
-</details></div>
-</div>
-</div>
 <div class="masterPreviewBox">
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
 <div class="masterPreviewControls">
-<label><span>左右位置</span><select id="masterHAlign"><option value="left">左</option><option value="center" selected>中央</option><option value="right">右</option></select></label>
-<label><span>上下位置</span><select id="masterVAlign"><option value="top">上</option><option value="middle" selected>中</option><option value="bottom">下</option></select></label>
-<label><span>横余白（%）</span><input id="masterMarginX" type="number" min="0" max="50" step="1" value="8"></label>
-<label><span>縦余白（%）</span><input id="masterMarginY" type="number" min="0" max="50" step="1" value="8"></label>
+<label><span>左右位置</span><select id="masterHAlign"><option value="left">左</option><option selected="" value="center">中央</option><option value="right">右</option></select></label>
+<label><span>上下位置</span><select id="masterVAlign"><option value="top">上</option><option selected="" value="middle">中</option><option value="bottom">下</option></select></label>
+<label><span>横余白（%）</span><input id="masterMarginX" max="50" min="0" step="1" type="number" value="8"/></label>
+<label><span>縦余白（%）</span><input id="masterMarginY" max="50" min="0" step="1" type="number" value="8"/></label>
 <label class="masterGuideToggle"><span>カード外枠</span>
-  <select id="masterMarginGuide">
-    <option value="on" selected>ON</option>
-    <option value="off">OFF</option>
-  </select>
+<select id="masterMarginGuide">
+<option selected="" value="on">ON</option>
+<option value="off">OFF</option>
+</select>
 </label>
 <label><span>QR 左から（%）</span>
-  <input id="masterQrLeft" type="number" min="0" max="100" step="0.1" value="36">
+<input id="masterQrLeft" max="100" min="0" step="0.1" type="number" value="36"/>
 </label>
 <label><span>QR 上から（%）</span>
-  <input id="masterQrTop" type="number" min="0" max="100" step="0.1" value="28">
+<input id="masterQrTop" max="100" min="0" step="0.1" type="number" value="28"/>
 </label>
-<label><span>ID 左（%）</span><input id="masterIdLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
-<label><span>ID 上（%）</span><input id="masterIdTop" type="number" min="0" max="100" step="0.1" value="8"></label>
-<label><span>英語 左（%）</span><input id="masterEnglishLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
-<label><span>英語 上（%）</span><input id="masterEnglishTop" type="number" min="0" max="100" step="0.1" value="20"></label>
-<label><span>発音記号 左（%）</span><input id="masterIpaLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
-<label><span>発音記号 上（%）</span><input id="masterIpaTop" type="number" min="0" max="100" step="0.1" value="34"></label>
-<label><span>日本語 左（%）</span><input id="masterJapaneseLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
-<label><span>日本語 上（%）</span><input id="masterJapaneseTop" type="number" min="0" max="100" step="0.1" value="50"></label>
-<label><span>日本語読み 左（%）</span><input id="masterJapaneseReadLeft" type="number" min="0" max="100" step="0.1" value="10"></label>
-<label><span>日本語読み 上（%）</span><input id="masterJapaneseReadTop" type="number" min="0" max="100" step="0.1" value="64"></label>
 
 
 
 
-<label><span>文字 左右位置</span>
-  <select id="masterTextHAlign">
-    <option value="left" selected>左</option>
-    <option value="center">中央</option>
-    <option value="right">右</option>
-  </select>
-</label>
-<label><span>文字 上下位置</span>
-  <select id="masterTextVAlign">
-    <option value="top">上</option>
-    <option value="middle" selected>中</option>
-    <option value="bottom">下</option>
-  </select>
-</label>
+
+
+
+
+
+
+
 
 </div>
-<div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
-<div class="masterPreviewCanvas"><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
+<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number"/></label><label><span>左位置（%）</span><input id="masterQrLeft" max="100" min="0" step="0.1" type="number"/></label><label><span>上位置（%）</span><input id="masterQrTop" max="100" min="0" step="0.1" type="number"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="8"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="34"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="50"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="64"/></label></div></div><div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
+<div class="masterPreviewCanvas"><div class="masterPreviewCard" id="masterPreviewCard"></div></div>
+</div></div>
+</details></div>
 </div>
+</div>
+
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
 <span>印刷範囲</span>
-<input id="printRange" placeholder="例：1-50 または 1,2,4" type="text"/>
-</label>
+<input id="printRange" placeholder="例：1-50 または 1,2,4" type="text">
+</input></label>
 <div class="hint" style="align-self:end;">
           空欄なら現在の検索結果・選択結果をすべてID順で印刷します。
         </div>
 </div><div class="row">
 <button class="secondary" id="printBtn">印刷／PDF保存</button>
 </div>
-
 <div class="grid2" id="pptLayoutControls" style="margin-top:10px;">
 <label>
 <span>PowerPointレイアウト</span>
@@ -1256,8 +1277,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.1";
-const APP_UPDATED="2026-08-17 19:20";
+const APP_VERSION="v3.0.2";
+const APP_UPDATED="2026-08-17 19:26";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2833,6 +2854,39 @@ function updateMasterPreview(){
 }
 ["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrLeft","masterQrTop","masterTextHAlign","masterTextVAlign","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
+
+const MASTER_SIZE_MIRRORS={
+  masterMirror_settingQrSize:"settingQrSize",
+  masterMirror_settingIdSize:"settingIdSize",
+  masterMirror_settingEnglishSize:"settingEnglishSize",
+  masterMirror_settingIpaSize:"settingIpaSize",
+  masterMirror_settingJapaneseSize:"settingJapaneseSize",
+  masterMirror_settingJapaneseReadSize:"settingJapaneseReadSize"
+};
+
+function syncMasterSizeMirrorsFromSettings(){
+  for(const [mirrorId,settingId] of Object.entries(MASTER_SIZE_MIRRORS)){
+    const m=$(mirrorId),s=$(settingId);
+    if(m&&s)m.value=s.value;
+  }
+}
+
+for(const [mirrorId,settingId] of Object.entries(MASTER_SIZE_MIRRORS)){
+  const m=$(mirrorId),s=$(settingId);
+  if(m&&s){
+    m.addEventListener("input",()=>{
+      s.value=m.value;
+      s.dispatchEvent(new Event("input",{bubbles:true}));
+      s.dispatchEvent(new Event("change",{bubbles:true}));
+      try{saveAndApplySizeSettings();}catch{}
+      updateMasterPreview();
+    });
+    s.addEventListener("input",()=>{m.value=s.value;});
+    s.addEventListener("change",()=>{m.value=s.value;});
+  }
+}
+setTimeout(syncMasterSizeMirrorsFromSettings,0);
+
 </script>
 </body>
 </html>
