@@ -978,10 +978,20 @@
   .masterItemSettingsRow,.masterItemSettingsRow:first-child{grid-template-columns:1fr 1fr;}
   .masterItemName{grid-column:1/-1;}
 }
+
+.masterTextContent,
+.masterTextContent .qrTextInner,
+.qrTextBox,
+.qrTextBox .qrTextInner{
+  color:inherit;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.7 / 更新 2026-08-17 20:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.8 / 更新 2026-08-17 20:13</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1310,8 +1320,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.7";
-const APP_UPDATED="2026-08-17 20:05";
+const APP_VERSION="v3.0.8";
+const APP_UPDATED="2026-08-17 20:13";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2744,12 +2754,31 @@ function applyMasterStateToControls(s){
 function fitTextBox(box,baseRem,enabled){
   const text=box.querySelector(".qrTextInner")||box.firstElementChild;
   if(!text)return;
-  text.style.fontSize=baseRem+"rem";
+
+  const minRem=0.72;
+  const requested=Math.max(minRem,Number(baseRem)||1);
+  text.style.fontSize=requested+"rem";
+  text.style.lineHeight="1.2";
+  text.style.visibility="visible";
+  text.style.opacity="1";
+
   if(!enabled)return;
-  let size=baseRem;
+
+  const bw=box.clientWidth;
+  const bh=box.clientHeight;
+  if(bw<8||bh<8){
+    requestAnimationFrame(()=>fitTextBox(box,requested,true));
+    return;
+  }
+
+  let size=requested;
   let guard=0;
-  while((text.scrollWidth>box.clientWidth+1||text.scrollHeight>box.clientHeight+1)&&size>.45&&guard<40){
-    size*=.94;
+  while(
+    (text.scrollWidth>bw+1 || text.scrollHeight>bh+1) &&
+    size>minRem &&
+    guard<30
+  ){
+    size=Math.max(minRem,size*0.94);
     text.style.fontSize=size+"rem";
     guard++;
   }
@@ -2784,7 +2813,7 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
     if(!el.querySelector(".qrTextInner")){
       const txt=el.textContent;el.textContent="";
       const inner=document.createElement("div");inner.className="qrTextInner";inner.textContent=txt;
-      inner.style.width="100%";inner.style.lineHeight="1.2";inner.style.fontWeight=getComputedStyle(el).fontWeight;
+      inner.style.width="100%";inner.style.lineHeight="1.2";inner.style.fontWeight=getComputedStyle(el).fontWeight;inner.style.color=getComputedStyle(el).color||"#222";inner.style.visibility="visible";inner.style.opacity="1";
       el.appendChild(inner);
     }
     requestAnimationFrame(()=>fitTextBox(el,v.size,v.autoFit==="on"));
@@ -2824,7 +2853,7 @@ function createMasterTextObject(card,src,selector,leftId,topId,alignId,autoFitId
 
   const content=document.createElement("div");content.className="masterTextContent";
   const c=el.cloneNode(true);c.classList.add("qrTextInner");
-  c.style.margin="0";c.style.width="100%";c.style.height="100%";c.style.boxSizing="border-box";
+  c.style.margin="0";c.style.width="100%";c.style.height="100%";c.style.boxSizing="border-box";c.style.color=getComputedStyle(el).color||"#222";c.style.visibility="visible";c.style.opacity="1";
   c.style.display="flex";c.style.alignItems="center";
   const align=$(alignId)?.value||"center";c.style.textAlign=align;c.style.justifyContent=align==="left"?"flex-start":"center";
   const size=Number($(sizeId)?.value)||1;c.style.fontSize=size+"rem";
