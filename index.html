@@ -1026,10 +1026,23 @@
 
 #printQrSheet .printMasterCard{box-sizing:border-box;background:#fff;}
 @media print{#printLayoutControls{display:none!important;}#qrSheet{display:none!important;}#printQrSheet{display:grid!important;}}
+
+.masterItemSettingsRow{
+  grid-template-columns:95px repeat(7,minmax(0,1fr));
+}
+.masterItemSettingsRow:first-child{
+  grid-template-columns:95px repeat(4,minmax(0,1fr));
+}
+@media(max-width:900px){
+  .masterItemSettingsRow,.masterItemSettingsRow:first-child{
+    grid-template-columns:1fr 1fr;
+  }
+  .masterItemName{grid-column:1/-1;}
+}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.4 / 更新 2026-08-17 23:08</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.5 / 更新 2026-08-17 23:14</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1292,27 +1305,27 @@
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIdWidth" max="90" min="12" step="0.5" type="number" value="36"/></label><label><span>枠高さ（%）</span><input id="masterIdHeight" max="70" min="5" step="0.5" type="number" value="9"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label><label><span>文字揃え</span>
 <select id="masterEnglishAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterEnglishAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="34"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterEnglishAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterEnglishWidth" max="90" min="12" step="0.5" type="number" value="55"/></label><label><span>枠高さ（%）</span><input id="masterEnglishHeight" max="70" min="5" step="0.5" type="number" value="13"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="34"/></label><label><span>文字揃え</span>
 <select id="masterIpaAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterIpaAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterIpaAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIpaWidth" max="90" min="12" step="0.5" type="number" value="55"/></label><label><span>枠高さ（%）</span><input id="masterIpaHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>文字揃え</span>
 <select id="masterJapaneseAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterJapaneseAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="64"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterJapaneseAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterJapaneseWidth" max="90" min="12" step="0.5" type="number" value="55"/></label><label><span>枠高さ（%）</span><input id="masterJapaneseHeight" max="70" min="5" step="0.5" type="number" value="12"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="64"/></label><label><span>文字揃え</span>
 <select id="masterJapaneseReadAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterJapaneseReadAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div></div><div class="row masterDefaultRow" style="margin:10px 0 12px;"><button id="saveMasterDefaultBtn" type="button">現在のマスター設定をDefault保存</button></div><div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
+</label><label><span>自動フォント</span><select id="masterJapaneseReadAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterJapaneseReadWidth" max="90" min="12" step="0.5" type="number" value="55"/></label><label><span>枠高さ（%）</span><input id="masterJapaneseReadHeight" max="70" min="5" step="0.5" type="number" value="12"/></label></div></div><div class="row masterDefaultRow" style="margin:10px 0 12px;"><button id="saveMasterDefaultBtn" type="button">現在のマスター設定をDefault保存</button></div><div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
 <div class="masterPreviewCanvas"><div class="masterPreviewCard" id="masterPreviewCard"></div></div>
 </div></div>
 </details></div>
@@ -1321,7 +1334,7 @@
 <div class="grid2" id="printLayoutControls" style="margin-top:10px;">
 <label><span>印刷レイアウト</span><select id="printLayoutMode">
 <option value="1">1枚（A4横）</option><option value="2">2枚（A4縦）</option>
-<option value="4">4枚（A4横）</option><option value="8" selected>8枚（A4縦）</option>
+<option value="4">4枚（A4横）</option><option selected="" value="8">8枚（A4縦）</option>
 </select></label></div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
@@ -1363,8 +1376,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.4";
-const APP_UPDATED="2026-08-17 23:08";
+const APP_VERSION="v3.1.5";
+const APP_UPDATED="2026-08-17 23:14";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2671,7 +2684,7 @@ function prepareAndPrint(){
 $("printBtn").addEventListener("click",printMasterCards);
 
 
-function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey){
+function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,widthInputId,heightInputId){
   const handle=wrap.querySelector(".masterTextResizeHandle");
   let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0,startH=0;
 
@@ -2702,6 +2715,8 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey){
       const nh=Math.max(5,Math.min(70,startH+dy));
       wrap.style.width=nw+"%";
       wrap.style.height=nh+"%";
+      if($(widthInputId))$(widthInputId).value=nw.toFixed(1);
+      if($(heightInputId))$(heightInputId).value=nh.toFixed(1);
       const state=readMasterState();
       if(state[itemKey]){
         state[itemKey].w=Number(nw.toFixed(2));
@@ -2769,11 +2784,11 @@ function readMasterState(){
     marginX:num("masterMarginX",8),marginY:num("masterMarginY",8),
     border:$("masterMarginGuide")?.value||"on",
     qr:{size:num("masterMirror_settingQrSize",132),x:num("masterQrCenterX",50),y:num("masterQrCenterY",50)},
-    id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:prev("id","w",36),h:prev("id","h",9)},
-    english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:prev("english","w",55),h:prev("english","h",13)},
-    ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:prev("ipa","w",55),h:prev("ipa","h",10)},
-    japanese:{size:num("masterMirror_settingJapaneseSize",1.12),x:num("masterJapaneseLeft",32),y:num("masterJapaneseTop",55),align:$("masterJapaneseAlign")?.value||"center",autoFit:$("masterJapaneseAutoFit")?.value||"on",w:prev("japanese","w",55),h:prev("japanese","h",12)},
-    japaneseRead:{size:num("masterMirror_settingJapaneseReadSize",1.12),x:num("masterJapaneseReadLeft",32),y:num("masterJapaneseReadTop",70),align:$("masterJapaneseReadAlign")?.value||"center",autoFit:$("masterJapaneseReadAutoFit")?.value||"on",w:prev("japaneseRead","w",55),h:prev("japaneseRead","h",12)}
+    id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:num("masterIdWidth",prev("id","w",36)),h:num("masterIdHeight",prev("id","h",9))},
+    english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:num("masterEnglishWidth",prev("english","w",55)),h:num("masterEnglishHeight",prev("english","h",13))},
+    ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:num("masterIpaWidth",prev("ipa","w",55)),h:num("masterIpaHeight",prev("ipa","h",10))},
+    japanese:{size:num("masterMirror_settingJapaneseSize",1.12),x:num("masterJapaneseLeft",32),y:num("masterJapaneseTop",55),align:$("masterJapaneseAlign")?.value||"center",autoFit:$("masterJapaneseAutoFit")?.value||"on",w:num("masterJapaneseWidth",prev("japanese","w",55)),h:num("masterJapaneseHeight",prev("japanese","h",12))},
+    japaneseRead:{size:num("masterMirror_settingJapaneseReadSize",1.12),x:num("masterJapaneseReadLeft",32),y:num("masterJapaneseReadTop",70),align:$("masterJapaneseReadAlign")?.value||"center",autoFit:$("masterJapaneseReadAutoFit")?.value||"on",w:num("masterJapaneseReadWidth",prev("japaneseRead","w",55)),h:num("masterJapaneseReadHeight",prev("japaneseRead","h",12))}
   };
 }
 
@@ -2786,7 +2801,7 @@ function applyMasterStateToControls(s){
   for(const [k,suffix] of Object.entries(map)){
     const v=s[k]||MASTER_DEFAULT_STATE[k];
     set(sizeIds[k],v.size);set("master"+suffix+"Left",v.x);set("master"+suffix+"Top",v.y);
-    set("master"+suffix+"Align",v.align);set("master"+suffix+"AutoFit",v.autoFit||"on");
+    set("master"+suffix+"Align",v.align);set("master"+suffix+"AutoFit",v.autoFit||"on");set("master"+suffix+"Width",v.w);set("master"+suffix+"Height",v.h);
   }
 }
 
@@ -2929,7 +2944,7 @@ function loadSavedMasterState(){
   applyMasterStateToControls({...MASTER_DEFAULT_STATE,...s});
 }
 
-function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,autoFitId,sizeId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
+function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,autoFitId,sizeId,widthId,heightId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
   const el=src.querySelector(selector);
   if(!el)return;
 
@@ -2941,8 +2956,8 @@ function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,a
 
   const cx=Math.max(0,Math.min(100,Number($(leftId)?.value)||defaultLeft));
   const cy=Math.max(0,Math.min(100,Number($(topId)?.value)||defaultTop));
-  const boxW=Math.max(12,Math.min(90,Number(saved.w)||defaultWidth));
-  const boxH=Math.max(5,Math.min(70,Number(saved.h)||defaultHeight));
+  const boxW=Math.max(12,Math.min(90,Number($(widthId)?.value)||Number(saved.w)||defaultWidth));
+  const boxH=Math.max(5,Math.min(70,Number($(heightId)?.value)||Number(saved.h)||defaultHeight));
 
   wrap.style.left=cx+"%";
   wrap.style.top=cy+"%";
@@ -2995,7 +3010,7 @@ function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,a
     fitMasterPlainText(content,text,size,($(autoFitId)?.value||"on")==="on");
   });
 
-  attachMasterTextInteractions(wrap,card,leftId,topId,itemKey);
+  attachMasterTextInteractions(wrap,card,leftId,topId,itemKey,widthId,heightId);
 }
 
 function attachMasterQrInteractions(wrap,card){
@@ -3139,13 +3154,13 @@ function updateMasterPreview(){
    attachMasterQrInteractions(wrap,card);
  }
 
- createMasterTextObject(card,src,".qrId","id","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize",20,12,36,9);
- createMasterTextObject(card,src,".qrEnglish","english","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize",32,24,55,13);
- createMasterTextObject(card,src,".qrIpa","ipa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize",32,38,55,10);
- createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize",32,55,55,12);
- createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize",32,70,55,12);
+ createMasterTextObject(card,src,".qrId","id","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize","masterIdWidth","masterIdHeight",20,12,36,9);
+ createMasterTextObject(card,src,".qrEnglish","english","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize","masterEnglishWidth","masterEnglishHeight",32,24,55,13);
+ createMasterTextObject(card,src,".qrIpa","ipa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize","masterIpaWidth","masterIpaHeight",32,38,55,10);
+ createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize","masterJapaneseWidth","masterJapaneseHeight",32,55,55,12);
+ createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize","masterJapaneseReadWidth","masterJapaneseReadHeight",32,70,55,12);
 }
-["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 
 
