@@ -1039,10 +1039,27 @@
   }
   .masterItemName{grid-column:1/-1;}
 }
+
+.qrSheet.masterLayoutSheet .qrCard{
+  position:relative !important;
+  aspect-ratio:297/210 !important;
+  overflow:hidden !important;
+  padding:0 !important;
+  background:#fff !important;
+  box-sizing:border-box !important;
+  border:0 !important;
+}
+.masterOutputInner{
+  position:absolute;
+  box-sizing:border-box;
+  background:#fff;
+  overflow:hidden;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.5 / 更新 2026-08-17 23:14</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.6 / 更新 2026-08-17 23:20</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1376,8 +1393,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.5";
-const APP_UPDATED="2026-08-17 23:14";
+const APP_VERSION="v3.1.6";
+const APP_UPDATED="2026-08-17 23:20";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2870,54 +2887,115 @@ function fitMasterPlainText(box,text,baseRem,enabled){
 
 function applyMasterLayoutToCard(card,state=readMasterState()){
   if(!card)return;
-  card.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
-  card.style.borderRadius="14px";
 
-  const qr=card.querySelector(".qrCodeWrap");
+  // Restore original children if this card was already transformed.
+  const existingInner=card.querySelector(":scope > .masterOutputInner");
+  if(existingInner){
+    const children=[...existingInner.children];
+    children.forEach(ch=>card.appendChild(ch));
+    existingInner.remove();
+  }
+
+  card.style.position="relative";
+  card.style.aspectRatio="297/210";
+  card.style.overflow="hidden";
+  card.style.background="#fff";
+  card.style.boxSizing="border-box";
+  card.style.border="0";
+
+  // This matches master preview: margin defines the actual outer card edge.
+  const inner=document.createElement("div");
+  inner.className="masterOutputInner";
+  inner.style.position="absolute";
+  inner.style.left=state.marginX+"%";
+  inner.style.right=state.marginX+"%";
+  inner.style.top=state.marginY+"%";
+  inner.style.bottom=state.marginY+"%";
+  inner.style.boxSizing="border-box";
+  inner.style.background="#fff";
+  inner.style.overflow="hidden";
+  inner.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
+  inner.style.borderRadius="14px";
+
+  const movable=[...card.children].filter(el=>el!==inner);
+  movable.forEach(el=>inner.appendChild(el));
+  card.appendChild(inner);
+
+  const qr=inner.querySelector(".qrCodeWrap");
   if(qr){
     const pct=Math.max(8,Math.min(60,(state.qr.size/132)*28));
-    qr.style.left=state.qr.x+"%";qr.style.top=state.qr.y+"%";
-    qr.style.width=pct+"%";qr.style.aspectRatio="1/1";qr.style.transform="translate(-50%,-50%)";
+    qr.style.position="absolute";
+    qr.style.left=state.qr.x+"%";
+    qr.style.top=state.qr.y+"%";
+    qr.style.width=pct+"%";
+    qr.style.height="auto";
+    qr.style.aspectRatio="1/1";
+    qr.style.transform="translate(-50%,-50%)";
+    qr.style.margin="0";
+    qr.style.boxSizing="border-box";
     qr.querySelectorAll("canvas,img").forEach(el=>{
-      el.style.width="100%";el.style.height="100%";el.style.maxWidth="none";
+      el.style.width="100%";
+      el.style.height="100%";
+      el.style.maxWidth="none";
+      el.style.display="block";
     });
   }
 
   const defs=[
-    [".qrId",state.id],[ ".qrEnglish",state.english],[ ".qrIpa",state.ipa],
-    [".qrJapanese",state.japanese],[ ".qrJapaneseRead",state.japaneseRead]
+    [".qrId",state.id],
+    [".qrEnglish",state.english],
+    [".qrIpa",state.ipa],
+    [".qrJapanese",state.japanese],
+    [".qrJapaneseRead",state.japaneseRead]
   ];
+
   defs.forEach(([sel,v])=>{
-    const el=card.querySelector(sel);if(!el)return;
+    const el=inner.querySelector(sel);
+    if(!el)return;
+
     el.classList.add("qrTextBox");
-    el.style.left=v.x+"%";el.style.top=v.y+"%";el.style.width=v.w+"%";el.style.height=v.h+"%";
+    el.style.position="absolute";
+    el.style.left=v.x+"%";
+    el.style.top=v.y+"%";
+    el.style.width=v.w+"%";
+    el.style.height=v.h+"%";
     el.style.transform="translate(-50%,-50%)";
-    el.style.textAlign=v.align;el.style.justifyContent=v.align==="left"?"flex-start":"center";
-    el.style.fontSize=v.size+"rem";
-    if(!el.querySelector(".qrTextInner")){
+    el.style.boxSizing="border-box";
+    el.style.margin="0";
+    el.style.padding="0";
+    el.style.display="flex";
+    el.style.alignItems="center";
+    el.style.justifyContent=v.align==="left"?"flex-start":"center";
+    el.style.textAlign=v.align;
+    el.style.overflow="hidden";
+
+    let innerText=el.querySelector(":scope > .qrTextInner");
+    if(!innerText){
       const txt=el.textContent;
       el.textContent="";
-      const inner=document.createElement("div");
-      inner.className="qrTextInner";
-      inner.textContent=txt;
-      inner.style.width="100%";
-      inner.style.height="100%";
-      inner.style.display="flex";
-      inner.style.alignItems="center";
-      inner.style.justifyContent=v.align==="left"?"flex-start":"center";
-      inner.style.textAlign=v.align;
-      inner.style.lineHeight="1.2";
-      inner.style.padding="2px 4px";
-      inner.style.boxSizing="border-box";
-      inner.style.whiteSpace="normal";
-      inner.style.wordBreak="normal";
-      inner.style.overflowWrap="break-word";
-      inner.style.hyphens="auto";
-      inner.style.color="#222";
-      if(sel===".qrEnglish")inner.style.fontWeight="700";
-      el.appendChild(inner);
+      innerText=document.createElement("div");
+      innerText.className="qrTextInner";
+      innerText.textContent=txt;
+      el.appendChild(innerText);
     }
-    requestAnimationFrame(()=>fitMasterPlainText(el,el.querySelector(".qrTextInner"),v.size,v.autoFit==="on"));
+
+    innerText.style.width="100%";
+    innerText.style.height="auto";
+    innerText.style.display="block";
+    innerText.style.boxSizing="border-box";
+    innerText.style.padding="2px 4px";
+    innerText.style.lineHeight="1.18";
+    innerText.style.whiteSpace="normal";
+    innerText.style.wordBreak="normal";
+    innerText.style.overflowWrap="break-word";
+    innerText.style.hyphens="auto";
+    innerText.style.textAlign=v.align;
+    innerText.style.color="#222";
+    if(sel===".qrEnglish")innerText.style.fontWeight="700";
+
+    requestAnimationFrame(()=>{
+      fitMasterPlainText(el,innerText,v.size,v.autoFit==="on");
+    });
   });
 }
 
