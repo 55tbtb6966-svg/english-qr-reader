@@ -767,10 +767,19 @@
       }
     }
 
+.masterPreviewBox{margin-top:14px;padding:12px 14px;border:1px solid #d9dee7;border-radius:12px;background:#fff}
+.masterPreviewControls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:8px}
+.masterPreviewControls label span{display:block;font-size:.86rem;color:#556176;margin-bottom:4px}
+.masterPreviewControls select,.masterPreviewControls input{width:100%;box-sizing:border-box}
+.masterPreviewHint{font-size:.82rem;color:#667085;margin:9px 0}
+.masterPreviewCanvas{width:100%;aspect-ratio:297/210;background:#f5f6f8;border:1px solid #cfd5dd;overflow:hidden;position:relative}
+.masterPreviewCard{position:absolute;inset:0;background:#fff;box-sizing:border-box;overflow:hidden}
+.masterPreviewCard .qrCard{position:absolute;margin:0!important;box-sizing:border-box;background:#fff;width:44%;max-width:44%;border:1px solid #bbb;border-radius:10px}
+@media(max-width:650px){.masterPreviewControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.5 / 更新 2026-08-17 01:22</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.6 / 更新 2026-08-17 18:48</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1039,6 +1048,17 @@
 </details></div>
 </div>
 </div>
+<div class="masterPreviewBox">
+<div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
+<div class="masterPreviewControls">
+<label><span>左右位置</span><select id="masterHAlign"><option value="left">左</option><option value="center" selected>中央</option><option value="right">右</option></select></label>
+<label><span>上下位置</span><select id="masterVAlign"><option value="top">上</option><option value="middle" selected>中</option><option value="bottom">下</option></select></label>
+<label><span>横余白（%）</span><input id="masterMarginX" type="number" min="0" max="50" step="1" value="8"></label>
+<label><span>縦余白（%）</span><input id="masterMarginY" type="number" min="0" max="50" step="1" value="8"></label>
+</div>
+<div class="masterPreviewHint">現在表示中の先頭QRカードをA4横の比率で確認できます。設定変更はすぐに反映されます。</div>
+<div class="masterPreviewCanvas"><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
+</div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
 <span>印刷範囲</span>
@@ -1080,8 +1100,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.5";
-const APP_UPDATED="2026-08-17 01:22";
+const APP_VERSION="v2.9.6";
+const APP_UPDATED="2026-08-17 18:48";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2404,6 +2424,21 @@ $("printBtn").addEventListener("click",prepareAndPrint);
   const status=document.getElementById("scanStatus");
   if(status)status.textContent="アプリの起動に失敗しました。ページを再読み込みしてください。";
 });
+function updateMasterPreview(){
+ const host=$("masterPreviewCard");if(!host)return;host.innerHTML="";
+ const src=$("qrSheet")?.querySelector(".qrCard");
+ if(!src){host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667085;font-size:.9rem;padding:20px;text-align:center">QRカードを作成すると、ここにプレビューが表示されます。</div>';return;}
+ const c=src.cloneNode(true),sc=src.querySelectorAll("canvas");
+ c.querySelectorAll("canvas").forEach((cv,i)=>{if(sc[i]){const im=document.createElement("img");try{im.src=sc[i].toDataURL("image/png")}catch{};cv.replaceWith(im)}});
+ host.appendChild(c);
+ const ha=$("masterHAlign")?.value||"center",va=$("masterVAlign")?.value||"middle";
+ const mx=Math.max(0,Math.min(50,Number($("masterMarginX")?.value)||0)),my=Math.max(0,Math.min(50,Number($("masterMarginY")?.value)||0));
+ c.style.left=ha==="left"?mx+"%":ha==="right"?"auto":"50%";c.style.right=ha==="right"?mx+"%":"auto";
+ c.style.top=va==="top"?my+"%":va==="bottom"?"auto":"50%";c.style.bottom=va==="bottom"?my+"%":"auto";
+ c.style.transform="translate("+(ha==="center"?"-50%":"0")+","+(va==="middle"?"-50%":"0")+")";
+}
+["masterHAlign","masterVAlign","masterMarginX","masterMarginY"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 </script>
 </body>
 </html>
