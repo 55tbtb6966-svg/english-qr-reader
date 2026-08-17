@@ -899,7 +899,7 @@
 }
 .masterItemSettingsRow{
   display:grid;
-  grid-template-columns:110px repeat(3,minmax(0,1fr));
+  grid-template-columns:110px repeat(4,minmax(0,1fr));
   gap:8px;
   align-items:end;
   padding:8px 0;
@@ -924,7 +924,7 @@
 }
 @media(max-width:700px){
   .masterItemSettingsRow{
-    grid-template-columns:1fr 1fr 1fr;
+    grid-template-columns:1fr 1fr;
   }
   .masterItemName{
     grid-column:1 / -1;
@@ -933,7 +933,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.2 / 更新 2026-08-17 19:26</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.3 / 更新 2026-08-17 19:32</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1230,7 +1230,32 @@
 
 
 </div>
-<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number"/></label><label><span>左位置（%）</span><input id="masterQrLeft" max="100" min="0" step="0.1" type="number"/></label><label><span>上位置（%）</span><input id="masterQrTop" max="100" min="0" step="0.1" type="number"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="8"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="34"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="50"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>左位置（%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>上位置（%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="64"/></label></div></div><div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
+<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number"/></label><label><span>中心X（左から%）</span><input id="masterQrLeft" max="100" min="0" step="0.1" type="number"/></label><label><span>中心Y（上から%）</span><input id="masterQrTop" max="100" min="0" step="0.1" type="number"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="8"/></label><label><span>文字揃え</span>
+<select id="masterIdAlign">
+<option value="left">左寄せ</option>
+<option value="center" selected>中央揃え</option>
+</select>
+</label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label><label><span>文字揃え</span>
+<select id="masterEnglishAlign">
+<option value="left">左寄せ</option>
+<option value="center" selected>中央揃え</option>
+</select>
+</label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="34"/></label><label><span>文字揃え</span>
+<select id="masterIpaAlign">
+<option value="left">左寄せ</option>
+<option value="center" selected>中央揃え</option>
+</select>
+</label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>文字揃え</span>
+<select id="masterJapaneseAlign">
+<option value="left">左寄せ</option>
+<option value="center" selected>中央揃え</option>
+</select>
+</label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="64"/></label><label><span>文字揃え</span>
+<select id="masterJapaneseReadAlign">
+<option value="left">左寄せ</option>
+<option value="center" selected>中央揃え</option>
+</select>
+</label></div></div><div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
 <div class="masterPreviewCanvas"><div class="masterPreviewCard" id="masterPreviewCard"></div></div>
 </div></div>
 </details></div>
@@ -1277,8 +1302,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.2";
-const APP_UPDATED="2026-08-17 19:26";
+const APP_VERSION="v3.0.3";
+const APP_UPDATED="2026-08-17 19:32";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2611,7 +2636,7 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
     const l=parseFloat(wrap.style.left)||0;
     const t=parseFloat(wrap.style.top)||0;
     const note=wrap.querySelector(".masterTextPositionNote");
-    if(note)note.textContent=`左 ${l.toFixed(1)}% / 上 ${t.toFixed(1)}%`;
+    if(note)note.textContent=`中心X ${l.toFixed(1)}% / 中心Y ${t.toFixed(1)}%`;
     if($(leftInputId))$(leftInputId).value=l.toFixed(1);
     if($(topInputId))$(topInputId).value=t.toFixed(1);
   };
@@ -2624,8 +2649,8 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
     if(mode==="drag"){
       const w=parseFloat(wrap.style.width)||40;
       const h=parseFloat(wrap.style.height)||10;
-      const nl=Math.max(0,Math.min(100-w,startLeft+dx));
-      const nt=Math.max(0,Math.min(100-h,startTop+dy));
+      const nl=Math.max(w/2,Math.min(100-w/2,startLeft+dx));
+      const nt=Math.max(h/2,Math.min(100-h/2,startTop+dy));
       wrap.style.left=nl+"%";
       wrap.style.top=nt+"%";
       updateNote();
@@ -2669,18 +2694,20 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
   });
 }
 
-function createMasterTextObject(card,src,selector,leftId,topId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
+function createMasterTextObject(card,src,selector,leftId,topId,alignId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
   const el=src.querySelector(selector);
   if(!el)return;
 
   const wrap=document.createElement("div");
   wrap.className="masterTextObject";
-  const left=Math.max(0,Math.min(95,Number($(leftId)?.value)||defaultLeft));
-  const top=Math.max(0,Math.min(95,Number($(topId)?.value)||defaultTop));
-  wrap.style.left=left+"%";
-  wrap.style.top=top+"%";
+
+  const cx=Math.max(0,Math.min(100,Number($(leftId)?.value)||defaultLeft));
+  const cy=Math.max(0,Math.min(100,Number($(topId)?.value)||defaultTop));
+  wrap.style.left=cx+"%";
+  wrap.style.top=cy+"%";
   wrap.style.width=defaultWidth+"%";
   wrap.style.height=defaultHeight+"%";
+  wrap.style.transform="translate(-50%,-50%)";
 
   const content=document.createElement("div");
   content.className="masterTextContent";
@@ -2689,12 +2716,19 @@ function createMasterTextObject(card,src,selector,leftId,topId,defaultLeft,defau
   c.style.width="100%";
   c.style.height="100%";
   c.style.boxSizing="border-box";
+  c.style.display="flex";
+  c.style.alignItems="center";
+
+  const align=$(alignId)?.value||"center";
+  c.style.textAlign=align;
+  c.style.justifyContent=align==="left"?"flex-start":"center";
+
   content.appendChild(c);
   wrap.appendChild(content);
 
   const note=document.createElement("div");
   note.className="masterTextPositionNote";
-  note.textContent=`左 ${left.toFixed(1)}% / 上 ${top.toFixed(1)}%`;
+  note.textContent=`中心X ${cx.toFixed(1)}% / 中心Y ${cy.toFixed(1)}%`;
   wrap.appendChild(note);
 
   const handle=document.createElement("div");
@@ -2846,13 +2880,13 @@ function updateMasterPreview(){
    attachMasterQrInteractions(wrap,card);
  }
 
- createMasterTextObject(card,src,".qrId","masterIdLeft","masterIdTop",10,8,36,9);
- createMasterTextObject(card,src,".qrEnglish","masterEnglishLeft","masterEnglishTop",10,20,55,13);
- createMasterTextObject(card,src,".qrIpa","masterIpaLeft","masterIpaTop",10,34,55,10);
- createMasterTextObject(card,src,".qrJapanese","masterJapaneseLeft","masterJapaneseTop",10,50,55,12);
- createMasterTextObject(card,src,".qrJapaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop",10,64,55,12);
+ createMasterTextObject(card,src,".qrId","masterIdLeft","masterIdTop","masterIdAlign",20,12,36,9);
+ createMasterTextObject(card,src,".qrEnglish","masterEnglishLeft","masterEnglishTop","masterEnglishAlign",32,24,55,13);
+ createMasterTextObject(card,src,".qrIpa","masterIpaLeft","masterIpaTop","masterIpaAlign",32,38,55,10);
+ createMasterTextObject(card,src,".qrJapanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign",32,55,55,12);
+ createMasterTextObject(card,src,".qrJapaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign",32,70,55,12);
 }
-["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrLeft","masterQrTop","masterTextHAlign","masterTextVAlign","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrLeft","masterQrTop","masterTextHAlign","masterTextVAlign","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 
 const MASTER_SIZE_MIRRORS={
