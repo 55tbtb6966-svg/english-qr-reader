@@ -1092,10 +1092,19 @@
   }
 }
 
+
+@media print{
+  #printQrSheet{
+    grid-template-columns:repeat(2,1fr) !important;
+    grid-template-rows:repeat(4,1fr) !important;
+    gap:3mm !important;
+  }
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.0 / 更新 2026-08-17 23:42</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.1 / 更新 2026-08-17 23:58</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1384,20 +1393,7 @@
 </details></div>
 </div>
 </div>
-<div class="grid2" id="printLayoutControls" style="margin-top:10px;">
-<label><span>印刷レイアウト</span><select id="printLayoutMode">
-<option value="1">1枚（A4横）</option><option value="2">2枚（A4縦）</option>
-<option value="4">4枚（A4横）</option><option selected="" value="8">8枚（A4縦）</option>
-</select></label></div>
-<div class="grid2" id="printRangeControls" style="margin-top:10px;">
-<label>
-<span>印刷範囲</span>
-<input id="printRange" placeholder="例：1-50 または 1,2,4" type="text"/>
-</label>
-<div class="hint" style="align-self:end;">
-          空欄なら現在の検索結果・選択結果をすべてID順で印刷します。
-        </div>
-</div><div class="row">
+<div class="row">
 <button class="secondary" id="printBtn">印刷／PDF保存</button>
 </div>
 <div class="grid2" id="pptLayoutControls" style="margin-top:10px;">
@@ -1429,8 +1425,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.0";
-const APP_UPDATED="2026-08-17 23:42";
+const APP_VERSION="v3.2.1";
+const APP_UPDATED="2026-08-17 23:58";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2524,7 +2520,7 @@ async function exportCurrentQrPageToPowerPoint(){
 
   try{
     const pptx=new PptxGenJS();
-    const count=Number($("printLayoutMode")?.value||8);
+    const count=8;
     let sw,sh,cols,rows,layoutName;
 
     if(count===1||count===4){
@@ -3451,14 +3447,17 @@ function buildMasterPrintSheet(records){
   });
 }
 function applyDynamicPrintLayout(){
- const count=Number($("printLayoutMode")?.value||8);
- let style=$("dynamicPrintPageStyle"); if(!style){style=document.createElement("style");style.id="dynamicPrintPageStyle";document.head.appendChild(style);}
- let page,grid;
- if(count===1){page='@page{size:A4 landscape;margin:8mm;}';grid='#printQrSheet{grid-template-columns:1fr!important;grid-template-rows:1fr!important;gap:0!important;}';}
- else if(count===2){page='@page{size:A4 portrait;margin:8mm;}';grid='#printQrSheet{grid-template-columns:1fr!important;grid-template-rows:repeat(2,1fr)!important;gap:4mm!important;}';}
- else if(count===4){page='@page{size:A4 landscape;margin:8mm;}';grid='#printQrSheet{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(2,1fr)!important;gap:4mm!important;}';}
- else{page='@page{size:A4 portrait;margin:8mm;}';grid='#printQrSheet{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}';}
- style.textContent='@media print{'+page+grid+'#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;}#printQrSheet .printMasterCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;}}';
+  let style=$("dynamicPrintPageStyle");
+  if(!style){
+    style=document.createElement("style");
+    style.id="dynamicPrintPageStyle";
+    document.head.appendChild(style);
+  }
+  style.textContent='@media print{'+
+    '@page{size:A4 portrait;margin:8mm;}'+
+    '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}'+
+    '#printQrSheet .printMasterCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;}'+
+    '}';
 }
 async function printMasterCards(){
   let records=qrPageSource.length?qrPageSource.slice():[];
@@ -3485,8 +3484,7 @@ async function printMasterCards(){
 }
 
 
-$("printLayoutMode")?.addEventListener("change",()=>{localStorage.setItem("printLayoutMode",$("printLayoutMode").value);applyDynamicPrintLayout();});
-{const saved=localStorage.getItem("printLayoutMode");if(saved&&$("printLayoutMode"))$("printLayoutMode").value=saved;applyDynamicPrintLayout();}
+
 
 
 $("masterMirror_settingQrSize")?.addEventListener("input",()=>{
