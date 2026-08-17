@@ -1024,10 +1024,46 @@
   overflow:hidden !important;
 }
 
+
+#printQrSheet.printLayout1,
+#printQrSheet.printLayout2,
+#printQrSheet.printLayout4,
+#printQrSheet.printLayout8{
+  display:grid;
+  width:100%;
+  box-sizing:border-box;
+}
+
+#printQrSheet.printLayout1{grid-template-columns:1fr;}
+#printQrSheet.printLayout2{grid-template-columns:1fr;}
+#printQrSheet.printLayout4{grid-template-columns:repeat(2,1fr);}
+#printQrSheet.printLayout8{grid-template-columns:repeat(2,1fr);}
+
+#printQrSheet .printMasterCard{
+  position:relative;
+  aspect-ratio:297/210;
+  overflow:hidden;
+  box-sizing:border-box;
+  background:#fff;
+  border:0;
+  break-inside:avoid;
+  page-break-inside:avoid;
+}
+
+@media print {
+  #printLayoutControls{display:none !important;}
+}
+
+
+@media print{
+  #qrSheet{display:none!important;}
+  #printQrSheet{display:grid!important;}
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.1 / 更新 2026-08-17 20:36</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.2 / 更新 2026-08-17 20:49</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1316,6 +1352,18 @@
 </details></div>
 </div>
 </div>
+
+<div class="grid2" id="printLayoutControls" style="margin-top:10px;">
+  <label>
+    <span>印刷レイアウト</span>
+    <select id="printLayoutMode">
+      <option value="1">1枚（A4横）</option>
+      <option value="2">2枚（A4縦）</option>
+      <option value="4">4枚（A4横）</option>
+      <option value="8" selected>8枚（A4縦）</option>
+    </select>
+  </label>
+</div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
 <label>
 <span>印刷範囲</span>
@@ -1356,8 +1404,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.1";
-const APP_UPDATED="2026-08-17 20:36";
+const APP_VERSION="v3.1.2";
+const APP_UPDATED="2026-08-17 20:49";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2538,6 +2586,106 @@ async function exportCurrentQrPageToPowerPoint(){
 $("pptBtn").addEventListener("click",exportCurrentQrPageToPowerPoint);
 
 
+
+function cloneCardCanvasToImages(card){
+  const clone=card.cloneNode(true);
+  const srcCanvases=card.querySelectorAll("canvas");
+  clone.querySelectorAll("canvas").forEach((cv,i)=>{
+    const src=srcCanvases[i];
+    if(!src)return;
+    const img=document.createElement("img");
+    try{img.src=src.toDataURL("image/png")}catch{}
+    img.style.width="100%";
+    img.style.height="100%";
+    img.style.objectFit="contain";
+    cv.replaceWith(img);
+  });
+  return clone;
+}
+
+function buildPrintMasterSheet(records){
+  const sheet=$("printQrSheet");
+  if(!sheet)return;
+  sheet.innerHTML="";
+  sheet.className="qrSheet printOnlySheet";
+
+  const count=Number($("printLayoutMode")?.value||8);
+  sheet.classList.add("printLayout"+count);
+
+  // Build from record data, then apply the same master layout used in preview.
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+  const state=readMasterState();
+
+  records.forEach(r=>{
+    const card=document.createElement("div");
+    card.className="qrCard printMasterCard";
+
+    const q=document.createElement("div");
+    q.className="qrCodeWrap";
+    card.appendChild(q);
+    const qrSize=Math.max(100,Math.round(state.qr.size));
+    new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
+
+    if(showId){
+      const el=document.createElement("div");
+      el.className="qrId";el.textContent=r.id;card.appendChild(el);
+    }
+    if(showEnglish){
+      const el=document.createElement("div");
+      el.className="qrEnglish";el.textContent=r.english;card.appendChild(el);
+    }
+    if(showIpa&&r.ipa){
+      const el=document.createElement("div");
+      el.className="qrIpa";el.textContent=r.ipa;card.appendChild(el);
+    }
+    if(showJapanese&&r.japanese){
+      const el=document.createElement("div");
+      el.className="qrJapanese";el.textContent=r.japanese;card.appendChild(el);
+    }
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese)){
+      const el=document.createElement("div");
+      el.className="qrJapaneseRead";el.textContent=r.japaneseRead||r.japanese;card.appendChild(el);
+    }
+
+    sheet.appendChild(card);
+    applyMasterLayoutToCard(card,state);
+  });
+}
+
+function updatePrintPageStyle(){
+  const count=Number($("printLayoutMode")?.value||8);
+  let style=$("dynamicPrintPageStyle");
+  if(!style){
+    style=document.createElement("style");
+    style.id="dynamicPrintPageStyle";
+    document.head.appendChild(style);
+  }
+
+  let page="",grid="";
+  if(count===1){
+    page='@page{size:A4 landscape;margin:8mm;}';
+    grid='#printQrSheet{grid-template-columns:1fr!important;gap:0!important;}';
+  }else if(count===2){
+    page='@page{size:A4 portrait;margin:8mm;}';
+    grid='#printQrSheet{grid-template-columns:1fr!important;grid-template-rows:repeat(2,1fr)!important;gap:4mm!important;}';
+  }else if(count===4){
+    page='@page{size:A4 landscape;margin:8mm;}';
+    grid='#printQrSheet{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(2,1fr)!important;gap:4mm!important;}';
+  }else{
+    page='@page{size:A4 portrait;margin:8mm;}';
+    grid='#printQrSheet{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}';
+  }
+
+  style.textContent='@media print{'+page+grid+
+    '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;}'+
+    '#printQrSheet .printMasterCard{width:100%!important;height:auto!important;aspect-ratio:297/210!important;}'+
+    '}';
+}
+
 function parsePrintRange(spec,total){
   const s=String(spec||"").trim();
   if(!s)return null;
@@ -2656,30 +2804,26 @@ function prepareAndPrint(){
   }
 }
 
-$("printBtn").addEventListener("click",prepareAndPrint);
+$("printBtn").addEventListener("click",()=>{
+  let records=qrPageSource.length?qrPageSource.slice():[];
+  if(!records.length){
+    setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
+    return;
+  }
 
+  const spec=$("printRange")?.value||"";
+  if(spec.trim()){
+    const positions=parsePrintRange(spec,records.length);
+    if(!positions||!positions.length){
+      setStatus($("qrStatus"),"印刷範囲を確認してください。例：1-50 または 1,2,4",false);
+      return;
+    }
+    records=positions.map(n=>records[n-1]).filter(Boolean);
+  }
 
-(async()=>{
-  updateVersionBadge("");
-  loadQrFieldSettings();
-  loadSizeSettingsControls();
-  const savedShowIpa=localStorage.getItem("showIpa");
-  $("showIpa").checked=savedShowIpa===null?true:savedShowIpa==="true";
-  loadEnglishVoices();loadJapaneseVoices();speechSynthesis.onvoiceschanged=()=>{loadEnglishVoices();loadJapaneseVoices();};
-  await openDb();await refreshSummary();await renderPage();
-  updateScanInputModeUi();
-  try{
-    const allForVersion=await getAllRecords();
-    const csvVersion=allForVersion.find(r=>r.version)?.version||"";
-    updateVersionBadge(csvVersion);
-  }catch{}
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
-})().catch(err=>{
-  console.error(err);
-  const storage=document.getElementById("storageUsage");
-  if(storage&&storage.textContent==="確認中")storage.textContent="起動エラー";
-  const status=document.getElementById("scanStatus");
-  if(status)status.textContent="アプリの起動に失敗しました。ページを再読み込みしてください。";
+  buildPrintMasterSheet(records);
+  updatePrintPageStyle();
+  setTimeout(()=>window.print(),50);
 });
 
 
@@ -3199,6 +3343,17 @@ function syncLegacySizeFromMaster(){
 ["masterMirror_settingQrSize","masterMirror_settingIdSize","masterMirror_settingEnglishSize",
  "masterMirror_settingIpaSize","masterMirror_settingJapaneseSize","masterMirror_settingJapaneseReadSize"
 ].forEach(id=>$(id)?.addEventListener("change",syncLegacySizeFromMaster));
+
+
+$("printLayoutMode")?.addEventListener("change",()=>{
+  localStorage.setItem("printLayoutMode",$("printLayoutMode").value);
+  updatePrintPageStyle();
+});
+{
+  const saved=localStorage.getItem("printLayoutMode");
+  if(saved&&$("printLayoutMode"))$("printLayoutMode").value=saved;
+  updatePrintPageStyle();
+}
 
 </script>
 </body>
