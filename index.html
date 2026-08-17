@@ -1095,7 +1095,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.1.9 / 更新 2026-08-17 23:36</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.0 / 更新 2026-08-17 23:42</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1429,8 +1429,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.1.9";
-const APP_UPDATED="2026-08-17 23:36";
+const APP_VERSION="v3.2.0";
+const APP_UPDATED="2026-08-17 23:42";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2558,7 +2558,7 @@ async function exportCurrentQrPageToPowerPoint(){
       const by=y+h*(state.marginY/100)+(h*(1-2*state.marginY/100))*((v.y-v.h/2)/100);
       const bw=(w*(1-2*state.marginX/100))*(v.w/100);
       const bh=(h*(1-2*state.marginY/100))*(v.h/100);
-      const fs=Math.max(6,Math.min(36,12*v.size*(w/11.693)*4.1));
+      const fs=Math.max(4,Math.min(48,(Number(v.size)||1)*12*(w/11.693)));
       slide.addText(String(txt),{
         x:bx,y:by,w:bw,h:bh,
         fontFace:"Aptos",fontSize:fs,bold,
@@ -3050,7 +3050,8 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
     if(sel===".qrEnglish")innerText.style.fontWeight="700";
 
     requestAnimationFrame(()=>{
-      fitMasterPlainText(el,innerText,v.size,v.autoFit==="on");
+      const px=masterFontPxForCard(card,v);
+      fitMasterPlainText(el,innerText,px/16,v.autoFit==="on");
     });
   });
 }
@@ -3338,6 +3339,14 @@ function syncLegacySizeFromMaster(){
 ].forEach(id=>$(id)?.addEventListener("change",syncLegacySizeFromMaster));
 
 
+
+function masterFontPxForCard(card,v){
+  const inner=card.querySelector(".masterOutputInner")||card;
+  const w=inner.getBoundingClientRect().width||620;
+  // Master preview reference width is approximately 620 px.
+  return Math.max(5,(Number(v.size)||1)*16*(w/620));
+}
+
 function buildMasterPrintSheet(records){
   const sheet=$("printQrSheet");
   if(!sheet)return;
@@ -3425,7 +3434,11 @@ function buildMasterPrintSheet(records){
       t.style.color="#222";
       box.appendChild(t);
       inner.appendChild(box);
-      requestAnimationFrame(()=>fitMasterPlainText(box,t,v.size,v.autoFit==="on"));
+      requestAnimationFrame(()=>{
+      const px=masterFontPxForCard(card,v);
+      const rem=px/16;
+      fitMasterPlainText(box,t,rem,v.autoFit==="on");
+    });
     };
 
     if(showId)addText("qrId",r.id,state.id,false);
