@@ -1012,7 +1012,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.9 / 更新 2026-08-17 20:17</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.1.0 / 更新 2026-08-17 20:29</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1341,8 +1341,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.9";
-const APP_UPDATED="2026-08-17 20:17";
+const APP_VERSION="v3.1.0";
+const APP_UPDATED="2026-08-17 20:29";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2668,7 +2668,7 @@ $("printBtn").addEventListener("click",prepareAndPrint);
 });
 
 
-function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
+function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey){
   const handle=wrap.querySelector(".masterTextResizeHandle");
   let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0,startH=0;
 
@@ -2699,6 +2699,12 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
       const nh=Math.max(5,Math.min(70,startH+dy));
       wrap.style.width=nw+"%";
       wrap.style.height=nh+"%";
+      const state=readMasterState();
+      if(state[itemKey]){
+        state[itemKey].w=Number(nw.toFixed(2));
+        state[itemKey].h=Number(nh.toFixed(2));
+        localStorage.setItem("masterCardCurrentState",JSON.stringify(state));
+      }
     }
   };
 
@@ -2707,6 +2713,7 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId){
     wrap.classList.remove("dragging");
     window.removeEventListener("pointermove",move);
     window.removeEventListener("pointerup",up);
+    try{updateMasterPreview();applyMasterLayoutToAllRendered();}catch{}
   };
 
   wrap.addEventListener("pointerdown",e=>{
@@ -2747,15 +2754,23 @@ const MASTER_DEFAULT_STATE={
 
 function readMasterState(){
   const num=(id,def)=>{const n=Number($(id)?.value);return Number.isFinite(n)?n:def;};
+  let previous={};
+  try{previous=JSON.parse(localStorage.getItem("masterCardCurrentState")||"{}")}catch{}
+
+  const prev=(k,key,def)=>{
+    const n=Number(previous?.[k]?.[key]);
+    return Number.isFinite(n)?n:def;
+  };
+
   return {
     marginX:num("masterMarginX",8),marginY:num("masterMarginY",8),
     border:$("masterMarginGuide")?.value||"on",
     qr:{size:num("masterMirror_settingQrSize",132),x:num("masterQrCenterX",50),y:num("masterQrCenterY",50)},
-    id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:36,h:9},
-    english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:55,h:13},
-    ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:55,h:10},
-    japanese:{size:num("masterMirror_settingJapaneseSize",1.12),x:num("masterJapaneseLeft",32),y:num("masterJapaneseTop",55),align:$("masterJapaneseAlign")?.value||"center",autoFit:$("masterJapaneseAutoFit")?.value||"on",w:55,h:12},
-    japaneseRead:{size:num("masterMirror_settingJapaneseReadSize",1.12),x:num("masterJapaneseReadLeft",32),y:num("masterJapaneseReadTop",70),align:$("masterJapaneseReadAlign")?.value||"center",autoFit:$("masterJapaneseReadAutoFit")?.value||"on",w:55,h:12}
+    id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:prev("id","w",36),h:prev("id","h",9)},
+    english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:prev("english","w",55),h:prev("english","h",13)},
+    ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:prev("ipa","w",55),h:prev("ipa","h",10)},
+    japanese:{size:num("masterMirror_settingJapaneseSize",1.12),x:num("masterJapaneseLeft",32),y:num("masterJapaneseTop",55),align:$("masterJapaneseAlign")?.value||"center",autoFit:$("masterJapaneseAutoFit")?.value||"on",w:prev("japanese","w",55),h:prev("japanese","h",12)},
+    japaneseRead:{size:num("masterMirror_settingJapaneseReadSize",1.12),x:num("masterJapaneseReadLeft",32),y:num("masterJapaneseReadTop",70),align:$("masterJapaneseReadAlign")?.value||"center",autoFit:$("masterJapaneseReadAutoFit")?.value||"on",w:prev("japaneseRead","w",55),h:prev("japaneseRead","h",12)}
   };
 }
 
@@ -2881,19 +2896,25 @@ function loadSavedMasterState(){
   applyMasterStateToControls({...MASTER_DEFAULT_STATE,...s});
 }
 
-function createMasterTextObject(card,src,selector,leftId,topId,alignId,autoFitId,sizeId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
+function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,autoFitId,sizeId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
   const el=src.querySelector(selector);
   if(!el)return;
+
+  const savedState=readMasterState();
+  const saved=savedState[itemKey]||{};
 
   const wrap=document.createElement("div");
   wrap.className="masterTextObject";
 
   const cx=Math.max(0,Math.min(100,Number($(leftId)?.value)||defaultLeft));
   const cy=Math.max(0,Math.min(100,Number($(topId)?.value)||defaultTop));
+  const boxW=Math.max(12,Math.min(90,Number(saved.w)||defaultWidth));
+  const boxH=Math.max(5,Math.min(70,Number(saved.h)||defaultHeight));
+
   wrap.style.left=cx+"%";
   wrap.style.top=cy+"%";
-  wrap.style.width=defaultWidth+"%";
-  wrap.style.height=defaultHeight+"%";
+  wrap.style.width=boxW+"%";
+  wrap.style.height=boxH+"%";
   wrap.style.transform="translate(-50%,-50%)";
 
   const content=document.createElement("div");
@@ -2939,7 +2960,7 @@ function createMasterTextObject(card,src,selector,leftId,topId,alignId,autoFitId
     fitMasterPlainText(content,text,size,($(autoFitId)?.value||"on")==="on");
   });
 
-  attachMasterTextInteractions(wrap,card,leftId,topId);
+  attachMasterTextInteractions(wrap,card,leftId,topId,itemKey);
 }
 
 function attachMasterQrInteractions(wrap,card){
@@ -3083,11 +3104,11 @@ function updateMasterPreview(){
    attachMasterQrInteractions(wrap,card);
  }
 
- createMasterTextObject(card,src,".qrId","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize",20,12,36,9);
- createMasterTextObject(card,src,".qrEnglish","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize",32,24,55,13);
- createMasterTextObject(card,src,".qrIpa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize",32,38,55,10);
- createMasterTextObject(card,src,".qrJapanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize",32,55,55,12);
- createMasterTextObject(card,src,".qrJapaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize",32,70,55,12);
+ createMasterTextObject(card,src,".qrId","id","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize",20,12,36,9);
+ createMasterTextObject(card,src,".qrEnglish","english","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize",32,24,55,13);
+ createMasterTextObject(card,src,".qrIpa","ipa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize",32,38,55,10);
+ createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize",32,55,55,12);
+ createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize",32,70,55,12);
 }
 ["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
