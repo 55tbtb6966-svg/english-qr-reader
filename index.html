@@ -942,7 +942,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.0.5 / 更新 2026-08-17 19:49</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.0.6 / 更新 2026-08-17 19:53</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1204,7 +1204,7 @@
 </div>
 
 
-<div class="masterPreviewBox">
+<div id="legacySizeSettingsCompat" style="display:none;"><label><span>QRコードサイズ（px）</span><input id="settingQrSize" max="220" min="80" step="2" type="number" value="132"/></label><label><span>ID文字サイズ（rem）</span><input id="settingIdSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" max="2.5" min="0.7" step="0.05" type="number" value="1.18"/></label><label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>日本語文字サイズ（rem）</span><input id="settingJapaneseSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><label><span>日本語読み文字サイズ（rem）</span><input id="settingJapaneseReadSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><button id="applySizeSettingsBtn" type="button">サイズを適用</button><button class="secondary" id="resetSizeSettingsBtn" type="button">初期値に戻す</button></div><div class="masterPreviewBox">
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
 <div class="masterPreviewControls">
 </div>
@@ -1279,8 +1279,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.0.5";
-const APP_UPDATED="2026-08-17 19:49";
+const APP_VERSION="v3.0.6";
+const APP_UPDATED="2026-08-17 19:53";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2748,14 +2748,14 @@ function attachMasterQrInteractions(wrap,card){
       const nw=Math.max(8,Math.min(60,startW+dx));
       wrap.style.width=nw+"%";
 
-      // Synchronize with the master-card QR size setting.
+      // Synchronize with existing QR-size setting.
       const px=Math.round(132*nw/28);
       const bounded=Math.max(80,Math.min(220,px));
-      if($("masterMirror_settingQrSize"))$("masterMirror_settingQrSize").value=bounded;
-      const values=getMasterSizeValues();
-      values.masterMirror_settingQrSize=bounded;
-      localStorage.setItem("masterCardSizeSettings",JSON.stringify(values));
-      applyMasterSizeValues();
+      if($("settingQrSize"))$("settingQrSize").value=bounded;
+      const settings=getSizeSettings();
+      settings.qrSize=bounded;
+      localStorage.setItem("qrCardSizeSettings",JSON.stringify(settings));
+      applySizeSettingsToCss(settings);
     }
   };
 
@@ -2845,8 +2845,8 @@ function updateMasterPreview(){
 
    const left=Math.max(0,Math.min(100,Number($("masterQrCenterX")?.value)||50));
    const top=Math.max(0,Math.min(100,Number($("masterQrCenterY")?.value)||50));
-   const masterSizes=getMasterSizeValues();
-   const sizePct=Math.max(8,Math.min(60,(masterSizes.masterMirror_settingQrSize/132)*28));
+   const ss=getSizeSettings();
+   const sizePct=Math.max(8,Math.min(60,(ss.qrSize/132)*28));
 
    wrap.style.left=left+"%";
    wrap.style.top=top+"%";
@@ -2867,39 +2867,62 @@ function updateMasterPreview(){
 ["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 
-const MASTER_SIZE_DEFAULTS={
-  masterMirror_settingQrSize:132,
-  masterMirror_settingIdSize:0.95,
-  masterMirror_settingEnglishSize:1.18,
-  masterMirror_settingIpaSize:1.05,
-  masterMirror_settingJapaneseSize:1.12,
-  masterMirror_settingJapaneseReadSize:1.12
+const MASTER_SIZE_MIRRORS={
+  masterMirror_settingQrSize:"settingQrSize",
+  masterMirror_settingIdSize:"settingIdSize",
+  masterMirror_settingEnglishSize:"settingEnglishSize",
+  masterMirror_settingIpaSize:"settingIpaSize",
+  masterMirror_settingJapaneseSize:"settingJapaneseSize",
+  masterMirror_settingJapaneseReadSize:"settingJapaneseReadSize"
 };
-function getMasterSizeValues(){
-  let saved={};
-  try{saved=JSON.parse(localStorage.getItem("masterCardSizeSettings")||"{}")}catch{}
-  return {...MASTER_SIZE_DEFAULTS,...saved};
+
+function syncMasterSizeMirrorsFromSettings(){
+  for(const [mirrorId,settingId] of Object.entries(MASTER_SIZE_MIRRORS)){
+    const m=$(mirrorId),s=$(settingId);
+    if(m&&s)m.value=s.value;
+  }
 }
-function applyMasterSizeValues(){
-  const v=getMasterSizeValues();
-  for(const [id,val] of Object.entries(v)){if($(id))$(id).value=val;}
-  document.documentElement.style.setProperty("--qr-size",v.masterMirror_settingQrSize+"px");
-  document.documentElement.style.setProperty("--id-size",v.masterMirror_settingIdSize+"rem");
-  document.documentElement.style.setProperty("--english-size",v.masterMirror_settingEnglishSize+"rem");
-  document.documentElement.style.setProperty("--ipa-size",v.masterMirror_settingIpaSize+"rem");
-  document.documentElement.style.setProperty("--japanese-size",v.masterMirror_settingJapaneseSize+"rem");
-  document.documentElement.style.setProperty("--japanese-read-size",v.masterMirror_settingJapaneseReadSize+"rem");
+
+for(const [mirrorId,settingId] of Object.entries(MASTER_SIZE_MIRRORS)){
+  const m=$(mirrorId),s=$(settingId);
+  if(m&&s){
+    m.addEventListener("input",()=>{
+      s.value=m.value;
+      s.dispatchEvent(new Event("input",{bubbles:true}));
+      s.dispatchEvent(new Event("change",{bubbles:true}));
+      try{saveAndApplySizeSettings();}catch{}
+      updateMasterPreview();
+    });
+    s.addEventListener("input",()=>{m.value=s.value;});
+    s.addEventListener("change",()=>{m.value=s.value;});
+  }
 }
-Object.keys(MASTER_SIZE_DEFAULTS).forEach(id=>{
-  $(id)?.addEventListener("input",()=>{
-    const v=getMasterSizeValues();
-    v[id]=Number($(id).value);
-    localStorage.setItem("masterCardSizeSettings",JSON.stringify(v));
-    applyMasterSizeValues();
-    updateMasterPreview();
-  });
-});
-setTimeout(applyMasterSizeValues,0);
+setTimeout(syncMasterSizeMirrorsFromSettings,0);
+
+
+function syncMasterControlsToLegacySizeSettings(){
+  const pairs={
+    masterMirror_settingQrSize:"settingQrSize",
+    masterMirror_settingIdSize:"settingIdSize",
+    masterMirror_settingEnglishSize:"settingEnglishSize",
+    masterMirror_settingIpaSize:"settingIpaSize",
+    masterMirror_settingJapaneseSize:"settingJapaneseSize",
+    masterMirror_settingJapaneseReadSize:"settingJapaneseReadSize"
+  };
+  for(const [masterId,legacyId] of Object.entries(pairs)){
+    const m=$(masterId),l=$(legacyId);
+    if(!m||!l)continue;
+    if(!m.value)m.value=l.value;
+    m.addEventListener("input",()=>{
+      l.value=m.value;
+      l.dispatchEvent(new Event("input",{bubbles:true}));
+      l.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    l.addEventListener("input",()=>{if(document.activeElement!==m)m.value=l.value;});
+    l.addEventListener("change",()=>{if(document.activeElement!==m)m.value=l.value;});
+  }
+}
+setTimeout(syncMasterControlsToLegacySizeSettings,0);
 
 </script>
 </body>
