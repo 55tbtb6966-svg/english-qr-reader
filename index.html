@@ -791,10 +791,19 @@
   border-color:transparent !important;
 }
 
+
+.masterPreviewBox{
+  max-width:760px;
+}
+.masterPreviewCanvas{
+  max-width:620px;
+  margin:0 auto;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v2.9.8 / 更新 2026-08-17 19:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v2.9.9 / 更新 2026-08-17 19:06</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1076,8 +1085,37 @@
     <option value="off">OFF</option>
   </select>
 </label>
+<label><span>QR 左右位置</span>
+  <select id="masterQrHAlign">
+    <option value="left">左</option>
+    <option value="center" selected>中央</option>
+    <option value="right">右</option>
+  </select>
+</label>
+<label><span>QR 上下位置</span>
+  <select id="masterQrVAlign">
+    <option value="top">上</option>
+    <option value="middle" selected>中</option>
+    <option value="bottom">下</option>
+  </select>
+</label>
+<label><span>文字 左右位置</span>
+  <select id="masterTextHAlign">
+    <option value="left" selected>左</option>
+    <option value="center">中央</option>
+    <option value="right">右</option>
+  </select>
+</label>
+<label><span>文字 上下位置</span>
+  <select id="masterTextVAlign">
+    <option value="top">上</option>
+    <option value="middle" selected>中</option>
+    <option value="bottom">下</option>
+  </select>
+</label>
+
 </div>
-<div class="masterPreviewHint">現在表示中の先頭QRカードをA4横の比率で確認できます。設定変更はすぐに反映されます。</div>
+<div class="masterPreviewHint">外枠の内側で、QRと文字の配置を確認するためのA4横マスタープレビューです。</div>
 <div class="masterPreviewCanvas"><div id="masterPreviewCard" class="masterPreviewCard"></div></div>
 </div>
 <div class="grid2" id="printRangeControls" style="margin-top:10px;">
@@ -1121,8 +1159,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v2.9.8";
-const APP_UPDATED="2026-08-17 19:00";
+const APP_VERSION="v2.9.9";
+const APP_UPDATED="2026-08-17 19:06";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2452,46 +2490,79 @@ function updateMasterPreview(){
    host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667085;font-size:.9rem;padding:20px;text-align:center">QRカードを作成すると、ここにプレビューが表示されます。</div>';
    return;
  }
- const c=src.cloneNode(true),sc=src.querySelectorAll("canvas");
- c.querySelectorAll("canvas").forEach((cv,i)=>{
-   if(sc[i]){
-     const im=document.createElement("img");
-     try{im.src=sc[i].toDataURL("image/png")}catch{}
-     cv.replaceWith(im);
-   }
- });
- host.appendChild(c);
 
- const ha=$("masterHAlign")?.value||"center";
- const va=$("masterVAlign")?.value||"middle";
  const mx=Math.max(0,Math.min(45,Number($("masterMarginX")?.value)||0));
  const my=Math.max(0,Math.min(45,Number($("masterMarginY")?.value)||0));
-
- // The gray rounded line is the actual card edge.
- // Its left/right/top/bottom are placed exactly at the requested margins.
- c.style.position="absolute";
- c.style.left=mx+"%";
- c.style.right=mx+"%";
- c.style.top=my+"%";
- c.style.bottom=my+"%";
- c.style.width="auto";
- c.style.maxWidth="none";
- c.style.height="auto";
- c.style.transform="none";
- c.style.borderRadius="14px";
-
- // Content alignment inside that card.
- c.style.display="flex";
- c.style.flexDirection="column";
- c.style.justifyContent=va==="top"?"flex-start":va==="bottom"?"flex-end":"center";
- c.style.alignItems=ha==="left"?"flex-start":ha==="right"?"flex-end":"center";
- c.style.padding="12px";
- c.style.boxSizing="border-box";
-
  const borderOn=$("masterMarginGuide")?.value!=="off";
- c.style.border=borderOn?"1px solid #b8bec7":"1px solid transparent";
+
+ const card=document.createElement("div");
+ card.style.position="absolute";
+ card.style.left=mx+"%";
+ card.style.right=mx+"%";
+ card.style.top=my+"%";
+ card.style.bottom=my+"%";
+ card.style.border=borderOn?"1px solid #b8bec7":"1px solid transparent";
+ card.style.borderRadius="14px";
+ card.style.background="#fff";
+ card.style.boxSizing="border-box";
+ card.style.overflow="hidden";
+ host.appendChild(card);
+
+ const qrSource=src.querySelector("canvas,img");
+ if(qrSource){
+   let qrEl;
+   if(qrSource.tagName==="CANVAS"){
+     qrEl=document.createElement("img");
+     try{qrEl.src=qrSource.toDataURL("image/png")}catch{}
+   }else{
+     qrEl=qrSource.cloneNode(true);
+   }
+   qrEl.style.position="absolute";
+   qrEl.style.width="28%";
+   qrEl.style.height="auto";
+   qrEl.style.aspectRatio="1/1";
+   qrEl.style.objectFit="contain";
+
+   const qh=$("masterQrHAlign")?.value||"center";
+   const qv=$("masterQrVAlign")?.value||"middle";
+   qrEl.style.left=qh==="left"?"6%":qh==="right"?"auto":"50%";
+   qrEl.style.right=qh==="right"?"6%":"auto";
+   qrEl.style.top=qv==="top"?"8%":qv==="bottom"?"auto":"50%";
+   qrEl.style.bottom=qv==="bottom"?"8%":"auto";
+   qrEl.style.transform="translate("+(qh==="center"?"-50%":"0")+","+(qv==="middle"?"-50%":"0")+")";
+   card.appendChild(qrEl);
+ }
+
+ const textWrap=document.createElement("div");
+ textWrap.style.position="absolute";
+ textWrap.style.width="58%";
+ textWrap.style.maxHeight="78%";
+ textWrap.style.overflow="hidden";
+ textWrap.style.display="flex";
+ textWrap.style.flexDirection="column";
+ textWrap.style.gap="4px";
+
+ const th=$("masterTextHAlign")?.value||"left";
+ const tv=$("masterTextVAlign")?.value||"middle";
+ textWrap.style.left=th==="left"?"6%":th==="right"?"auto":"50%";
+ textWrap.style.right=th==="right"?"6%":"auto";
+ textWrap.style.top=tv==="top"?"8%":tv==="bottom"?"auto":"50%";
+ textWrap.style.bottom=tv==="bottom"?"8%":"auto";
+ textWrap.style.transform="translate("+(th==="center"?"-50%":"0")+","+(tv==="middle"?"-50%":"0")+")";
+ textWrap.style.textAlign=th==="left"?"left":th==="right"?"right":"center";
+
+ const ids=[".qrId",".qrEnglish",".qrIpa",".qrJapanese",".qrJapaneseRead"];
+ ids.forEach(sel=>{
+   const el=src.querySelector(sel);
+   if(!el)return;
+   const c=el.cloneNode(true);
+   c.style.margin="0";
+   c.style.width="100%";
+   textWrap.appendChild(c);
+ });
+ card.appendChild(textWrap);
 }
-["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterHAlign","masterVAlign","masterMarginX","masterMarginY","masterMarginGuide","masterQrHAlign","masterQrVAlign","masterTextHAlign","masterTextVAlign"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 </script>
 </body>
