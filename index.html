@@ -1115,10 +1115,20 @@
   }
 }
 
+
+#printQrSheet .printMasterCard > img{
+  width:100% !important;
+  height:100% !important;
+  display:block !important;
+}
+#printQrSheet .printMasterCard > img:last-child{
+  object-fit:contain !important;
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.2 / 更新 2026-08-18 00:35</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.3 / 更新 2026-08-18 07:42</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1439,8 +1449,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.2";
-const APP_UPDATED="2026-08-18 00:35";
+const APP_VERSION="v3.2.3";
+const APP_UPDATED="2026-08-18 07:42";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2516,21 +2526,21 @@ async function exportCurrentQrPageToPowerPoint(){
     return;
   }
 
-  const urls = await getPreviewCardImagesForOutput();
-  if(!urls.length){
+  const items = await getPreviewCardImageItemsForOutput();
+  if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
 
   const spec = $("printRange")?.value || "";
-  let selected = urls.slice();
+  let selected = items.slice();
   if(spec.trim()){
-    const pos = parsePrintRange(spec, urls.length);
+    const pos = parsePrintRange(spec, items.length);
     if(!pos || !pos.length){
       setStatus($("qrStatus"),"PPT範囲を確認してください。",false);
       return;
     }
-    selected = pos.map(n=>urls[n-1]).filter(Boolean);
+    selected = pos.map(n=>items[n-1]).filter(Boolean);
   }
 
   try{
@@ -2538,6 +2548,9 @@ async function exportCurrentQrPageToPowerPoint(){
     pptx.defineLayout({name:"A4P", width:8.267, height:11.693});
     pptx.layout = "A4P";
     pptx.author = "English QR Reader";
+
+    const state = readMasterState();
+    const qrPct = Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28)) / 100;
 
     const sw = 8.267, sh = 11.693;
     const cols = 2, rows = 4, perSlide = 8;
@@ -2549,12 +2562,31 @@ async function exportCurrentQrPageToPowerPoint(){
       const slide = pptx.addSlide();
       slide.background = {color:"FFFFFF"};
       const batch = selected.slice(start, start + perSlide);
-      batch.forEach((data, i)=>{
+
+      batch.forEach((item, i)=>{
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = mx + col * (cw + gap);
         const y = my + row * (ch + gap);
-        slide.addImage({data, x, y, w:cw, h:ch});
+
+        slide.addImage({data:item.url, x, y, w:cw, h:ch});
+
+        if(item.record && item.record.id){
+          const innerX = x + cw*(state.marginX/100);
+          const innerY = y + ch*(state.marginY/100);
+          const innerW = cw*(1-2*state.marginX/100);
+          const innerH = ch*(1-2*state.marginY/100);
+
+          const qrW = innerW * qrPct;
+          const qrH = qrW;
+          const qx = innerX + innerW*(state.qr.x/100) - qrW/2;
+          const qy = innerY + innerH*(state.qr.y/100) - qrH/2;
+
+          const data = qrDataUrlForPpt(item.record.id, 900);
+          if(data){
+            slide.addImage({data, x:qx, y:qy, w:qrW, h:qrH});
+          }
+        }
       });
     }
 
@@ -3381,6 +3413,17 @@ async function getPreviewCardImagesForOutput(){
   return urls;
 }
 
+async function getPreviewCardImageItemsForOutput(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  const items = [];
+  for(let i=0;i<cards.length;i++){
+    const url = await previewCardToImageDataUrl(cards[i], 2);
+    items.push({url, record: qrPageSource[i] || null});
+  }
+  return items;
+}
+
+
 function masterFontPxForCard(card,v){
   const inner=card.querySelector(".masterOutputInner")||card;
   const w=inner.getBoundingClientRect().width||620;
@@ -3506,8 +3549,8 @@ function applyDynamicPrintLayout(){
     '}';
 }
 async function printMasterCards(){
-  const urls = await getPreviewCardImagesForOutput();
-  if(!urls.length){
+  const items = await getPreviewCardImageItemsForOutput();
+  if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
@@ -3517,17 +3560,20 @@ async function printMasterCards(){
   sheet.innerHTML = "";
 
   const spec = $("printRange")?.value || "";
-  let selected = urls.slice();
+  let selected = items.slice();
   if(spec.trim()){
-    const pos = parsePrintRange(spec, urls.length);
+    const pos = parsePrintRange(spec, items.length);
     if(!pos || !pos.length){
       setStatus($("qrStatus"),"印刷範囲を確認してください。",false);
       return;
     }
-    selected = pos.map(n=>urls[n-1]).filter(Boolean);
+    selected = pos.map(n=>items[n-1]).filter(Boolean);
   }
 
-  selected.forEach(url=>{
+  const state = readMasterState();
+  const qrPct = Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28)) / 100;
+
+  selected.forEach(item=>{
     const card = document.createElement("div");
     card.className = "printMasterCard";
     card.style.position = "relative";
@@ -3536,12 +3582,26 @@ async function printMasterCards(){
     card.style.overflow = "hidden";
 
     const img = document.createElement("img");
-    img.src = url;
+    img.src = item.url;
     img.style.width = "100%";
     img.style.height = "100%";
     img.style.display = "block";
     img.style.objectFit = "contain";
     card.appendChild(img);
+
+    if(item.record && item.record.id){
+      const qr = document.createElement("img");
+      qr.src = qrDataUrlForPpt(item.record.id, 700);
+      qr.style.position = "absolute";
+      qr.style.left = (state.marginX + (100 - 2*state.marginX) * (state.qr.x/100)) + "%";
+      qr.style.top = (state.marginY + (100 - 2*state.marginY) * (state.qr.y/100)) + "%";
+      qr.style.width = ((100 - 2*state.marginX) * qrPct) + "%";
+      qr.style.aspectRatio = "1/1";
+      qr.style.transform = "translate(-50%,-50%)";
+      qr.style.display = "block";
+      qr.style.objectFit = "contain";
+      card.appendChild(qr);
+    }
 
     sheet.appendChild(card);
   });
