@@ -1152,7 +1152,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.6 / 更新 2026-08-18 19:13</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.7 / 更新 2026-08-18 19:23</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1473,8 +1473,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.6";
-const APP_UPDATED="2026-08-18 19:13";
+const APP_VERSION="v3.2.7";
+const APP_UPDATED="2026-08-18 19:23";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2544,13 +2544,94 @@ function qrDataUrlForPpt(id,size=600){
   return data;
 }
 
+
+function getPreviewCardEditableItemsForPpt(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  const items = [];
+
+  cards.forEach((card, i)=>{
+    const cardRect = card.getBoundingClientRect();
+    if(!cardRect.width || !cardRect.height) return;
+
+    const item = {
+      record: qrPageSource[i] || null,
+      cardWidthPx: cardRect.width,
+      cardHeightPx: cardRect.height,
+      border: null,
+      qr: null,
+      texts: []
+    };
+
+    const inner = card.querySelector(".masterOutputInner");
+    if(inner){
+      const r = inner.getBoundingClientRect();
+      item.border = {
+        left: ((r.left - cardRect.left) / cardRect.width) * 100,
+        top: ((r.top - cardRect.top) / cardRect.height) * 100,
+        width: (r.width / cardRect.width) * 100,
+        height: (r.height / cardRect.height) * 100
+      };
+    }
+
+    const qrEl = card.querySelector(".masterOutputInner .qrCodeWrap, .qrCodeWrap");
+    if(qrEl){
+      const r = qrEl.getBoundingClientRect();
+      if(r.width && r.height){
+        item.qr = {
+          left: ((r.left - cardRect.left) / cardRect.width) * 100,
+          top: ((r.top - cardRect.top) / cardRect.height) * 100,
+          width: (r.width / cardRect.width) * 100,
+          height: (r.height / cardRect.height) * 100
+        };
+      }
+    }
+
+    const defs = [
+      [".qrId","id"],
+      [".qrEnglish","english"],
+      [".qrIpa","ipa"],
+      [".qrJapanese","japanese"],
+      [".qrJapaneseRead","japaneseRead"]
+    ];
+
+    defs.forEach(([sel, key])=>{
+      const el = card.querySelector(sel);
+      if(!el) return;
+      const t = el.querySelector(".qrTextInner, .masterPlainText") || el;
+      const txt = (t.textContent || "").trim();
+      if(!txt) return;
+
+      const r = el.getBoundingClientRect();
+      if(!r.width || !r.height) return;
+
+      const cs = getComputedStyle(t);
+      item.texts.push({
+        key,
+        text: txt,
+        left: ((r.left - cardRect.left) / cardRect.width) * 100,
+        top: ((r.top - cardRect.top) / cardRect.height) * 100,
+        width: (r.width / cardRect.width) * 100,
+        height: (r.height / cardRect.height) * 100,
+        fontPx: parseFloat(cs.fontSize || "16"),
+        fontRatio: (parseFloat(cs.fontSize || "16") / cardRect.width),
+        align: (cs.textAlign === "left" ? "left" : "center"),
+        bold: parseInt(cs.fontWeight || "400", 10) >= 600
+      });
+    });
+
+    items.push(item);
+  });
+
+  return items;
+}
+
 async function exportCurrentQrPageToPowerPoint(){
   if(typeof PptxGenJS==="undefined"){
     setStatus($("qrStatus"),"PowerPoint作成ライブラリを読み込めませんでした。",false);
     return;
   }
 
-  const items = await getPreviewCardImageItemsForOutput();
+  const items = getPreviewCardEditableItemsForPpt();
   if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
@@ -2572,12 +2653,18 @@ async function exportCurrentQrPageToPowerPoint(){
     pptx.defineLayout({name:"A4P", width:8.267, height:11.693});
     pptx.layout = "A4P";
     pptx.author = "English QR Reader";
+    pptx.subject = "Editable QR cards";
+    pptx.title = "QR Cards";
+    pptx.company = "OpenAI";
 
+    // Fixed A4 portrait, 8 cards (2 x 4), matching the print layout.
     const sw = 8.267, sh = 11.693;
     const cols = 2, rows = 4, perSlide = 8;
     const gap = 0.08, mx = 0.15, my = 0.15;
     const cw = (sw - 2*mx - gap*(cols-1)) / cols;
     const ch = (sh - 2*my - gap*(rows-1)) / rows;
+
+    const state = readMasterState();
 
     for(let start=0; start<selected.length; start+=perSlide){
       const slide = pptx.addSlide();
@@ -2590,24 +2677,64 @@ async function exportCurrentQrPageToPowerPoint(){
         const x = mx + col * (cw + gap);
         const y = my + row * (ch + gap);
 
-        slide.addImage({data:item.url, x, y, w:cw, h:ch});
+        // white base for each card area
+        slide.addShape(pptx.ShapeType.rect,{
+          x, y, w:cw, h:ch,
+          line:{color:"FFFFFF", transparency:100, width:0},
+          fill:{color:"FFFFFF"}
+        });
 
-        if(item.record && item.record.id && item.qrBox){
-          const qx = x + cw * (item.qrBox.left / 100);
-          const qy = y + ch * (item.qrBox.top / 100);
-          const qw = cw * (item.qrBox.width / 100);
-          const qh = ch * (item.qrBox.height / 100);
+        // Rounded inner border, matching the master card border.
+        if(item.border && state.border !== "off"){
+          slide.addShape(pptx.ShapeType.roundRect,{
+            x: x + cw*(item.border.left/100),
+            y: y + ch*(item.border.top/100),
+            w: cw*(item.border.width/100),
+            h: ch*(item.border.height/100),
+            rectRadius: 0.03,
+            line:{color:"B8BEC7", width:1},
+            fill:{color:"FFFFFF", transparency:100}
+          });
+        }
 
-          const data = qrDataUrlForPpt(item.record.id, 900);
-          if(data){
-            slide.addImage({data, x:qx, y:qy, w:qw, h:qh});
+        // Editable/movable QR image
+        if(item.record && item.record.id && item.qr){
+          const qrData = qrDataUrlForPpt(item.record.id, 900);
+          if(qrData){
+            slide.addImage({
+              data: qrData,
+              x: x + cw*(item.qr.left/100),
+              y: y + ch*(item.qr.top/100),
+              w: cw*(item.qr.width/100),
+              h: ch*(item.qr.height/100)
+            });
           }
         }
+
+        // Editable text boxes
+        item.texts.forEach(t=>{
+          const fontPt = Math.max(4, Math.min(40, t.fontRatio * cw * 72));
+          slide.addText(String(t.text), {
+            x: x + cw*(t.left/100),
+            y: y + ch*(t.top/100),
+            w: cw*(t.width/100),
+            h: ch*(t.height/100),
+            fontFace: "Aptos",
+            fontSize: fontPt,
+            bold: !!t.bold,
+            color: "222222",
+            margin: 0,
+            align: (t.align === "left" ? "left" : "center"),
+            valign: "mid",
+            breakLine: false,
+            fit: "shrink"
+          });
+        });
       });
     }
 
-    await pptx.writeFile({fileName:`qr_cards_preview_8up_${new Date().toISOString().slice(0,10)}.pptx`});
-    setStatus($("qrStatus"),`PowerPointを作成しました（${selected.length}件）。`);
+    await pptx.writeFile({fileName:`qr_cards_editable_a4_8up_${new Date().toISOString().slice(0,10)}.pptx`});
+    setStatus($("qrStatus"),`編集可能なPowerPointを作成しました（A4縦・8枚固定、${selected.length}件）。`);
   }catch(err){
     console.error(err);
     setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
