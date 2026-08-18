@@ -1119,40 +1119,54 @@
 
 
 
-#printQrSheet .printCardPreviewImage{
-  position:absolute !important;
-  inset:0 !important;
-  width:100% !important;
-  height:100% !important;
-  display:block !important;
-  object-fit:contain !important;
-  transform:none !important;
-}
-#printQrSheet .printQrOverlay{
-  display:block !important;
-  object-fit:contain !important;
-  max-width:none !important;
-  max-height:none !important;
-  min-width:0 !important;
-  min-height:0 !important;
-  /* width/height/left/top come from the actual preview QR bounds */
-}
 
 
+
+
+
+
+
+#printQrSheet .directPrintCard{
+  position:relative;
+  aspect-ratio:297/210;
+  background:#fff;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+#printQrSheet .directPrintInner{
+  position:absolute;
+  box-sizing:border-box;
+  background:#fff;
+  overflow:hidden;
+}
+#printQrSheet .directPrintQr{
+  position:absolute;
+  display:block;
+  object-fit:contain;
+}
+#printQrSheet .directPrintText{
+  position:absolute;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  box-sizing:border-box;
+}
 @media print{
-  #printQrSheet .printMasterCard .printQrOverlay{
-    max-width:none !important;
-    max-height:none !important;
-    min-width:0 !important;
-    min-height:0 !important;
-    object-fit:contain !important;
+  body *{visibility:hidden!important;}
+  #printQrSheet,#printQrSheet *{visibility:visible!important;}
+  #printQrSheet{
+    position:absolute!important;
+    left:0!important;
+    top:0!important;
+    width:100%!important;
+    background:#fff!important;
   }
 }
 
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.7 / 更新 2026-08-18 19:23</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.8 / 更新 2026-08-18 19:28</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1473,8 +1487,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.7";
-const APP_UPDATED="2026-08-18 19:23";
+const APP_VERSION="v3.2.8";
+const APP_UPDATED="2026-08-18 19:28";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -3708,70 +3722,135 @@ function applyDynamicPrintLayout(){
   style.textContent='@media print{'+
     '@page{size:A4 portrait;margin:8mm;}'+
     '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}'+
-    '#printQrSheet .printMasterCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;}'+
-    '#printQrSheet .printCardPreviewImage{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important;object-fit:contain!important;transform:none!important;}'+
-    '#printQrSheet .printQrOverlay{position:absolute!important;display:block!important;object-fit:contain!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;}'+
+    '#printQrSheet .directPrintCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;background:#fff!important;}'+
+    '#printQrSheet .directPrintQr{position:absolute!important;object-fit:contain!important;max-width:none!important;max-height:none!important;}'+
+    '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
     '}';
 }
 async function printMasterCards(){
-  const items = await getPreviewCardImageItemsForOutput();
+  const items = getPreviewCardEditableItemsForPpt();
   if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
 
   const sheet = $("printQrSheet");
-  if(!sheet) return;
-  sheet.innerHTML = "";
+  if(!sheet)return;
+  sheet.innerHTML="";
 
-  const spec = $("printRange")?.value || "";
-  let selected = items.slice();
+  const spec=$("printRange")?.value||"";
+  let selected=items.slice();
   if(spec.trim()){
-    const pos = parsePrintRange(spec, items.length);
-    if(!pos || !pos.length){
+    const pos=parsePrintRange(spec,items.length);
+    if(!pos||!pos.length){
       setStatus($("qrStatus"),"印刷範囲を確認してください。",false);
       return;
     }
-    selected = pos.map(n=>items[n-1]).filter(Boolean);
+    selected=pos.map(n=>items[n-1]).filter(Boolean);
   }
 
+  const state=readMasterState();
+
   selected.forEach(item=>{
-    const card = document.createElement("div");
-    card.className = "printMasterCard";
-    card.style.position = "relative";
-    card.style.aspectRatio = "297 / 210";
-    card.style.background = "#fff";
-    card.style.overflow = "hidden";
+    const card=document.createElement("div");
+    card.className="printMasterCard directPrintCard";
+    card.style.position="relative";
+    card.style.aspectRatio="297 / 210";
+    card.style.background="#fff";
+    card.style.overflow="hidden";
+    card.style.boxSizing="border-box";
 
-    const img = document.createElement("img");
-    img.className = "printCardPreviewImage";
-    img.src = item.url;
-    img.style.width = "100%";
-    img.style.height = "100%";
-    img.style.display = "block";
-    img.style.objectFit = "contain";
-    card.appendChild(img);
+    // Outer/margin-defined card frame
+    if(item.border){
+      const inner=document.createElement("div");
+      inner.className="directPrintInner";
+      inner.style.position="absolute";
+      inner.style.left=item.border.left+"%";
+      inner.style.top=item.border.top+"%";
+      inner.style.width=item.border.width+"%";
+      inner.style.height=item.border.height+"%";
+      inner.style.boxSizing="border-box";
+      inner.style.background="#fff";
+      inner.style.overflow="hidden";
+      inner.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
+      inner.style.borderRadius="14px";
+      card.appendChild(inner);
+    }
 
-    if(item.record && item.record.id && item.qrBox){
-      const qr = document.createElement("img");
-      qr.className = "printQrOverlay";
-      qr.src = qrDataUrlForPpt(item.record.id, 700);
-      qr.style.position = "absolute";
-      qr.style.left = (item.qrBox.left + item.qrBox.width/2) + "%";
-      qr.style.top = (item.qrBox.top + item.qrBox.height/2) + "%";
-      qr.style.width = item.qrBox.width + "%";
-      qr.style.height = item.qrBox.height + "%";
-      qr.style.transform = "translate(-50%,-50%)";
-      qr.style.display = "block";
-      qr.style.objectFit = "contain";
+    // QR - direct generated image, placed using the exact current preview bounds.
+    if(item.record && item.record.id && item.qr){
+      const qr=document.createElement("img");
+      qr.className="directPrintQr";
+      qr.src=qrDataUrlForPpt(item.record.id,900);
+      qr.style.position="absolute";
+      qr.style.left=item.qr.left+"%";
+      qr.style.top=item.qr.top+"%";
+      qr.style.width=item.qr.width+"%";
+      qr.style.height=item.qr.height+"%";
+      qr.style.objectFit="contain";
+      qr.style.display="block";
+      qr.style.margin="0";
+      qr.style.padding="0";
       card.appendChild(qr);
     }
+
+    // Text - native HTML text, not rasterized.
+    item.texts.forEach(t=>{
+      const box=document.createElement("div");
+      box.className="directPrintText directPrintText-"+t.key;
+      box.textContent=t.text;
+      box.style.position="absolute";
+      box.style.left=t.left+"%";
+      box.style.top=t.top+"%";
+      box.style.width=t.width+"%";
+      box.style.height=t.height+"%";
+      box.style.display="flex";
+      box.style.alignItems="center";
+      box.style.justifyContent=t.align==="left"?"flex-start":"center";
+      box.style.textAlign=t.align==="left"?"left":"center";
+      box.style.fontFamily='Arial,"Helvetica Neue",sans-serif';
+      box.style.fontWeight=t.bold?"700":"400";
+      box.style.color="#222";
+      box.style.lineHeight="1.18";
+      box.style.whiteSpace="normal";
+      box.style.wordBreak="normal";
+      box.style.overflowWrap="break-word";
+      box.style.overflow="hidden";
+      box.style.boxSizing="border-box";
+      box.style.padding="2px 4px";
+
+      // Keep exact visible font ratio from preview.
+      const ratio=Number(t.fontRatio)||0;
+      box.dataset.fontRatio=String(ratio);
+      card.appendChild(box);
+    });
 
     sheet.appendChild(card);
   });
 
+  // Scale print-font size from the same preview width ratio.
+  requestAnimationFrame(()=>{
+    sheet.querySelectorAll(".directPrintCard").forEach(card=>{
+      const w=card.getBoundingClientRect().width;
+      card.querySelectorAll(".directPrintText").forEach(box=>{
+        const ratio=Number(box.dataset.fontRatio)||0;
+        if(ratio>0)box.style.fontSize=(ratio*w)+"px";
+      });
+    });
+  });
+
   applyDynamicPrintLayout();
-  await new Promise(resolve=>setTimeout(resolve,120));
+  await new Promise(resolve=>setTimeout(resolve,180));
+
+  // One last font-size pass after print layout dimensions settle.
+  sheet.querySelectorAll(".directPrintCard").forEach(card=>{
+    const w=card.getBoundingClientRect().width;
+    card.querySelectorAll(".directPrintText").forEach(box=>{
+      const ratio=Number(box.dataset.fontRatio)||0;
+      if(ratio>0)box.style.fontSize=(ratio*w)+"px";
+    });
+  });
+
   window.print();
 }
 
