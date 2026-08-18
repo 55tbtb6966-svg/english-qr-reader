@@ -1128,7 +1128,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.3 / 更新 2026-08-18 07:42</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.4 / 更新 2026-08-18 19:05</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1363,11 +1363,11 @@
 <div class="qrCombinedSettingsBox"><div class="qrOptionBox">
 <div class="qrOptionTitle">QRカードに表示する項目</div>
 <div class="qrOptionRow">
-<label class="qrCheckLabel"><input checked="" id="qrShowId" type="checkbox"/><span>ID</span></label>
-<label class="qrCheckLabel"><input checked="" id="qrShowEnglish" type="checkbox"/><span>英語</span></label>
-<label class="qrCheckLabel"><input checked="" id="qrShowIpa" type="checkbox"/><span>発音記号</span></label>
-<label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox"/><span>日本語</span></label>
-<label class="qrCheckLabel"><input checked="" id="qrShowJapaneseRead" type="checkbox"/><span>日本語読み</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowId" type="checkbox" checked/><span>ID</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowEnglish" type="checkbox" checked/><span>英語</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowIpa" type="checkbox" checked/><span>発音記号</span></label>
+<label class="qrCheckLabel"><input id="qrShowJapanese" type="checkbox" checked/><span>日本語</span></label>
+<label class="qrCheckLabel"><input checked="" id="qrShowJapaneseRead" type="checkbox" checked/><span>日本語読み</span></label>
 </div>
 <p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
 </div><details class="advancedSettings">
@@ -1449,8 +1449,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.3";
-const APP_UPDATED="2026-08-18 07:42";
+const APP_VERSION="v3.2.4";
+const APP_UPDATED="2026-08-18 19:05";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2190,7 +2190,7 @@ async function renderPage(){
 const QR_FIELD_DEFAULTS={
   qrShowEnglish:true,
   qrShowIpa:true,
-  qrShowJapanese:false,
+  qrShowJapanese:true,
   qrShowJapaneseRead:true,
   qrShowId:true
 };
@@ -2549,9 +2549,6 @@ async function exportCurrentQrPageToPowerPoint(){
     pptx.layout = "A4P";
     pptx.author = "English QR Reader";
 
-    const state = readMasterState();
-    const qrPct = Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28)) / 100;
-
     const sw = 8.267, sh = 11.693;
     const cols = 2, rows = 4, perSlide = 8;
     const gap = 0.08, mx = 0.15, my = 0.15;
@@ -2571,20 +2568,15 @@ async function exportCurrentQrPageToPowerPoint(){
 
         slide.addImage({data:item.url, x, y, w:cw, h:ch});
 
-        if(item.record && item.record.id){
-          const innerX = x + cw*(state.marginX/100);
-          const innerY = y + ch*(state.marginY/100);
-          const innerW = cw*(1-2*state.marginX/100);
-          const innerH = ch*(1-2*state.marginY/100);
-
-          const qrW = innerW * qrPct;
-          const qrH = qrW;
-          const qx = innerX + innerW*(state.qr.x/100) - qrW/2;
-          const qy = innerY + innerH*(state.qr.y/100) - qrH/2;
+        if(item.record && item.record.id && item.qrBox){
+          const qx = x + cw * (item.qrBox.left / 100);
+          const qy = y + ch * (item.qrBox.top / 100);
+          const qw = cw * (item.qrBox.width / 100);
+          const qh = ch * (item.qrBox.height / 100);
 
           const data = qrDataUrlForPpt(item.record.id, 900);
           if(data){
-            slide.addImage({data, x:qx, y:qy, w:qrW, h:qrH});
+            slide.addImage({data, x:qx, y:qy, w:qw, h:qh});
           }
         }
       });
@@ -3417,8 +3409,29 @@ async function getPreviewCardImageItemsForOutput(){
   const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
   const items = [];
   for(let i=0;i<cards.length;i++){
-    const url = await previewCardToImageDataUrl(cards[i], 2);
-    items.push({url, record: qrPageSource[i] || null});
+    const card = cards[i];
+    const url = await previewCardToImageDataUrl(card, 2);
+
+    let qrBox = null;
+    const qrEl = card.querySelector(".masterOutputInner .qrCodeWrap, .qrCodeWrap");
+    if(qrEl){
+      const cardRect = card.getBoundingClientRect();
+      const qrRect = qrEl.getBoundingClientRect();
+      if(cardRect.width > 0 && cardRect.height > 0 && qrRect.width > 0 && qrRect.height > 0){
+        qrBox = {
+          left: ((qrRect.left - cardRect.left) / cardRect.width) * 100,
+          top: ((qrRect.top - cardRect.top) / cardRect.height) * 100,
+          width: (qrRect.width / cardRect.width) * 100,
+          height: (qrRect.height / cardRect.height) * 100
+        };
+      }
+    }
+
+    items.push({
+      url,
+      record: qrPageSource[i] || null,
+      qrBox
+    });
   }
   return items;
 }
@@ -3570,9 +3583,6 @@ async function printMasterCards(){
     selected = pos.map(n=>items[n-1]).filter(Boolean);
   }
 
-  const state = readMasterState();
-  const qrPct = Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28)) / 100;
-
   selected.forEach(item=>{
     const card = document.createElement("div");
     card.className = "printMasterCard";
@@ -3589,14 +3599,14 @@ async function printMasterCards(){
     img.style.objectFit = "contain";
     card.appendChild(img);
 
-    if(item.record && item.record.id){
+    if(item.record && item.record.id && item.qrBox){
       const qr = document.createElement("img");
       qr.src = qrDataUrlForPpt(item.record.id, 700);
       qr.style.position = "absolute";
-      qr.style.left = (state.marginX + (100 - 2*state.marginX) * (state.qr.x/100)) + "%";
-      qr.style.top = (state.marginY + (100 - 2*state.marginY) * (state.qr.y/100)) + "%";
-      qr.style.width = ((100 - 2*state.marginX) * qrPct) + "%";
-      qr.style.aspectRatio = "1/1";
+      qr.style.left = (item.qrBox.left + item.qrBox.width/2) + "%";
+      qr.style.top = (item.qrBox.top + item.qrBox.height/2) + "%";
+      qr.style.width = item.qrBox.width + "%";
+      qr.style.height = item.qrBox.height + "%";
       qr.style.transform = "translate(-50%,-50%)";
       qr.style.display = "block";
       qr.style.objectFit = "contain";
@@ -3621,6 +3631,23 @@ $("masterMirror_settingQrSize")?.addEventListener("input",()=>{
 $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
   requestAnimationFrame(()=>applyMasterLayoutToAllRendered());
 });
+
+
+(function ensureDefaultQrFieldToggles(){
+  try{
+    const key = "qrFieldToggles";
+    const raw = localStorage.getItem(key);
+    if(!raw){
+      localStorage.setItem(key, JSON.stringify({
+        qrShowEnglish:true,
+        qrShowIpa:true,
+        qrShowJapanese:true,
+        qrShowJapaneseRead:true,
+        qrShowId:true
+      }));
+    }
+  }catch(e){}
+})();
 
 </script>
 </body>
