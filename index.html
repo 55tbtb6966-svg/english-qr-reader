@@ -1138,10 +1138,21 @@
   /* width/height/left/top come from the actual preview QR bounds */
 }
 
+
+@media print{
+  #printQrSheet .printMasterCard .printQrOverlay{
+    max-width:none !important;
+    max-height:none !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    object-fit:contain !important;
+  }
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.5 / 更新 2026-08-18 19:10</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.6 / 更新 2026-08-18 19:13</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1462,8 +1473,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.5";
-const APP_UPDATED="2026-08-18 19:10";
+const APP_VERSION="v3.2.6";
+const APP_UPDATED="2026-08-18 19:13";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -3571,7 +3582,8 @@ function applyDynamicPrintLayout(){
     '@page{size:A4 portrait;margin:8mm;}'+
     '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}'+
     '#printQrSheet .printMasterCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;}'+
-    '#printQrSheet .printMasterCard img{width:100%!important;height:100%!important;display:block!important;object-fit:contain!important;}'+
+    '#printQrSheet .printCardPreviewImage{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important;object-fit:contain!important;transform:none!important;}'+
+    '#printQrSheet .printQrOverlay{position:absolute!important;display:block!important;object-fit:contain!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;}'+
     '}';
 }
 async function printMasterCards(){
