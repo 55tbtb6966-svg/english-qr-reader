@@ -1116,19 +1116,32 @@
 }
 
 
-#printQrSheet .printMasterCard > img{
+
+
+
+#printQrSheet .printCardPreviewImage{
+  position:absolute !important;
+  inset:0 !important;
   width:100% !important;
   height:100% !important;
   display:block !important;
-}
-#printQrSheet .printMasterCard > img:last-child{
   object-fit:contain !important;
+  transform:none !important;
+}
+#printQrSheet .printQrOverlay{
+  display:block !important;
+  object-fit:contain !important;
+  max-width:none !important;
+  max-height:none !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  /* width/height/left/top come from the actual preview QR bounds */
 }
 
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.4 / 更新 2026-08-18 19:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.5 / 更新 2026-08-18 19:10</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1449,8 +1462,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.4";
-const APP_UPDATED="2026-08-18 19:05";
+const APP_VERSION="v3.2.5";
+const APP_UPDATED="2026-08-18 19:10";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -3592,6 +3605,7 @@ async function printMasterCards(){
     card.style.overflow = "hidden";
 
     const img = document.createElement("img");
+    img.className = "printCardPreviewImage";
     img.src = item.url;
     img.style.width = "100%";
     img.style.height = "100%";
@@ -3601,6 +3615,7 @@ async function printMasterCards(){
 
     if(item.record && item.record.id && item.qrBox){
       const qr = document.createElement("img");
+      qr.className = "printQrOverlay";
       qr.src = qrDataUrlForPpt(item.record.id, 700);
       qr.style.position = "absolute";
       qr.style.left = (item.qrBox.left + item.qrBox.width/2) + "%";
