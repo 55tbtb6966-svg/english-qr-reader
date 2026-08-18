@@ -1162,10 +1162,95 @@
   }
 }
 
+
+.printPrecheckPanel{
+  margin:12px 0 14px;
+  padding:12px 14px;
+  border:1px solid #d9dee7;
+  border-radius:12px;
+  background:#fff;
+}
+.printPrecheckHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.printPrecheckSummary{
+  font-size:.92rem;
+  margin:6px 0 10px;
+}
+.printPrecheckList{
+  display:grid;
+  gap:8px;
+}
+.printIssueCard{
+  border:1px solid #e0e5ec;
+  border-radius:10px;
+  padding:9px 10px;
+  background:#fafbfc;
+}
+.printIssueTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+}
+.printIssueId{font-weight:700}
+.printIssueText{
+  margin-top:5px;
+  color:#5c6675;
+  font-size:.86rem;
+  line-height:1.45;
+}
+.printIssueCard.hasOverride{
+  border-style:dashed;
+}
+.printCardAdjustEditor{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid #e2e7ee;
+}
+.printAdjustHint{
+  color:#667085;
+  font-size:.82rem;
+  margin:4px 0 10px;
+}
+.printAdjustRow{
+  display:grid;
+  grid-template-columns:90px repeat(3,minmax(0,1fr));
+  gap:8px;
+  align-items:end;
+  margin-bottom:8px;
+}
+.printAdjustRow label span{
+  display:block;
+  font-size:.78rem;
+  color:#667085;
+  margin-bottom:3px;
+}
+.printAdjustRow input{
+  width:100%;
+  box-sizing:border-box;
+}
+@media(max-width:700px){
+  .printAdjustRow{
+    grid-template-columns:1fr 1fr;
+  }
+  .printAdjustRow .printAdjustName{
+    grid-column:1/-1;
+    font-weight:700;
+  }
+}
+@media print{
+  #printPrecheckPanel,#printPrecheckBtn{display:none!important;}
+}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.3.4 / 更新 2026-08-18 20:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.4.0 / 更新 2026-08-18 23:54</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1454,8 +1539,25 @@
 </details></div>
 </div>
 </div>
-<div class="row">
+<div class="row"><button class="secondary" id="printPrecheckBtn" type="button">印刷前チェック</button>
 <button class="secondary" id="printBtn">印刷／PDF保存</button>
+</div><div class="printPrecheckPanel" hidden="" id="printPrecheckPanel">
+<div class="printPrecheckHeader">
+<strong>印刷前チェック</strong>
+<button class="secondary" id="closePrintPrecheckBtn" type="button">閉じる</button>
+</div>
+<div class="printPrecheckSummary" id="printPrecheckSummary"></div>
+<div class="printPrecheckList" id="printPrecheckList"></div>
+<div class="printCardAdjustEditor" hidden="" id="printCardAdjustEditor">
+<div class="printAdjustTitle"><strong id="printAdjustCardTitle">個別調整</strong></div>
+<div class="printAdjustHint">この変更は印刷／PDF用だけです。マスター設定は変更しません。</div>
+<div id="printAdjustRows"></div>
+<div class="row">
+<button id="savePrintCardAdjustBtn" type="button">このカードの調整を保存</button>
+<button class="secondary" id="resetPrintCardAdjustBtn" type="button">個別調整を解除</button>
+<button class="secondary" id="cancelPrintCardAdjustBtn" type="button">キャンセル</button>
+</div>
+</div>
 </div>
 <div class="row" id="pptSaveControls" style="margin-top:10px;">
 <button class="secondary" id="pptBtn">PowerPoint保存</button>
@@ -1477,8 +1579,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.3.4";
-const APP_UPDATED="2026-08-18 20:00";
+const APP_VERSION="v3.4.0";
+const APP_UPDATED="2026-08-18 23:54";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -3744,7 +3846,228 @@ function applyDynamicPrintLayout(){
     '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
     '}';
 }
-async function printMasterCards(){
+async 
+const PRINT_OVERRIDE_KEY="printCardOverridesSessionV1";
+let printAdjustEditingId="";
+
+function getPrintOverrides(){
+  try{return JSON.parse(sessionStorage.getItem(PRINT_OVERRIDE_KEY)||"{}")||{};}catch{return {};}
+}
+function savePrintOverrides(v){
+  try{sessionStorage.setItem(PRINT_OVERRIDE_KEY,JSON.stringify(v||{}));}catch{}
+}
+function getPrintOverride(id){
+  return id ? (getPrintOverrides()[id]||null) : null;
+}
+
+function rectsOverlap(a,b,pad=0.35){
+  const ax1=a.left+pad, ay1=a.top+pad, ax2=a.left+a.width-pad, ay2=a.top+a.height-pad;
+  const bx1=b.left+pad, by1=b.top+pad, bx2=b.left+b.width-pad, by2=b.top+b.height-pad;
+  return ax1<bx2 && ax2>bx1 && ay1<by2 && ay2>by1;
+}
+
+function applyPrintOverrideToItem(item){
+  if(!item?.record?.id)return item;
+  const ov=getPrintOverride(item.record.id);
+  if(!ov)return item;
+  const state=readMasterState();
+  const clone={
+    ...item,
+    texts:(item.texts||[]).map(t=>{
+      const x=ov[t.key];
+      if(!x)return {...t};
+      const base=state[t.key]||{};
+      const baseSize=Number(base.size)||1;
+      const newSize=Number(x.size)||baseSize;
+      return {
+        ...t,
+        top:Number.isFinite(Number(x.y)) ? Number(x.y) : t.top,
+        height:Number.isFinite(Number(x.h)) ? Number(x.h) : t.height,
+        fontRatio:t.fontRatio*(newSize/baseSize)
+      };
+    })
+  };
+  return clone;
+}
+
+function checkPrintItem(item,index){
+  const issues=[];
+  if(!item)return issues;
+  const state=readMasterState();
+  const adjusted=applyPrintOverrideToItem(item);
+  const texts=adjusted.texts||[];
+
+  // Outside the visible card / inner frame.
+  const bounds=adjusted.border || {left:0,top:0,width:100,height:100};
+  const br=bounds.left+bounds.width, bb=bounds.top+bounds.height;
+  texts.forEach(t=>{
+    const r=t;
+    const rr=r.left+r.width, rb=r.top+r.height;
+    if(r.left<bounds.left-0.5 || r.top<bounds.top-0.5 || rr>br+0.5 || rb>bb+0.5){
+      issues.push(`${labelForPrintKey(t.key)}：枠外にはみ出す可能性`);
+    }
+  });
+
+  // Text-to-text overlap.
+  for(let i=0;i<texts.length;i++){
+    for(let j=i+1;j<texts.length;j++){
+      if(rectsOverlap(texts[i],texts[j])){
+        issues.push(`${labelForPrintKey(texts[i].key)} と ${labelForPrintKey(texts[j].key)} が重なる可能性`);
+      }
+    }
+  }
+
+  // QR-to-text overlap.
+  if(adjusted.qr){
+    texts.forEach(t=>{
+      if(rectsOverlap(adjusted.qr,t,0.8)){
+        issues.push(`QR と ${labelForPrintKey(t.key)} が重なる可能性`);
+      }
+    });
+  }
+
+  // Strong auto-shrink detection from the actual preview font size.
+  const card=document.querySelectorAll("#qrSheet .qrCard")[index];
+  if(card){
+    const inner=card.querySelector(".masterOutputInner")||card;
+    const innerW=inner.getBoundingClientRect().width||1;
+    const expectedScale=innerW/620;
+    texts.forEach(t=>{
+      const base=state[t.key];
+      if(!base || base.autoFit!=="on")return;
+      const expected=Math.max(5,(Number(base.size)||1)*16*expectedScale);
+      const actual=Number(t.fontPx)||0;
+      if(actual>0 && expected>0 && actual/expected<0.62){
+        issues.push(`${labelForPrintKey(t.key)}：自動フォントがかなり小さくなっています`);
+      }
+    });
+  }
+
+  return [...new Set(issues)];
+}
+
+function labelForPrintKey(k){
+  return ({id:"ID",english:"英語",ipa:"発音記号",japanese:"日本語",japaneseRead:"日本語読み"})[k]||k;
+}
+
+function runPrintPrecheck(){
+  const items=getPreviewCardEditableItemsForPpt();
+  const panel=$("printPrecheckPanel");
+  const summary=$("printPrecheckSummary");
+  const list=$("printPrecheckList");
+  if(!panel||!summary||!list)return;
+  panel.hidden=false;
+  $("printCardAdjustEditor").hidden=true;
+  list.innerHTML="";
+
+  if(!items.length){
+    summary.textContent="先にQRコードを表示してください。";
+    return;
+  }
+
+  let bad=0;
+  items.forEach((item,i)=>{
+    const issues=checkPrintItem(item,i);
+    if(!issues.length)return;
+    bad++;
+
+    const row=document.createElement("div");
+    row.className="printIssueCard"+(getPrintOverride(item.record?.id)?" hasOverride":"");
+
+    const top=document.createElement("div");
+    top.className="printIssueTop";
+    const id=document.createElement("div");
+    id.className="printIssueId";
+    id.textContent=item.record?.id||`カード${i+1}`;
+
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.className="secondary";
+    btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";
+    btn.addEventListener("click",()=>openPrintCardAdjustEditor(item));
+
+    top.appendChild(id);top.appendChild(btn);
+    row.appendChild(top);
+
+    const detail=document.createElement("div");
+    detail.className="printIssueText";
+    detail.textContent=issues.join(" / ");
+    row.appendChild(detail);
+    list.appendChild(row);
+  });
+
+  if(bad===0){
+    summary.textContent=`問題候補は見つかりませんでした（${items.length}件チェック）。`;
+    list.innerHTML='<div class="hint">そのまま印刷／PDF保存できます。</div>';
+  }else{
+    summary.textContent=`${items.length}件中、要確認 ${bad}件です。問題候補だけ個別調整できます。`;
+  }
+}
+
+function openPrintCardAdjustEditor(item){
+  if(!item?.record?.id)return;
+  printAdjustEditingId=item.record.id;
+  const editor=$("printCardAdjustEditor");
+  const rows=$("printAdjustRows");
+  const title=$("printAdjustCardTitle");
+  editor.hidden=false;
+  title.textContent=`${item.record.id} の個別調整`;
+  rows.innerHTML="";
+
+  const state=readMasterState();
+  const ov=getPrintOverride(item.record.id)||{};
+  const keys=["english","ipa","japanese","japaneseRead"];
+
+  keys.forEach(k=>{
+    const base=state[k];
+    if(!base)return;
+    const v=ov[k]||{};
+    const row=document.createElement("div");
+    row.className="printAdjustRow";
+    row.innerHTML=`
+      <div class="printAdjustName">${labelForPrintKey(k)}</div>
+      <label><span>中心Y（%）</span><input data-print-key="${k}" data-field="y" type="number" step="0.5" min="0" max="100" value="${v.y ?? base.y}"></label>
+      <label><span>文字サイズ</span><input data-print-key="${k}" data-field="size" type="number" step="0.1" min="0.5" max="8" value="${v.size ?? base.size}"></label>
+      <label><span>枠高さ（%）</span><input data-print-key="${k}" data-field="h" type="number" step="0.5" min="5" max="70" value="${v.h ?? base.h}"></label>`;
+    rows.appendChild(row);
+  });
+  editor.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function saveCurrentPrintCardAdjust(){
+  if(!printAdjustEditingId)return;
+  const all=getPrintOverrides();
+  const ov={};
+  document.querySelectorAll("#printAdjustRows input[data-print-key]").forEach(inp=>{
+    const k=inp.dataset.printKey, f=inp.dataset.field;
+    if(!ov[k])ov[k]={};
+    ov[k][f]=Number(inp.value);
+  });
+  all[printAdjustEditingId]=ov;
+  savePrintOverrides(all);
+  $("printCardAdjustEditor").hidden=true;
+  runPrintPrecheck();
+  setStatus($("qrStatus"),`${printAdjustEditingId} の印刷用個別調整を保存しました。`);
+}
+
+function resetCurrentPrintCardAdjust(){
+  if(!printAdjustEditingId)return;
+  const all=getPrintOverrides();
+  delete all[printAdjustEditingId];
+  savePrintOverrides(all);
+  $("printCardAdjustEditor").hidden=true;
+  runPrintPrecheck();
+  setStatus($("qrStatus"),`${printAdjustEditingId} の個別調整を解除しました。`);
+}
+
+$("printPrecheckBtn")?.addEventListener("click",runPrintPrecheck);
+$("closePrintPrecheckBtn")?.addEventListener("click",()=>{$("printPrecheckPanel").hidden=true;});
+$("savePrintCardAdjustBtn")?.addEventListener("click",saveCurrentPrintCardAdjust);
+$("resetPrintCardAdjustBtn")?.addEventListener("click",resetCurrentPrintCardAdjust);
+$("cancelPrintCardAdjustBtn")?.addEventListener("click",()=>{$("printCardAdjustEditor").hidden=true;});
+
+
+function printMasterCards(){
   const items = getPreviewCardEditableItemsForPpt();
   if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
@@ -3765,6 +4088,8 @@ async function printMasterCards(){
     }
     selected=pos.map(n=>items[n-1]).filter(Boolean);
   }
+
+  selected=selected.map(applyPrintOverrideToItem);
 
   const state=readMasterState();
 
