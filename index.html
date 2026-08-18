@@ -1165,7 +1165,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.3.2 / 更新 2026-08-18 19:51</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.3.4 / 更新 2026-08-18 20:00</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1428,7 +1428,7 @@
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIdWidth" max="90" min="12" step="0.5" type="number" value="35"/></label><label><span>枠高さ（%）</span><input id="masterIdHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number" value="5"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="20"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIdWidth" max="90" min="12" step="0.5" type="number" value="35"/></label><label><span>枠高さ（%）</span><input id="masterIdHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number" value="5"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>文字揃え</span>
 <select id="masterEnglishAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
@@ -1477,8 +1477,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.3.2";
-const APP_UPDATED="2026-08-18 19:51";
+const APP_VERSION="v3.3.4";
+const APP_UPDATED="2026-08-18 20:00";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2945,12 +2945,12 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,w
 }
 
 
-const MASTER_DEFAULT_VERSION="2026-08-18-layout-1";
+const MASTER_DEFAULT_VERSION="2026-08-18-layout-3";
 const MASTER_DEFAULT_STATE={
   marginX:3,marginY:3,border:"on",
   qr:{size:100,x:15,y:20},
   id:{size:1,x:50,y:10,align:"center",autoFit:"on",w:35,h:10},
-  english:{size:5,x:50,y:20,align:"center",autoFit:"on",w:90,h:25},
+  english:{size:5,x:50,y:50,align:"center",autoFit:"on",w:90,h:25},
   ipa:{size:1.5,x:50,y:67.5,align:"center",autoFit:"on",w:90,h:10},
   japanese:{size:1.5,x:50,y:80,align:"center",autoFit:"on",w:90,h:15},
   japaneseRead:{size:1.5,x:50,y:95,align:"center",autoFit:"on",w:90,h:15}
