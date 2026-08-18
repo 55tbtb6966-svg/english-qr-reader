@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.4.2 / 更新 2026-08-19 01:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.4.3 / 更新 2026-08-19 02:05</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.4.2";
-const APP_UPDATED="2026-08-19 01:54";
+const APP_VERSION="v3.4.3";
+const APP_UPDATED="2026-08-19 02:05";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2666,116 +2666,237 @@ function getPreviewCardEditableItemsForPpt(){
   return items;
 }
 
+
+function pptInchesToEmu(v){
+  return Math.round(Number(v||0)*914400);
+}
+
+async function groupPptxCardsBySlide(pptArrayBuffer, groupsBySlide){
+  const zip=await JSZip.loadAsync(pptArrayBuffer);
+  const P="http://schemas.openxmlformats.org/presentationml/2006/main";
+  const A="http://schemas.openxmlformats.org/drawingml/2006/main";
+
+  for(let slideIndex=0;slideIndex<groupsBySlide.length;slideIndex++){
+    const groups=groupsBySlide[slideIndex]||[];
+    if(!groups.length)continue;
+
+    const path=`ppt/slides/slide${slideIndex+1}.xml`;
+    const file=zip.file(path);
+    if(!file)continue;
+
+    const xml=await file.async("string");
+    const doc=new DOMParser().parseFromString(xml,"application/xml");
+    if(doc.getElementsByTagName("parsererror").length)throw new Error("PPT slide XML parse error");
+
+    const spTree=doc.getElementsByTagNameNS(P,"spTree")[0];
+    if(!spTree)continue;
+
+    const objectNodes=Array.from(spTree.children).filter(el=>{
+      return el.localName!=="nvGrpSpPr" && el.localName!=="grpSpPr";
+    });
+
+    let cursor=0;
+    groups.forEach((g,gi)=>{
+      const members=objectNodes.slice(cursor,cursor+g.count);
+      cursor+=g.count;
+      if(!members.length)return;
+
+      const grp=doc.createElementNS(P,"p:grpSp");
+
+      const nv=doc.createElementNS(P,"p:nvGrpSpPr");
+      const cNvPr=doc.createElementNS(P,"p:cNvPr");
+      cNvPr.setAttribute("id",String(9000+gi));
+      cNvPr.setAttribute("name",g.name||`Card ${gi+1}`);
+      const cNvGrpSpPr=doc.createElementNS(P,"p:cNvGrpSpPr");
+      const nvPr=doc.createElementNS(P,"p:nvPr");
+      nv.appendChild(cNvPr);
+      nv.appendChild(cNvGrpSpPr);
+      nv.appendChild(nvPr);
+      grp.appendChild(nv);
+
+      const grpSpPr=doc.createElementNS(P,"p:grpSpPr");
+      const xfrm=doc.createElementNS(A,"a:xfrm");
+
+      const off=doc.createElementNS(A,"a:off");
+      off.setAttribute("x",String(pptInchesToEmu(g.x)));
+      off.setAttribute("y",String(pptInchesToEmu(g.y)));
+
+      const ext=doc.createElementNS(A,"a:ext");
+      ext.setAttribute("cx",String(pptInchesToEmu(g.w)));
+      ext.setAttribute("cy",String(pptInchesToEmu(g.h)));
+
+      // Keep child coordinates in the original slide coordinate system.
+      // This lets the group have card-sized selection handles without moving its members.
+      const chOff=doc.createElementNS(A,"a:chOff");
+      chOff.setAttribute("x",String(pptInchesToEmu(g.x)));
+      chOff.setAttribute("y",String(pptInchesToEmu(g.y)));
+
+      const chExt=doc.createElementNS(A,"a:chExt");
+      chExt.setAttribute("cx",String(pptInchesToEmu(g.w)));
+      chExt.setAttribute("cy",String(pptInchesToEmu(g.h)));
+
+      xfrm.appendChild(off);
+      xfrm.appendChild(ext);
+      xfrm.appendChild(chOff);
+      xfrm.appendChild(chExt);
+      grpSpPr.appendChild(xfrm);
+      grp.appendChild(grpSpPr);
+
+      spTree.insertBefore(grp,members[0]);
+      members.forEach(node=>grp.appendChild(node));
+    });
+
+    const outXml=new XMLSerializer().serializeToString(doc);
+    zip.file(path,outXml);
+  }
+
+  return await zip.generateAsync({
+    type:"blob",
+    mimeType:"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    compression:"DEFLATE"
+  });
+}
+
+function downloadPptBlob(blob,fileName){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=fileName;
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+    a.remove();
+  },500);
+}
+
 async function exportCurrentQrPageToPowerPoint(){
   if(typeof PptxGenJS==="undefined"){
     setStatus($("qrStatus"),"PowerPoint作成ライブラリを読み込めませんでした。",false);
     return;
   }
+  if(typeof JSZip==="undefined"){
+    setStatus($("qrStatus"),"PowerPointグループ化ライブラリを読み込めませんでした。",false);
+    return;
+  }
 
-  const items = getPreviewCardEditableItemsForPpt();
+  const items=getPreviewCardEditableItemsForPpt();
   if(!items.length){
     setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
     return;
   }
 
-  const spec = $("printRange")?.value || "";
-  let selected = items.slice();
+  const spec=$("printRange")?.value||"";
+  let selected=items.slice();
   if(spec.trim()){
-    const pos = parsePrintRange(spec, items.length);
-    if(!pos || !pos.length){
+    const pos=parsePrintRange(spec,items.length);
+    if(!pos||!pos.length){
       setStatus($("qrStatus"),"PPT範囲を確認してください。",false);
       return;
     }
-    selected = pos.map(n=>items[n-1]).filter(Boolean);
+    selected=pos.map(n=>items[n-1]).filter(Boolean);
   }
 
   try{
-    const pptx = new PptxGenJS();
-    pptx.defineLayout({name:"A4P", width:8.267, height:11.693});
-    pptx.layout = "A4P";
-    pptx.author = "English QR Reader";
-    pptx.subject = "Editable QR cards";
-    pptx.title = "QR Cards";
-    pptx.company = "OpenAI";
+    const pptx=new PptxGenJS();
+    pptx.defineLayout({name:"A4P",width:8.267,height:11.693});
+    pptx.layout="A4P";
+    pptx.author="English QR Reader";
+    pptx.subject="Editable grouped QR cards";
+    pptx.title="QR Cards";
+    pptx.company="OpenAI";
 
-    // Fixed A4 portrait, 8 cards (2 x 4), matching the print layout.
-    const sw = 8.267, sh = 11.693;
-    const cols = 2, rows = 4, perSlide = 8;
-    const gap = 0.08, mx = 0.15, my = 0.15;
-    const cw = (sw - 2*mx - gap*(cols-1)) / cols;
-    const ch = (sh - 2*my - gap*(rows-1)) / rows;
+    const sw=8.267,sh=11.693;
+    const cols=2,rows=4,perSlide=8;
+    const gap=0.08,mx=0.15,my=0.15;
+    const cw=(sw-2*mx-gap*(cols-1))/cols;
+    const ch=(sh-2*my-gap*(rows-1))/rows;
+    const state=readMasterState();
+    const groupsBySlide=[];
 
-    const state = readMasterState();
+    for(let start=0;start<selected.length;start+=perSlide){
+      const slide=pptx.addSlide();
+      slide.background={color:"FFFFFF"};
+      const batch=selected.slice(start,start+perSlide);
+      const slideGroups=[];
 
-    for(let start=0; start<selected.length; start+=perSlide){
-      const slide = pptx.addSlide();
-      slide.background = {color:"FFFFFF"};
-      const batch = selected.slice(start, start + perSlide);
+      batch.forEach((item,i)=>{
+        const col=i%cols;
+        const row=Math.floor(i/cols);
+        const x=mx+col*(cw+gap);
+        const y=my+row*(ch+gap);
+        let objectCount=0;
 
-      batch.forEach((item, i)=>{
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = mx + col * (cw + gap);
-        const y = my + row * (ch + gap);
-
-        // white base for each card area
         slide.addShape(pptx.ShapeType.rect,{
-          x, y, w:cw, h:ch,
-          line:{color:"FFFFFF", transparency:100, width:0},
+          x,y,w:cw,h:ch,
+          line:{color:"FFFFFF",transparency:100,width:0},
           fill:{color:"FFFFFF"}
         });
+        objectCount++;
 
-        // Rounded inner border, matching the master card border.
-        if(item.border && state.border !== "off"){
+        if(item.border&&state.border!=="off"){
           slide.addShape(pptx.ShapeType.roundRect,{
-            x: x + cw*(item.border.left/100),
-            y: y + ch*(item.border.top/100),
-            w: cw*(item.border.width/100),
-            h: ch*(item.border.height/100),
-            rectRadius: 0.03,
-            line:{color:"B8BEC7", width:1},
-            fill:{color:"FFFFFF", transparency:100}
+            x:x+cw*(item.border.left/100),
+            y:y+ch*(item.border.top/100),
+            w:cw*(item.border.width/100),
+            h:ch*(item.border.height/100),
+            rectRadius:0.03,
+            line:{color:"B8BEC7",width:1},
+            fill:{color:"FFFFFF",transparency:100}
           });
+          objectCount++;
         }
 
-        // Editable/movable QR image
-        if(item.record && item.record.id && item.qr){
-          const qrData = qrDataUrlForPpt(item.record.id, 900);
+        if(item.record&&item.record.id&&item.qr){
+          const qrData=qrDataUrlForPpt(item.record.id,900);
           if(qrData){
             slide.addImage({
-              data: qrData,
-              x: x + cw*(item.qr.left/100),
-              y: y + ch*(item.qr.top/100),
-              w: cw*(item.qr.width/100),
-              h: ch*(item.qr.height/100)
+              data:qrData,
+              x:x+cw*(item.qr.left/100),
+              y:y+ch*(item.qr.top/100),
+              w:cw*(item.qr.width/100),
+              h:ch*(item.qr.height/100)
             });
+            objectCount++;
           }
         }
 
-        // Editable text boxes
         item.texts.forEach(t=>{
-          const fontPt = Math.max(4, Math.min(40, t.fontRatio * cw * 72));
-          slide.addText(String(t.text), {
-            x: x + cw*(t.left/100),
-            y: y + ch*(t.top/100),
-            w: cw*(t.width/100),
-            h: ch*(t.height/100),
-            fontFace: "Aptos",
-            fontSize: fontPt,
-            bold: !!t.bold,
-            color: "222222",
-            margin: 0,
-            align: (t.align === "left" ? "left" : "center"),
-            valign: "mid",
-            breakLine: false,
-            fit: "shrink"
+          const fontPt=Math.max(4,Math.min(40,t.fontRatio*cw*72));
+          slide.addText(String(t.text),{
+            x:x+cw*(t.left/100),
+            y:y+ch*(t.top/100),
+            w:cw*(t.width/100),
+            h:ch*(t.height/100),
+            fontFace:"Aptos",
+            fontSize:fontPt,
+            bold:!!t.bold,
+            color:"222222",
+            margin:0,
+            align:(t.align==="left"?"left":"center"),
+            valign:"mid",
+            breakLine:false,
+            fit:"shrink"
           });
+          objectCount++;
+        });
+
+        slideGroups.push({
+          count:objectCount,
+          x,y,w:cw,h:ch,
+          name:`Card ${item.record?.id||start+i+1}`
         });
       });
+
+      groupsBySlide.push(slideGroups);
     }
 
-    await pptx.writeFile({fileName:`qr_cards_editable_a4_8up_${new Date().toISOString().slice(0,10)}.pptx`});
-    setStatus($("qrStatus"),`編集可能なPowerPointを作成しました（A4縦・8枚固定、${selected.length}件）。`);
+    const raw=await pptx.write({outputType:"arraybuffer"});
+    const groupedBlob=await groupPptxCardsBySlide(raw,groupsBySlide);
+    const fileName=`qr_cards_grouped_a4_8up_${new Date().toISOString().slice(0,10)}.pptx`;
+    downloadPptBlob(groupedBlob,fileName);
+    setStatus($("qrStatus"),`PowerPointを作成しました（1カードずつグループ化、A4縦・8枚固定、${selected.length}件）。`);
   }catch(err){
     console.error(err);
     setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
