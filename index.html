@@ -1178,10 +1178,15 @@
 @media(max-width:700px){.printAdjustRow{grid-template-columns:1fr 1fr}.printAdjustRow .printAdjustName{grid-column:1/-1;font-weight:700}}
 @media print{#printPrecheckPanel,#printPrecheckBtn{display:none!important}}
 
+
+#printPrecheckPanel{position:relative;z-index:50}
+#printPrecheckPanel button{position:relative;z-index:51;pointer-events:auto!important}
+#printPrecheckList{position:relative;z-index:51}
+
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.4.1 / 更新 2026-08-19 01:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.4.2 / 更新 2026-08-19 01:54</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1444,22 +1449,22 @@
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIdWidth" max="90" min="12" step="0.5" type="number" value="35"/></label><label><span>枠高さ（%）</span><input id="masterIdHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number" value="5"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterIdAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIdWidth" max="90" min="12" step="0.5" type="number" value="35"/></label><label><span>枠高さ（%）</span><input id="masterIdHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">英語</div><label><span>文字サイズ</span><input id="masterMirror_settingEnglishSize" max="2.5" min="0.6" step="0.05" type="number" value="5"/></label><label><span>中心X（左から%）</span><input id="masterEnglishLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterEnglishTop" max="100" min="0" step="0.1" type="number" value="45"/></label><label><span>文字揃え</span>
 <select id="masterEnglishAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterEnglishAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterEnglishWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterEnglishHeight" max="70" min="5" step="0.5" type="number" value="25"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="67.5"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterEnglishAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterEnglishWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterEnglishHeight" max="70" min="5" step="0.5" type="number" value="25"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">発音記号</div><label><span>文字サイズ</span><input id="masterMirror_settingIpaSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterIpaLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIpaTop" max="100" min="0" step="0.1" type="number" value="62.5"/></label><label><span>文字揃え</span>
 <select id="masterIpaAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterIpaAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIpaWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterIpaHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="80"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterIpaAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterIpaWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterIpaHeight" max="70" min="5" step="0.5" type="number" value="10"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseTop" max="100" min="0" step="0.1" type="number" value="75"/></label><label><span>文字揃え</span>
 <select id="masterJapaneseAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
 </select>
-</label><label><span>自動フォント</span><select id="masterJapaneseAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterJapaneseWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterJapaneseHeight" max="70" min="5" step="0.5" type="number" value="15"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="95"/></label><label><span>文字揃え</span>
+</label><label><span>自動フォント</span><select id="masterJapaneseAutoFit"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>枠幅（%）</span><input id="masterJapaneseWidth" max="90" min="12" step="0.5" type="number" value="90"/></label><label><span>枠高さ（%）</span><input id="masterJapaneseHeight" max="70" min="5" step="0.5" type="number" value="15"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">日本語読み</div><label><span>文字サイズ</span><input id="masterMirror_settingJapaneseReadSize" max="2.5" min="0.6" step="0.05" type="number" value="1.5"/></label><label><span>中心X（左から%）</span><input id="masterJapaneseReadLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterJapaneseReadTop" max="100" min="0" step="0.1" type="number" value="90"/></label><label><span>文字揃え</span>
 <select id="masterJapaneseReadAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
@@ -1509,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.4.1";
-const APP_UPDATED="2026-08-19 01:46";
+const APP_VERSION="v3.4.2";
+const APP_UPDATED="2026-08-19 01:54";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -2977,15 +2982,15 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,w
 }
 
 
-const MASTER_DEFAULT_VERSION="2026-08-18-layout-3";
+const MASTER_DEFAULT_VERSION="2026-08-19-layout-4";
 const MASTER_DEFAULT_STATE={
   marginX:3,marginY:3,border:"on",
   qr:{size:100,x:15,y:20},
   id:{size:1,x:50,y:10,align:"center",autoFit:"on",w:35,h:10},
-  english:{size:5,x:50,y:50,align:"center",autoFit:"on",w:90,h:25},
-  ipa:{size:1.5,x:50,y:67.5,align:"center",autoFit:"on",w:90,h:10},
-  japanese:{size:1.5,x:50,y:80,align:"center",autoFit:"on",w:90,h:15},
-  japaneseRead:{size:1.5,x:50,y:95,align:"center",autoFit:"on",w:90,h:15}
+  english:{size:5,x:50,y:45,align:"center",autoFit:"on",w:90,h:25},
+  ipa:{size:1.5,x:50,y:62.5,align:"center",autoFit:"on",w:90,h:10},
+  japanese:{size:1.5,x:50,y:75,align:"center",autoFit:"on",w:90,h:15},
+  japaneseRead:{size:1.5,x:50,y:90,align:"center",autoFit:"on",w:90,h:15}
 };
 
 function readMasterState(){
@@ -3779,6 +3784,7 @@ function applyDynamicPrintLayout(){
 
 const PRINT_OVERRIDE_KEY="printCardOverridesSessionV1";
 let printAdjustEditingId="";
+let printPrecheckItemsCache=[];
 function getPrintOverrides(){try{return JSON.parse(sessionStorage.getItem(PRINT_OVERRIDE_KEY)||"{}")||{};}catch(e){return {};}}
 function savePrintOverrides(v){try{sessionStorage.setItem(PRINT_OVERRIDE_KEY,JSON.stringify(v||{}));}catch(e){}}
 function getPrintOverride(id){return id?(getPrintOverrides()[id]||null):null;}
@@ -3801,12 +3807,12 @@ function checkPrintItem(item){
 function runPrintPrecheck(){
   const panel=$("printPrecheckPanel"),summary=$("printPrecheckSummary"),list=$("printPrecheckList"); if(!panel||!summary||!list)return;
   panel.hidden=false;$("printCardAdjustEditor").hidden=true;list.innerHTML="";
-  const items=getPreviewCardEditableItemsForPpt(); if(!items.length){summary.textContent="先にQRコードを表示してください。";return;}
+  const items=getPreviewCardEditableItemsForPpt(); printPrecheckItemsCache=items; if(!items.length){summary.textContent="先にQRコードを表示してください。";return;}
   let bad=0;items.forEach((item,i)=>{const issues=checkPrintItem(item);if(!issues.length)return;bad++;
     const row=document.createElement("div");row.className="printIssueCard";
     const top=document.createElement("div");top.className="printIssueTop";
     const id=document.createElement("div");id.className="printIssueId";id.textContent=item.record?.id||("カード"+(i+1));
-    const btn=document.createElement("button");btn.type="button";btn.className="secondary";btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";btn.addEventListener("click",()=>openPrintCardAdjustEditor(item));
+    const btn=document.createElement("button");btn.type="button";btn.className="secondary printAdjustOpenBtn";btn.dataset.cardIndex=String(i);btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";
     top.append(id,btn);row.appendChild(top);
     const detail=document.createElement("div");detail.className="printIssueText";detail.textContent=issues.join(" / ");row.appendChild(detail);list.appendChild(row);
   });
@@ -3833,6 +3839,15 @@ function saveCurrentPrintCardAdjust(){
 }
 function resetCurrentPrintCardAdjust(){if(!printAdjustEditingId)return;const all=getPrintOverrides();delete all[printAdjustEditingId];savePrintOverrides(all);$("printCardAdjustEditor").hidden=true;runPrintPrecheck();}
 $("printPrecheckBtn")?.addEventListener("click",runPrintPrecheck);
+$("printPrecheckList")?.addEventListener("click",e=>{
+  const btn=e.target.closest(".printAdjustOpenBtn");
+  if(!btn)return;
+  e.preventDefault();
+  e.stopPropagation();
+  const idx=Number(btn.dataset.cardIndex);
+  const item=printPrecheckItemsCache[idx];
+  if(item)openPrintCardAdjustEditor(item);
+});
 $("closePrintPrecheckBtn")?.addEventListener("click",()=>{$("printPrecheckPanel").hidden=true;});
 $("savePrintCardAdjustBtn")?.addEventListener("click",saveCurrentPrintCardAdjust);
 $("resetPrintCardAdjustBtn")?.addEventListener("click",resetCurrentPrintCardAdjust);
