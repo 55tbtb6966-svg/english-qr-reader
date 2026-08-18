@@ -1166,7 +1166,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.2.8 / 更新 2026-08-18 19:28</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.2.9 / 更新 2026-08-18 19:31</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1487,8 +1487,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.2.8";
-const APP_UPDATED="2026-08-18 19:28";
+const APP_VERSION="v3.2.9";
+const APP_UPDATED="2026-08-18 19:31";
 function updateVersionBadge(csvVersion=""){
   const el=document.getElementById("appVersionBadge");
   if(!el)return;
@@ -3751,6 +3751,12 @@ async function printMasterCards(){
 
   const state=readMasterState();
 
+  // A4 portrait, 8 cards fixed:
+  // printable width = 210 - 16 mm = 194 mm
+  // 2 columns with 3 mm gap => each card = 95.5 mm.
+  // CSS print reference is 96 px/inch.
+  const PRINT_CARD_WIDTH_PX=(95.5/25.4)*96;
+
   selected.forEach(item=>{
     const card=document.createElement("div");
     card.className="printMasterCard directPrintCard";
@@ -3760,7 +3766,6 @@ async function printMasterCards(){
     card.style.overflow="hidden";
     card.style.boxSizing="border-box";
 
-    // Outer/margin-defined card frame
     if(item.border){
       const inner=document.createElement("div");
       inner.className="directPrintInner";
@@ -3777,7 +3782,6 @@ async function printMasterCards(){
       card.appendChild(inner);
     }
 
-    // QR - direct generated image, placed using the exact current preview bounds.
     if(item.record && item.record.id && item.qr){
       const qr=document.createElement("img");
       qr.className="directPrintQr";
@@ -3794,7 +3798,6 @@ async function printMasterCards(){
       card.appendChild(qr);
     }
 
-    // Text - native HTML text, not rasterized.
     item.texts.forEach(t=>{
       const box=document.createElement("div");
       box.className="directPrintText directPrintText-"+t.key;
@@ -3819,38 +3822,20 @@ async function printMasterCards(){
       box.style.boxSizing="border-box";
       box.style.padding="2px 4px";
 
-      // Keep exact visible font ratio from preview.
+      // Use the font-size/card-width ratio measured from the correct preview.
+      // Do NOT measure the hidden print sheet (it reports width 0).
       const ratio=Number(t.fontRatio)||0;
-      box.dataset.fontRatio=String(ratio);
+      const px=Math.max(5,ratio*PRINT_CARD_WIDTH_PX);
+      box.style.fontSize=px+"px";
+
       card.appendChild(box);
     });
 
     sheet.appendChild(card);
   });
 
-  // Scale print-font size from the same preview width ratio.
-  requestAnimationFrame(()=>{
-    sheet.querySelectorAll(".directPrintCard").forEach(card=>{
-      const w=card.getBoundingClientRect().width;
-      card.querySelectorAll(".directPrintText").forEach(box=>{
-        const ratio=Number(box.dataset.fontRatio)||0;
-        if(ratio>0)box.style.fontSize=(ratio*w)+"px";
-      });
-    });
-  });
-
   applyDynamicPrintLayout();
   await new Promise(resolve=>setTimeout(resolve,180));
-
-  // One last font-size pass after print layout dimensions settle.
-  sheet.querySelectorAll(".directPrintCard").forEach(card=>{
-    const w=card.getBoundingClientRect().width;
-    card.querySelectorAll(".directPrintText").forEach(box=>{
-      const ratio=Number(box.dataset.fontRatio)||0;
-      if(ratio>0)box.style.fontSize=(ratio*w)+"px";
-    });
-  });
-
   window.print();
 }
 
