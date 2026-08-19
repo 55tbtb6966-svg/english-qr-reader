@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.1 / 更新 2026-08-19 14:56</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.2 / 更新 2026-08-19 15:01</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.1";
-const APP_UPDATED="2026-08-19 14:56";
+const APP_VERSION="v3.5.2";
+const APP_UPDATED="2026-08-19 15:01";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1788,38 +1788,33 @@ function speakText(text,lang,rate){
 }
 
 
+
+function pauseTagToSpeechText(text,lang,rate){
+  const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
+  if(!raw)return "";
+
+  // Keep the entire script in ONE SpeechSynthesisUtterance.
+  // iPhone Safari can fail when a second utterance is started several seconds later.
+  // {pauseN} is therefore expanded to punctuation that produces an audible pause
+  // without ending the speech session.
+  return raw.replace(/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi,(_,secRaw)=>{
+    const sec=Math.max(0,Math.min(10,Number(secRaw)||0));
+    if(sec<=0)return " ";
+
+    // Approximate one second with a short punctuation cluster.
+    // Scale slightly with speech rate so slower voices do not become excessively long.
+    const r=Math.max(0.5,Math.min(2,Number(rate)||1));
+    const units=Math.max(1,Math.round(sec*3*r));
+    const mark=lang.startsWith("ja")?"、":"…";
+    return " "+Array(units).fill(mark).join(" ")+" ";
+  });
+}
+
 async function speakScript(text,lang,rate,token){
-  const raw=String(text||"").replace(/\r\n?/g,"\n").trim();
-  if(!raw)return;
-
-  // Newlines are treated as ordinary whitespace.
-  // Pause command syntax: {pause3}, {pause2.5}, etc.
-  const normalized=raw.replace(/\n+/g," ");
-  const rePause=/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi;
-
-  let last=0;
-  let m;
-  while((m=rePause.exec(normalized))!==null){
-    if(token!==speakingToken)return;
-
-    const before=normalized.slice(last,m.index).trim();
-    if(before){
-      await speakText(before,lang,rate);
-      if(token!==speakingToken)return;
-    }
-
-    const sec=Math.max(0,Math.min(30,Number(m[1])||0));
-    if(sec>0){
-      await new Promise(r=>setTimeout(r,sec*1000));
-      if(token!==speakingToken)return;
-    }
-    last=rePause.lastIndex;
-  }
-
-  const rest=normalized.slice(last).trim();
-  if(rest && token===speakingToken){
-    await speakText(rest,lang,rate);
-  }
+  if(token!==speakingToken)return;
+  const prepared=pauseTagToSpeechText(text,lang,rate);
+  if(!prepared)return;
+  await speakText(prepared,lang,rate);
 }
 
 async function playRecord(modeOverride=null){
