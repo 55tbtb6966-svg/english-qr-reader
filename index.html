@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.3 / 更新 2026-08-19 15:04</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.4 / 更新 2026-08-20 00:51</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.3";
-const APP_UPDATED="2026-08-19 15:04";
+const APP_VERSION="v3.5.4";
+const APP_UPDATED="2026-08-20 00:51";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1662,7 +1662,9 @@ async function importCsv(replace) {
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
     if(parsed.version) await putMeta("version",parsed.version);
-    setStatus($("importStatus"),parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
+    const enSpeakCount=parsed.records.filter(r=>String(r.englishSpeak||"").trim()).length;
+    const jaSpeakCount=parsed.records.filter(r=>String(r.japaneseSpeak||"").trim()).length;
+    setStatus($("importStatus"),parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。 EnglishSpeak "+enSpeakCount+"件 / JapaneseSpeak "+jaSpeakCount+"件");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
@@ -1790,96 +1792,27 @@ function speakText(text,lang,rate){
 
 
 
-function makeSpeechUtterance(text,lang,rate,volume=1){
-  const u=new SpeechSynthesisUtterance(String(text||""));
-  u.lang=lang;
-  u.rate=rate;
-  u.volume=volume;
-  const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
-  if(v)u.voice=v;
-  return u;
-}
 
-function pauseSpeechText(sec,lang){
-  const s=Math.max(0,Math.min(10,Number(sec)||0));
-  if(s<=0)return "";
-  // A queued punctuation utterance keeps the iPhone speech queue alive.
-  // More marks create a longer pause-like interval.
-  const units=Math.max(2,Math.round(s*5));
-  return lang.startsWith("ja")
-    ? Array(units).fill("、").join(" ")
-    : Array(units).fill("…").join(" ");
-}
+function pauseTagToSingleSpeech(text){
+  const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
+  if(!raw)return "";
 
-function queueSpeechScript(text,lang,rate,token){
-  return new Promise(resolve=>{
-    if(token!==speakingToken){resolve();return;}
-
-    const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
-    if(!raw){resolve();return;}
-
-    const rePause=/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi;
-    const parts=[];
-    let last=0,m;
-
-    while((m=rePause.exec(raw))!==null){
-      const before=raw.slice(last,m.index).trim();
-      if(before)parts.push({type:"speech",text:before});
-      parts.push({type:"pause",sec:Number(m[1])||0});
-      last=rePause.lastIndex;
-    }
-    const rest=raw.slice(last).trim();
-    if(rest)parts.push({type:"speech",text:rest});
-
-    if(!parts.length){resolve();return;}
-
-    const utterances=[];
-    parts.forEach(part=>{
-      if(part.type==="speech"){
-        const softStart=isShortEnglishExpression(part.text,lang)&&getSizeSettings().softWordStart!==false;
-        utterances.push(makeSpeechUtterance(part.text,lang,rate,softStart?0.9:1.0));
-      }else{
-        const ptxt=pauseSpeechText(part.sec,lang);
-        if(ptxt){
-          const pu=makeSpeechUtterance(ptxt,lang,0.55,0.02);
-          utterances.push(pu);
-        }
-      }
-    });
-
-    if(!utterances.length){resolve();return;}
-
-    let settled=false;
-    const finish=()=>{
-      if(settled)return;
-      settled=true;
-      resolve();
-    };
-
-    utterances.forEach((u,i)=>{
-      u.onerror=()=>{};
-      if(i===utterances.length-1){
-        u.onend=finish;
-        u.onerror=finish;
-      }
-    });
-
-    // Important for iPhone Safari:
-    // queue ALL utterances immediately, rather than starting the answer after a timer.
-    utterances.forEach(u=>speechSynthesis.speak(u));
-
-    // Safety fallback in case Safari fails to emit onend.
-    const approxMs=Math.max(
-      5000,
-      parts.reduce((sum,p)=>sum+(p.type==="pause"?Math.min(10,p.sec)*1000:Math.max(900,p.text.length*90)),0)+4000
-    );
-    setTimeout(finish,approxMs);
+  // Keep everything in ONE utterance.
+  // {pauseN} is expanded to comma punctuation. iPhone TTS should continue
+  // to the answer because no second utterance is required.
+  return raw.replace(/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi,(_,secRaw)=>{
+    const sec=Math.max(0,Math.min(10,Number(secRaw)||0));
+    if(sec<=0)return " ";
+    const count=Math.max(1,Math.round(sec*4));
+    return " "+Array(count).fill(",").join(" ")+" ";
   });
 }
 
 async function speakScript(text,lang,rate,token){
   if(token!==speakingToken)return;
-  await queueSpeechScript(text,lang,rate,token);
+  const prepared=pauseTagToSingleSpeech(text);
+  if(!prepared)return;
+  await speakText(prepared,lang,rate);
 }
 
 async function playRecord(modeOverride=null){
@@ -1925,7 +1858,12 @@ async function lookup(id,auto=true){
   $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
   $("manualJapaneseRate").value=String(r.japaneseRate);
-  setStatus($("scanStatus"),id+" を読み取りました。");
+  const hasEnglishSpeak=!!String(r.englishSpeak||"").trim();
+  const pauseMatch=String(r.englishSpeak||"").match(/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/i);
+  const speakInfo=hasEnglishSpeak
+    ? (" / EnglishSpeakあり"+(pauseMatch?(" / pause "+pauseMatch[1]+"秒"):""))
+    : " / EnglishSpeakなし";
+  setStatus($("scanStatus"),id+" を読み取りました。"+speakInfo);
   if(auto)await playRecord();
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
