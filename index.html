@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.4.4 / 更新 2026-08-19 13:33</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.1 / 更新 2026-08-19 14:56</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.4.4";
-const APP_UPDATED="2026-08-19 13:33";
+const APP_VERSION="v3.5.1";
+const APP_UPDATED="2026-08-19 14:56";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1623,6 +1623,8 @@ function csvToRecords(rows) {
   const h=rows[0].map(v=>String(v||"").replace(/^\uFEFF/,"").trim().toLowerCase());
   const idx=names=>h.findIndex(x=>names.includes(x));
   const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iIpa=idx(["ipa","phonetic","発音記号"]), iJa=idx(["japanese","日本語","和訳"]), iJaRead=idx(["japaneseread","japanese_read","日本語読み","読み"]);
+  const iEnSpeak=idx(["englishspeak","english_speak","英語読み上げ","英語読み上げ文"]);
+  const iJaSpeak=idx(["japanesespeak","japanese_speak","日本語読み上げ","日本語読み上げ文"]);
   const iMode=idx(["mode","読み方"]), iER=idx(["englishrate","english_rate","英語速度"]);
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
   const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
@@ -1633,7 +1635,12 @@ function csvToRecords(rows) {
     if(!id||!english) continue;
     const modeRaw=String(iMode>=0?c[iMode]||"both":"both").trim().toLowerCase();
     const mode=["english","japanese","both"].includes(modeRaw)?modeRaw:"both";
-    const rec={id,english,ipa:iIpa>=0?String(c[iIpa]||"").trim():"",japanese:iJa>=0?String(c[iJa]||"").trim():"",japaneseRead:iJaRead>=0?String(c[iJaRead]||"").trim():"",
+    const rec={id,english,
+      englishSpeak:iEnSpeak>=0?String(c[iEnSpeak]||"").trim():"",
+      ipa:iIpa>=0?String(c[iIpa]||"").trim():"",
+      japanese:iJa>=0?String(c[iJa]||"").trim():"",
+      japaneseRead:iJaRead>=0?String(c[iJaRead]||"").trim():"",
+      japaneseSpeak:iJaSpeak>=0?String(c[iJaSpeak]||"").trim():"",
       mode,englishRate:iER>=0?Number(c[iER])||1:1,japaneseRate:iJR>=0?Number(c[iJR])||1:1,
       repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1,
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
@@ -1662,9 +1669,9 @@ async function importCsv(replace) {
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getAllRecords()).sort((a,b)=>a.id.localeCompare(b.id));
-  const lines=["ID,English,IPA,Japanese,JapaneseRead,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment"];
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment"];
   all.forEach(r=>lines.push([
-    r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",r.mode,
+    r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.mode,
     r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||""
   ].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
@@ -1779,6 +1786,42 @@ function speakText(text,lang,rate){
     },softStart?650:350);
   });
 }
+
+
+async function speakScript(text,lang,rate,token){
+  const raw=String(text||"").replace(/\r\n?/g,"\n").trim();
+  if(!raw)return;
+
+  // Newlines are treated as ordinary whitespace.
+  // Pause command syntax: {pause3}, {pause2.5}, etc.
+  const normalized=raw.replace(/\n+/g," ");
+  const rePause=/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi;
+
+  let last=0;
+  let m;
+  while((m=rePause.exec(normalized))!==null){
+    if(token!==speakingToken)return;
+
+    const before=normalized.slice(last,m.index).trim();
+    if(before){
+      await speakText(before,lang,rate);
+      if(token!==speakingToken)return;
+    }
+
+    const sec=Math.max(0,Math.min(30,Number(m[1])||0));
+    if(sec>0){
+      await new Promise(r=>setTimeout(r,sec*1000));
+      if(token!==speakingToken)return;
+    }
+    last=rePause.lastIndex;
+  }
+
+  const rest=normalized.slice(last).trim();
+  if(rest && token===speakingToken){
+    await speakText(rest,lang,rate);
+  }
+}
+
 async function playRecord(modeOverride=null){
   if(!currentRecord)return;
   if(!("speechSynthesis" in window)){
@@ -1786,25 +1829,31 @@ async function playRecord(modeOverride=null){
     return;
   }
   const token=++speakingToken;
-  // 発話中・待機中のときだけcancelする。
-  // 毎回cancelすると、iPhoneで音声出力経路が再初期化され、
-  // 開始時のポップ音が目立つことがある。
   if(speechSynthesis.speaking||speechSynthesis.pending){
     speechSynthesis.cancel();
     await new Promise(r=>setTimeout(r,300));
   }else{
     await new Promise(r=>setTimeout(r,120));
   }
+
   const mode=modeOverride||currentRecord.mode;
+  const englishSpeech=String(currentRecord.englishSpeak||"").trim() || currentRecord.english;
+  const japaneseSpeech=String(currentRecord.japaneseSpeak||"").trim() || currentRecord.japaneseRead || currentRecord.japanese;
+
   for(let i=0;i<currentRecord.repeat;i++){
     if(token!==speakingToken)break;
-    if(mode==="english") await speakText(currentRecord.english,"en-US",currentRecord.englishRate);
-    else if(mode==="japanese") await speakText(currentRecord.japaneseRead||currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
-    else{
-      await speakText(currentRecord.english,"en-US",currentRecord.englishRate);
+
+    if(mode==="english"){
+      await speakScript(englishSpeech,"en-US",currentRecord.englishRate,token);
+    }else if(mode==="japanese"){
+      await speakScript(japaneseSpeech,"ja-JP",currentRecord.japaneseRate,token);
+    }else{
+      await speakScript(englishSpeech,"en-US",currentRecord.englishRate,token);
+      if(token!==speakingToken)break;
       await new Promise(r=>setTimeout(r,(currentRecord.gap||0.5)*1000));
-      await speakText(currentRecord.japaneseRead||currentRecord.japanese,"ja-JP",currentRecord.japaneseRate);
+      await speakScript(japaneseSpeech,"ja-JP",currentRecord.japaneseRate,token);
     }
+
     if(i<currentRecord.repeat-1)await new Promise(r=>setTimeout(r,450));
   }
 }
@@ -2239,7 +2288,7 @@ async function filteredAll(searchId){
   return all
     .filter(r=>{
       if(!q)return true;
-      return [r.id,r.english,r.ipa,r.japanese,r.japaneseRead,r.comment]
+      return [r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,r.comment]
         .some(v=>String(v??"").toLowerCase().includes(q));
     })
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
