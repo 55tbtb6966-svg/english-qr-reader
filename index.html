@@ -167,6 +167,31 @@
       .sizeSettingGrid { grid-template-columns:1fr; }
     }
 
+    .qrPreviewItem{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:7px;
+    }
+    .qrPreviewItem > .qrCard{
+      width:100%;
+      min-width:0;
+    }
+    .qrPreviewSpeakBtn{
+      align-self:center;
+      width:auto;
+      min-height:34px;
+      margin:0;
+      padding:6px 13px;
+      border-radius:999px;
+      font-size:.88rem;
+      line-height:1.15;
+      white-space:nowrap;
+    }
+    @media print{
+      .qrPreviewSpeakBtn{display:none!important;}
+    }
+
   
     :root {
       --qr-card-size:132px;
@@ -1186,7 +1211,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.9 / 更新 2026-08-20 17:18</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.6.0 / 更新 2026-08-20 17:29</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1439,6 +1464,12 @@
 <option>75</option><option>100</option>
 </select>
 </label>
+<label><span>プレビュー発音ボタン</span>
+<select id="settingPreviewSpeakButton">
+<option selected="" value="off">OFF</option>
+<option value="on">ON</option>
+</select>
+</label>
 </div>
 <div id="legacySizeSettingsCompat" style="display:none;"><label><span>QRコードサイズ（px）</span><input id="settingQrSize" max="220" min="80" step="2" type="number" value="132"/></label><label><span>ID文字サイズ（rem）</span><input id="settingIdSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" max="2.5" min="0.7" step="0.05" type="number" value="1.18"/></label><label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>日本語文字サイズ（rem）</span><input id="settingJapaneseSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><label><span>日本語読み文字サイズ（rem）</span><input id="settingJapaneseReadSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><button id="applySizeSettingsBtn" type="button">サイズを適用</button><button class="secondary" id="resetSizeSettingsBtn" type="button">初期値に戻す</button></div><div class="masterPreviewBox">
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
@@ -1514,8 +1545,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.9";
-const APP_UPDATED="2026-08-20 17:18";
+const APP_VERSION="v3.6.0";
+const APP_UPDATED="2026-08-20 17:29";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -2626,6 +2657,50 @@ function normalizePreviewQrToSingleImage(q){
   requestAnimationFrame(convert);
 }
 
+
+function previewSpeakButtonEnabled(){
+  return (localStorage.getItem("qrPreviewSpeakButton")||"off")==="on";
+}
+
+async function playRecordFromPreview(record){
+  if(!record)return;
+  const previous=currentRecord;
+  currentRecord=record;
+  try{
+    await playRecord();
+  }finally{
+    // Do not overwrite a record that may have been selected/scanned while playing.
+    if(currentRecord===record)currentRecord=previous;
+  }
+}
+
+function makePreviewSpeakButton(record){
+  const btn=document.createElement("button");
+  btn.type="button";
+  btn.className="secondary qrPreviewSpeakBtn";
+  btn.textContent="🔊 発音";
+  btn.setAttribute("aria-label",String(record?.english||record?.id||"")+" を再生");
+  btn.addEventListener("click",async e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    btn.disabled=true;
+    try{await playRecordFromPreview(record);}finally{btn.disabled=false;}
+  });
+  return btn;
+}
+
+function loadPreviewSpeakButtonSetting(){
+  const sel=$("settingPreviewSpeakButton");
+  if(!sel)return;
+  sel.value=localStorage.getItem("qrPreviewSpeakButton")||"off";
+  sel.addEventListener("change",()=>{
+    localStorage.setItem("qrPreviewSpeakButton",sel.value==="on"?"on":"off");
+    if(qrPageSource.length){
+      renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+    }
+  });
+}
+
 function renderQr(records){
   const sheet=$("qrSheet");sheet.innerHTML="";
   const showEnglish=$("qrShowEnglish")?.checked!==false;
@@ -2635,7 +2710,10 @@ function renderQr(records){
   const showId=$("qrShowId")?.checked!==false;
 
   records.forEach(r=>{
+    const item=document.createElement("div");
+    item.className="qrPreviewItem";
     const card=document.createElement("div");card.className="qrCard";
+    item.appendChild(card);
     const q=document.createElement("div");q.className="qrCodeWrap";card.appendChild(q);
     const qrSize=getSizeSettings().qrSize;
     new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
@@ -2671,7 +2749,10 @@ function renderQr(records){
       jr.textContent=r.japaneseRead||r.japanese;
       card.appendChild(jr);
     }
-    sheet.appendChild(card);
+    if(previewSpeakButtonEnabled()){
+      item.appendChild(makePreviewSpeakButton(r));
+    }
+    sheet.appendChild(item);
   });
 
   const labels=[];
@@ -4435,6 +4516,8 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
   requestAnimationFrame(()=>applyMasterLayoutToAllRendered());
 });
 
+
+loadPreviewSpeakButtonSetting();
 
 (function ensureDefaultQrFieldToggles(){
   try{
