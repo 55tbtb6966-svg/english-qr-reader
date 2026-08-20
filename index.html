@@ -1211,7 +1211,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.6.0 / 更新 2026-08-20 17:29</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.6.1 / 更新 2026-08-20 21:54</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1326,7 +1326,13 @@
 <div class="sizeSettingGrid">
 <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
 <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
+<label><span>可変Pause秒（{pause}）</span>
+<input id="settingVariablePauseSeconds" type="number" min="0" max="30" step="0.5" value="3"/>
+</label>
 </div>
+<p class="hint" style="margin-top:10px;">
+  <code>{pause2}</code> は固定2秒、<code>{pause5}</code> は固定5秒、<code>{pause}</code> は上の「可変Pause秒」を使います。
+</p>
 <p class="hint">選択した設定と音声はこのiPhoneのSafariに保存されます。</p>
 </div>
 </details>
@@ -1545,8 +1551,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.6.0";
-const APP_UPDATED="2026-08-20 17:29";
+const APP_VERSION="v3.6.1";
+const APP_UPDATED="2026-08-20 21:54";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1872,13 +1878,38 @@ async function keepAudioAliveForPause(ms,token){
   }
 }
 
+
+const VARIABLE_PAUSE_KEY="variablePauseSecondsV1";
+
+function getVariablePauseSeconds(){
+  const raw=localStorage.getItem(VARIABLE_PAUSE_KEY);
+  const n=Number(raw===null?"3":raw);
+  return Number.isFinite(n)?Math.max(0,Math.min(30,n)):3;
+}
+
+function loadVariablePauseSetting(){
+  const el=$("settingVariablePauseSeconds");
+  if(!el)return;
+  el.value=String(getVariablePauseSeconds());
+  const save=()=>{
+    const n=Number(el.value);
+    const v=Number.isFinite(n)?Math.max(0,Math.min(30,n)):3;
+    el.value=String(v);
+    localStorage.setItem(VARIABLE_PAUSE_KEY,String(v));
+  };
+  el.addEventListener("change",save);
+  el.addEventListener("blur",save);
+}
+
 async function speakScript(text,lang,rate,token){
   if(token!==speakingToken)return;
 
   const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
   if(!raw)return;
 
-  const rePause=/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi;
+  // {pause2} = fixed 2 sec, {pause5} = fixed 5 sec,
+  // {pause} = user-adjustable pause from 読み上げ設定.
+  const rePause=/\{pause(?:\s*([0-9]+(?:\.[0-9]+)?))?\}/gi;
   let last=0;
   let m;
 
@@ -1891,7 +1922,9 @@ async function speakScript(text,lang,rate,token){
       if(token!==speakingToken)return;
     }
 
-    const sec=Math.max(0,Math.min(30,Number(m[1])||0));
+    const sec=(m[1]!==undefined && m[1]!=="")
+      ? Math.max(0,Math.min(30,Number(m[1])||0))
+      : getVariablePauseSeconds();
     if(sec>0){
       await keepAudioAliveForPause(sec*1000,token);
       if(token!==speakingToken)return;
@@ -4517,6 +4550,7 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
 });
 
 
+loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
 
 (function ensureDefaultQrFieldToggles(){
