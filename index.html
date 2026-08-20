@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.4 / 更新 2026-08-20 00:51</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.5 / 更新 2026-08-20 14:36</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.4";
-const APP_UPDATED="2026-08-20 00:51";
+const APP_VERSION="v3.5.5";
+const APP_UPDATED="2026-08-20 14:36";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1662,9 +1662,7 @@ async function importCsv(replace) {
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
     if(parsed.version) await putMeta("version",parsed.version);
-    const enSpeakCount=parsed.records.filter(r=>String(r.englishSpeak||"").trim()).length;
-    const jaSpeakCount=parsed.records.filter(r=>String(r.japaneseSpeak||"").trim()).length;
-    setStatus($("importStatus"),parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。 EnglishSpeak "+enSpeakCount+"件 / JapaneseSpeak "+jaSpeakCount+"件");
+    setStatus($("importStatus"),parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
@@ -1793,26 +1791,87 @@ function speakText(text,lang,rate){
 
 
 
-function pauseTagToSingleSpeech(text){
-  const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
-  if(!raw)return "";
 
-  // Keep everything in ONE utterance.
-  // {pauseN} is expanded to comma punctuation. iPhone TTS should continue
-  // to the answer because no second utterance is required.
-  return raw.replace(/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi,(_,secRaw)=>{
-    const sec=Math.max(0,Math.min(10,Number(secRaw)||0));
-    if(sec<=0)return " ";
-    const count=Math.max(1,Math.round(sec*4));
-    return " "+Array(count).fill(",").join(" ")+" ";
-  });
+let pauseAudioContext=null;
+
+async function keepAudioAliveForPause(ms,token){
+  if(ms<=0)return;
+
+  let ctx=null,osc=null,gain=null,resumeTimer=null;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){
+      if(!pauseAudioContext || pauseAudioContext.state==="closed"){
+        pauseAudioContext=new AC();
+      }
+      ctx=pauseAudioContext;
+      if(ctx.state==="suspended"){
+        try{await ctx.resume();}catch(e){}
+      }
+
+      // Keep the iPhone audio session active during the silent pause.
+      osc=ctx.createOscillator();
+      gain=ctx.createGain();
+      osc.frequency.value=120;
+      gain.gain.value=0.000001;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+    }
+
+    resumeTimer=setInterval(()=>{
+      try{window.speechSynthesis?.resume();}catch(e){}
+      try{
+        if(ctx && ctx.state==="suspended")ctx.resume();
+      }catch(e){}
+    },250);
+
+    const started=performance.now();
+    while(performance.now()-started<ms){
+      if(token!==speakingToken)break;
+      await new Promise(r=>setTimeout(r,100));
+    }
+  }finally{
+    if(resumeTimer)clearInterval(resumeTimer);
+    try{if(osc)osc.stop();}catch(e){}
+    try{if(osc)osc.disconnect();}catch(e){}
+    try{if(gain)gain.disconnect();}catch(e){}
+  }
 }
 
 async function speakScript(text,lang,rate,token){
   if(token!==speakingToken)return;
-  const prepared=pauseTagToSingleSpeech(text);
-  if(!prepared)return;
-  await speakText(prepared,lang,rate);
+
+  const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
+  if(!raw)return;
+
+  const rePause=/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/gi;
+  let last=0;
+  let m;
+
+  while((m=rePause.exec(raw))!==null){
+    if(token!==speakingToken)return;
+
+    const before=raw.slice(last,m.index).trim();
+    if(before){
+      await speakText(before,lang,rate);
+      if(token!==speakingToken)return;
+    }
+
+    const sec=Math.max(0,Math.min(30,Number(m[1])||0));
+    if(sec>0){
+      await keepAudioAliveForPause(sec*1000,token);
+      if(token!==speakingToken)return;
+      try{window.speechSynthesis?.resume();}catch(e){}
+    }
+
+    last=rePause.lastIndex;
+  }
+
+  const rest=raw.slice(last).trim();
+  if(rest && token===speakingToken){
+    await speakText(rest,lang,rate);
+  }
 }
 
 async function playRecord(modeOverride=null){
@@ -1858,12 +1917,7 @@ async function lookup(id,auto=true){
   $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
   $("manualJapaneseRate").value=String(r.japaneseRate);
-  const hasEnglishSpeak=!!String(r.englishSpeak||"").trim();
-  const pauseMatch=String(r.englishSpeak||"").match(/\{pause\s*([0-9]+(?:\.[0-9]+)?)\}/i);
-  const speakInfo=hasEnglishSpeak
-    ? (" / EnglishSpeakあり"+(pauseMatch?(" / pause "+pauseMatch[1]+"秒"):""))
-    : " / EnglishSpeakなし";
-  setStatus($("scanStatus"),id+" を読み取りました。"+speakInfo);
+  setStatus($("scanStatus"),id+" を読み取りました。");
   if(auto)await playRecord();
 }
 async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
