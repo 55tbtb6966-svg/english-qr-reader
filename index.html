@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.6 / 更新 2026-08-20 16:40</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.7 / 更新 2026-08-20 16:53</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.6";
-const APP_UPDATED="2026-08-20 16:40";
+const APP_VERSION="v3.5.7";
+const APP_UPDATED="2026-08-20 16:53";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3375,13 +3375,19 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
     qr.style.overflow="hidden";
     qr.style.lineHeight="0";
 
-    // Keep the QR bitmap/canvas intact. Scale it only visually inside the wrapper.
+    // QRCode.js may create both a canvas and a fallback img.
+    // On iPhone Safari, forcing BOTH to display:block can show the QR twice.
+    // Keep exactly one renderer visible. Prefer canvas when available.
+    const qrCanvas=qr.querySelector("canvas");
+    const qrImg=qr.querySelector("img");
+    const qrPrimary=qrCanvas||qrImg;
+
     qr.querySelectorAll("canvas,img").forEach(el=>{
       el.style.width="100%";
       el.style.height="100%";
       el.style.maxWidth="100%";
       el.style.maxHeight="100%";
-      el.style.display="block";
+      el.style.display=(el===qrPrimary)?"block":"none";
       el.style.margin="0";
       el.style.padding="0";
       el.style.objectFit="contain";
