@@ -1211,7 +1211,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.6.1 / 更新 2026-08-20 21:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.6.2 / 更新 2026-08-20 23:00</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1327,7 +1327,7 @@
 <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
 <label><span>日本語音声</span><select id="japaneseVoiceSelect"></select></label>
 <label><span>可変Pause秒（{pause}）</span>
-<input id="settingVariablePauseSeconds" type="number" min="0" max="30" step="0.5" value="3"/>
+<input id="settingVariablePauseSeconds" type="number" min="0" max="30" step="0.5" value="2"/>
 </label>
 </div>
 <p class="hint" style="margin-top:10px;">
@@ -1551,8 +1551,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.6.1";
-const APP_UPDATED="2026-08-20 21:54";
+const APP_VERSION="v3.6.2";
+const APP_UPDATED="2026-08-20 23:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1883,8 +1883,8 @@ const VARIABLE_PAUSE_KEY="variablePauseSecondsV1";
 
 function getVariablePauseSeconds(){
   const raw=localStorage.getItem(VARIABLE_PAUSE_KEY);
-  const n=Number(raw===null?"3":raw);
-  return Number.isFinite(n)?Math.max(0,Math.min(30,n)):3;
+  const n=Number(raw===null?"2":raw);
+  return Number.isFinite(n)?Math.max(0,Math.min(30,n)):2;
 }
 
 function loadVariablePauseSetting(){
@@ -1893,7 +1893,7 @@ function loadVariablePauseSetting(){
   el.value=String(getVariablePauseSeconds());
   const save=()=>{
     const n=Number(el.value);
-    const v=Number.isFinite(n)?Math.max(0,Math.min(30,n)):3;
+    const v=Number.isFinite(n)?Math.max(0,Math.min(30,n)):2;
     el.value=String(v);
     localStorage.setItem(VARIABLE_PAUSE_KEY,String(v));
   };
