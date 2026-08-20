@@ -1186,7 +1186,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.5.5 / 更新 2026-08-20 14:36</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.5.6 / 更新 2026-08-20 16:40</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1514,8 +1514,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.5.5";
-const APP_UPDATED="2026-08-20 14:36";
+const APP_VERSION="v3.5.6";
+const APP_UPDATED="2026-08-20 16:40";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4085,6 +4085,54 @@ $("savePrintCardAdjustBtn")?.addEventListener("click",saveCurrentPrintCardAdjust
 $("resetPrintCardAdjustBtn")?.addEventListener("click",resetCurrentPrintCardAdjust);
 $("cancelPrintCardAdjustBtn")?.addEventListener("click",()=>{$("printCardAdjustEditor").hidden=true;});
 
+
+function isIPhoneSafariForPrint(){
+  const ua=navigator.userAgent||"";
+  const isIPhone=/iPhone/i.test(ua);
+  const isWebKit=/WebKit/i.test(ua);
+  const isOtherIOSBrowser=/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  return isIPhone && isWebKit && !isOtherIOSBrowser;
+}
+
+function iPhonePrintFontScale(){
+  if(!isIPhoneSafariForPrint())return 1;
+
+  // On iPhone Safari the two-column A4 print sheet is laid out in the
+  // on-screen CSS viewport before the print transform is applied.
+  // Scale text from the desktop A4 reference width to the actual
+  // two-column card width available in the iPhone viewport.
+  const viewport=Math.max(320,Math.min(window.innerWidth||390,500));
+  const horizontalPagePadding=32; // approximate page-side breathing room in CSS px
+  const columnGap=12;
+  const cardCssWidth=Math.max(120,(viewport-horizontalPagePadding-columnGap)/2);
+  const desktopReference=(95.5/25.4)*96;
+  return Math.max(0.42,Math.min(1,cardCssWidth/desktopReference));
+}
+
+
+function fitIPhonePrintTextBoxes(){
+  if(!isIPhoneSafariForPrint())return;
+  document.querySelectorAll('#printQrSheet .directPrintText[data-iphone-print-autofit="1"]').forEach(box=>{
+    let size=parseFloat(box.style.fontSize)||0;
+    if(!size)return;
+
+    // If the sheet is measurable, reduce only overflowing boxes.
+    // If it is hidden before print, the viewport-based scale above is retained.
+    if(box.clientWidth>0 && box.clientHeight>0){
+      let guard=0;
+      while(
+        guard<24 &&
+        size>5 &&
+        (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1)
+      ){
+        size*=0.94;
+        box.style.fontSize=size+"px";
+        guard++;
+      }
+    }
+  });
+}
+
 async function printMasterCards(){
   const items = getPreviewCardEditableItemsForPpt();
   if(!items.length){
@@ -4185,8 +4233,14 @@ async function printMasterCards(){
       // Use the font-size/card-width ratio measured from the correct preview.
       // Do NOT measure the hidden print sheet (it reports width 0).
       const ratio=Number(t.fontRatio)||0;
-      const px=Math.max(5,ratio*PRINT_CARD_WIDTH_PX);
+      const iphoneScale=iPhonePrintFontScale();
+      const px=Math.max(5,ratio*PRINT_CARD_WIDTH_PX*iphoneScale);
       box.style.fontSize=px+"px";
+
+      // Mark only iPhone print text for a final safety shrink.
+      if(iphoneScale<1){
+        box.dataset.iphonePrintAutofit="1";
+      }
 
       card.appendChild(box);
     });
@@ -4196,6 +4250,7 @@ async function printMasterCards(){
 
   applyDynamicPrintLayout();
   await new Promise(resolve=>setTimeout(resolve,180));
+  fitIPhonePrintTextBoxes();
 
   const oldTitle=document.title;
   document.title=outputBaseFileName();
