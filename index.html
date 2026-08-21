@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.2.6 / 更新 2026-08-22 06:03</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.2.7 / 更新 2026-08-22 06:37</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.2.6";
-const APP_UPDATED="2026-08-22 06:03";
+const APP_VERSION="v4.2.7";
+const APP_UPDATED="2026-08-22 06:37";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3677,6 +3677,15 @@ async function speakText(text,lang,rate){
   if(!text)return;
 
   const tokenAtStart=speakingToken;
+  const afterSound=speechAfterSoundEffect;
+  speechAfterSoundEffect=false;
+
+  if(afterSound){
+    try{window.speechSynthesis?.cancel();}catch(e){}
+    await new Promise(r=>setTimeout(r,180));
+    try{window.speechSynthesis?.resume();}catch(e){}
+  }
+
   await maybeWarmupSpeechEngine(tokenAtStart,lang);
   if(tokenAtStart!==speakingToken)return;
 
@@ -4020,6 +4029,13 @@ async function playHtmlEffectSound(name,token){
       setTimeout(done,4500);
     });
 
+    // iPhone Safari may keep the media audio route active even after "ended".
+    // Fully release the HTMLAudio element before handing off to speechSynthesis.
+    try{a.pause();}catch(e){}
+    try{a.currentTime=0;}catch(e){}
+    try{a.load();}catch(e){}
+    await new Promise(r=>setTimeout(r,180));
+
     return token===speakingToken;
   }catch(e){
     console.warn("HTML Audio effect playback failed:",name,e);
@@ -4092,21 +4108,30 @@ async function playEffectSound(name,token){
 
 
 async function releaseAudioForSpeech(effectName=""){
-  // correct/wrong are now ordinary HTML Audio, not Web Audio.
-  // For the remaining synthesized effects, suspend the AudioContext first.
-  if(effectName!=="correct" && effectName!=="wrong"){
+  const isHtmlEffect=effectName==="correct" || effectName==="wrong";
+
+  if(!isHtmlEffect){
     try{
       if(pauseAudioContext && pauseAudioContext.state==="running"){
         await pauseAudioContext.suspend();
       }
     }catch(e){}
+  }else{
+    // Make sure neither persistent MP3 element still owns the media route.
+    for(const a of Object.values(htmlEffectAudio)){
+      try{a.pause();}catch(e){}
+      try{a.currentTime=0;}catch(e){}
+    }
   }
 
+  // Reset the Safari TTS queue after media playback.
   try{window.speechSynthesis?.cancel();}catch(e){}
-  await new Promise(r=>setTimeout(r,180));
+  await new Promise(r=>setTimeout(r,isHtmlEffect?320:180));
   try{window.speechSynthesis?.resume();}catch(e){}
-  await new Promise(r=>setTimeout(r,260));
+  await new Promise(r=>setTimeout(r,isHtmlEffect?380:260));
 }
+
+let speechAfterSoundEffect=false;
 
 async function playRecord(modeOverride=null){
   if(!currentRecord)return;
@@ -4147,6 +4172,7 @@ async function playRecord(modeOverride=null){
         // handing playback to speechSynthesis.
         await releaseAudioForSpeech(String(currentRecord.sound||"").trim().toLowerCase());
         if(token!==speakingToken)break;
+        speechAfterSoundEffect=true;
       }
     }
 
