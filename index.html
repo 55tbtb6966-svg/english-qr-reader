@@ -2083,6 +2083,122 @@ body.flashFullscreenBody{
     grid-template-columns:1fr;
   }
 }
+
+.flashActionAccepted{
+  animation:flashAcceptedBlink .42s ease-out 1 !important;
+}
+@keyframes flashAcceptedBlink{
+  0%{outline:0 solid transparent; box-shadow:none;}
+  25%{outline:3px solid #111827; outline-offset:2px; box-shadow:0 0 0 4px rgba(17,24,39,.12);}
+  60%{outline:1px solid #111827; outline-offset:3px; box-shadow:0 0 0 2px rgba(17,24,39,.06);}
+  100%{outline:0 solid transparent; box-shadow:none;}
+}
+
+/* v3.9.1 iPhone shuffle label + stable expanded flash mode */
+@media(max-width:700px){
+  .flashShuffleToggle{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    text-align:center !important;
+    white-space:normal !important;
+    line-height:1.05 !important;
+    height:44px !important;
+    min-height:44px !important;
+    width:62px !important;
+    min-width:62px !important;
+    padding:3px 3px !important;
+  }
+
+  /* On iPhone/mobile, "fullscreen" means expand the card vertically in-place.
+     Keep control/button placement unchanged for stability. */
+  .flashStageCard.flashFullscreenMode{
+    position:relative !important;
+    inset:auto !important;
+    left:auto !important;
+    top:auto !important;
+    right:auto !important;
+    bottom:auto !important;
+    width:100% !important;
+    height:auto !important;
+    max-width:none !important;
+    max-height:none !important;
+    transform:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    overflow:visible !important;
+    z-index:auto !important;
+    background:transparent !important;
+    display:block !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashCard{
+    width:100% !important;
+    height:min(68dvh,760px) !important;
+    min-height:520px !important;
+    max-height:none !important;
+    margin:0 !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    position:relative !important;
+    z-index:auto !important;
+    display:flex !important;
+    flex-wrap:wrap !important;
+    align-items:center !important;
+    justify-content:flex-start !important;
+    gap:8px !important;
+    width:auto !important;
+    margin-top:10px !important;
+    overflow:visible !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashControlBtn{
+    height:44px !important;
+    min-height:44px !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashSpeakControl{
+    min-width:140px !important;
+    width:auto !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashShuffleToggle{
+    width:62px !important;
+    min-width:62px !important;
+    font-size:.70rem !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashFullscreenControl{
+    width:auto !important;
+    min-width:72px !important;
+  }
+}
+
+@media(max-width:430px){
+  .flashStageCard.flashFullscreenMode .flashCard{
+    height:64dvh !important;
+    min-height:470px !important;
+  }
+}
+
+.flashShuffleToggle span{
+  display:inline;
+}
+.flashShuffleToggle .flashShuffleState{
+  margin-left:4px;
+}
+@media(max-width:700px){
+  .flashShuffleToggle{
+    flex-direction:column !important;
+  }
+  .flashShuffleToggle span{
+    display:block !important;
+  }
+  .flashShuffleToggle .flashShuffleState{
+    margin-left:0 !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2098,7 +2214,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.9 / 更新 2026-08-21 19:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.1 / 更新 2026-08-21 20:00</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2581,8 +2697,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.9";
-const APP_UPDATED="2026-08-21 19:46";
+const APP_VERSION="v3.9.1";
+const APP_UPDATED="2026-08-21 20:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4006,6 +4122,7 @@ function toggleCurrentFlashCheck(){
   else flashCheckedIds.add(id);
   saveFlashCheckedIds();
   updateFlashCheckUi();
+  flashAccepted($("flashCheckBtn"));
 }
 function flashSideMemoText(r,side){
   const cfg=getFlashSideConfig(side);
@@ -4013,6 +4130,15 @@ function flashSideMemoText(r,side){
   if(cfg.rows!==2)return top;
   let bottom=flashFieldValue(r,cfg.bottom)||"（データなし）";
   return `${top} ／ ${bottom}`;
+}
+
+
+function flashAccepted(btn){
+  if(!btn)return;
+  btn.classList.remove("flashActionAccepted");
+  void btn.offsetWidth;
+  btn.classList.add("flashActionAccepted");
+  setTimeout(()=>btn.classList.remove("flashActionAccepted"),500);
 }
 
 function normalizeFlashCheckedIdsFromText(text){
@@ -4071,6 +4197,7 @@ async function importCheckedIdsFromTextarea(){
     return;
   }
   await applyCheckedIds(ids,"貼り付けID");
+  flashAccepted($("flashLoadIdsBtn"));
 }
 
 async function importCheckedIdsFromCsv(){
@@ -4092,6 +4219,7 @@ async function importCheckedIdsFromCsv(){
     return;
   }
   await applyCheckedIds(ids,file.name);
+  flashAccepted($("flashLoadCheckedCsvBtn"));
 }
 
 async function buildFlashcardsFromCheckedIds(){
@@ -4116,6 +4244,7 @@ async function buildFlashcardsFromCheckedIds(){
       ? `${flashRecords.length}件でフラッシュカードを作成しました。`
       : "現在のCSVに一致するチェックIDがありません。";
   }
+  if(flashRecords.length)flashAccepted($("flashBuildFromChecksBtn"));
 }
 
 async function getCheckedFlashRows(){
@@ -4384,6 +4513,7 @@ async function buildFlashcardsFromSearch(){
   flashBackShown=false;
   renderFlashcard();
   if($("flashStatus"))$("flashStatus").textContent=`検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
 }
 
 async function buildFlashcardsFromSelected(){
@@ -4401,6 +4531,7 @@ async function buildFlashcardsFromSelected(){
       ? `選択項目から ${flashRecords.length}件　CSV ${activeCsvProfile}`
       : "データ管理で項目をチェックしてください。";
   }
+  if(flashRecords.length)flashAccepted($("flashFromSelectedBtn"));
 }
 
 async function loadFlashcards(){
@@ -4433,7 +4564,9 @@ function shuffleFlashRecordOrder(){
 function updateFlashShuffleUi(){
   const btn=$("flashShuffleToggleBtn");
   if(!btn)return;
-  btn.textContent=flashShuffleEnabled?"シャッフル ON":"シャッフル OFF";
+  btn.innerHTML=flashShuffleEnabled
+    ? '<span>シャッフル</span><span class="flashShuffleState">ON</span>'
+    : '<span>シャッフル</span><span class="flashShuffleState">OFF</span>';
   btn.classList.toggle("flashShuffleOn",flashShuffleEnabled);
   btn.setAttribute("aria-pressed",String(flashShuffleEnabled));
 }
@@ -4460,9 +4593,16 @@ let flashFullscreenActive=false;
 function updateFlashFullscreenUi(){
   const stage=$("flashCard")?.closest(".flashStageCard");
   if(stage)stage.classList.toggle("flashFullscreenMode",flashFullscreenActive);
-  document.body.classList.toggle("flashFullscreenBody",flashFullscreenActive);
+
+  // Desktop can lock body for native/full-page fullscreen.
+  // Mobile keeps the control layout in place and only enlarges the card vertically.
+  document.body.classList.toggle(
+    "flashFullscreenBody",
+    flashFullscreenActive && !isTouchMobileFlash()
+  );
+
   const btn=$("flashFullscreenBtn");
-  if(btn)btn.textContent=flashFullscreenActive?"全画面終了":"全画面";
+  if(btn)btn.textContent=flashFullscreenActive?"拡大終了":"全画面";
   fitFlashcardFonts();
 }
 
@@ -4597,11 +4737,11 @@ window.addEventListener("orientationchange",()=>{
 $("flashLoadIdsBtn")?.addEventListener("click",importCheckedIdsFromTextarea);
 $("flashLoadCheckedCsvBtn")?.addEventListener("click",importCheckedIdsFromCsv);
 $("flashBuildFromChecksBtn")?.addEventListener("click",buildFlashcardsFromCheckedIds);
-$("flashBuildMemoBtn")?.addEventListener("click",buildFlashCheckedMemo);
-$("flashCopyIdsBtn")?.addEventListener("click",copyFlashCheckedIds);
-$("flashCopyMemoBtn")?.addEventListener("click",copyFlashCheckedMemo);
-$("flashSaveMemoBtn")?.addEventListener("click",saveFlashCheckedMemoFile);
-$("flashClearChecksBtn")?.addEventListener("click",clearFlashChecks);
+$("flashBuildMemoBtn")?.addEventListener("click",async()=>{await buildFlashCheckedMemo();flashAccepted($("flashBuildMemoBtn"));});
+$("flashCopyIdsBtn")?.addEventListener("click",async()=>{await copyFlashCheckedIds();flashAccepted($("flashCopyIdsBtn"));});
+$("flashCopyMemoBtn")?.addEventListener("click",async()=>{await copyFlashCheckedMemo();flashAccepted($("flashCopyMemoBtn"));});
+$("flashSaveMemoBtn")?.addEventListener("click",async()=>{await saveFlashCheckedMemoFile();flashAccepted($("flashSaveMemoBtn"));});
+$("flashClearChecksBtn")?.addEventListener("click",async()=>{await clearFlashChecks();flashAccepted($("flashClearChecksBtn"));});
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
