@@ -1839,6 +1839,179 @@ body.flashFullscreenBody{
     font-size:.72rem !important;
   }
 }
+
+/* v3.8.8 checked-card table */
+.flashCheckedTableWrap{
+  margin-top:10px;
+  width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  border:1px solid #d9dee7;
+  border-radius:10px;
+  background:#fff;
+}
+.flashCheckedTable{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:auto;
+  font-size:.9rem;
+}
+.flashCheckedTable th,
+.flashCheckedTable td{
+  border-right:1px solid #e5e7eb;
+  border-bottom:1px solid #e5e7eb;
+  padding:8px 10px;
+  text-align:left;
+  vertical-align:top;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.flashCheckedTable th:last-child,
+.flashCheckedTable td:last-child{
+  border-right:0;
+}
+.flashCheckedTable tr:last-child td{
+  border-bottom:0;
+}
+.flashCheckedTable th{
+  background:#f3f4f6;
+  color:#111827;
+  font-weight:700;
+  white-space:nowrap;
+}
+.flashCheckedTable th:first-child,
+.flashCheckedTable td:first-child{
+  width:120px;
+  min-width:100px;
+  white-space:nowrap;
+}
+.flashCheckedEmpty{
+  color:#667085;
+  text-align:center !important;
+}
+
+/* Speak stays large; shuffle same height as peers but intentionally narrow. */
+.flashSpeakControl{
+  min-width:150px !important;
+  min-height:44px !important;
+}
+.flashShuffleToggle{
+  min-width:0 !important;
+  width:66px !important;
+  height:44px !important;
+  min-height:44px !important;
+  padding:4px 4px !important;
+  font-size:.68rem !important;
+  line-height:1.05 !important;
+  white-space:normal !important;
+}
+.flashCheckControl,
+.flashFullscreenControl{
+  min-height:44px !important;
+}
+
+/* Fullscreen controls: one stable row on iPhone/desktop, no wrapping over card. */
+.flashStageCard.flashFullscreenMode .flashControlBar{
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:5px !important;
+  width:100% !important;
+  overflow:visible !important;
+}
+.flashStageCard.flashFullscreenMode .flashButtonPair{
+  flex:0 0 auto !important;
+}
+.flashStageCard.flashFullscreenMode .flashControlBtn{
+  flex:0 0 auto !important;
+  height:42px !important;
+  min-height:42px !important;
+}
+.flashStageCard.flashFullscreenMode #flashPrevBtn,
+.flashStageCard.flashFullscreenMode #flashNextBtn{
+  min-width:54px !important;
+  width:54px !important;
+  padding-left:5px !important;
+  padding-right:5px !important;
+}
+.flashStageCard.flashFullscreenMode #flashFrontBtn,
+.flashStageCard.flashFullscreenMode #flashBackBtn{
+  min-width:44px !important;
+  width:44px !important;
+  padding-left:4px !important;
+  padding-right:4px !important;
+}
+.flashStageCard.flashFullscreenMode .flashSpeakControl{
+  min-width:118px !important;
+  width:118px !important;
+  font-size:.95rem !important;
+  padding-left:8px !important;
+  padding-right:8px !important;
+}
+.flashStageCard.flashFullscreenMode .flashCheckControl{
+  min-width:78px !important;
+  width:78px !important;
+  padding-left:5px !important;
+  padding-right:5px !important;
+  font-size:.82rem !important;
+}
+.flashStageCard.flashFullscreenMode .flashShuffleToggle{
+  min-width:54px !important;
+  width:54px !important;
+  height:42px !important;
+  min-height:42px !important;
+  font-size:.62rem !important;
+  padding:2px 2px !important;
+}
+.flashStageCard.flashFullscreenMode .flashFullscreenControl{
+  min-width:68px !important;
+  width:68px !important;
+  padding-left:5px !important;
+  padding-right:5px !important;
+  font-size:.8rem !important;
+}
+
+@media(max-width:700px){
+  .flashSpeakControl{
+    min-width:140px !important;
+    min-height:44px !important;
+  }
+  .flashShuffleToggle{
+    width:62px !important;
+    min-width:0 !important;
+    height:44px !important;
+    min-height:44px !important;
+  }
+}
+
+/* Keep the previously working iPhone rotated fullscreen geometry. */
+@media (max-width:700px) and (orientation:portrait){
+  .flashStageCard.flashFullscreenMode{
+    position:fixed !important;
+    width:100dvh !important;
+    height:100vw !important;
+    max-width:none !important;
+    max-height:none !important;
+    left:50% !important;
+    top:50% !important;
+    right:auto !important;
+    bottom:auto !important;
+    transform:translate(-50%,-50%) rotate(90deg) !important;
+    transform-origin:center center !important;
+    overflow:hidden !important;
+  }
+}
+@media (max-width:700px) and (orientation:landscape){
+  .flashStageCard.flashFullscreenMode{
+    position:fixed !important;
+    inset:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    transform:none !important;
+    overflow:hidden !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1854,7 +2027,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.7 / 更新 2026-08-21 19:29</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.8 / 更新 2026-08-21 19:38</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2281,17 +2454,30 @@ body.flashFullscreenBody{
     </div>
   </div>
 
+  
   <details class="advancedSettings flashCheckedPanel" id="flashCheckedPanel">
     <summary>チェックした項目を確認 <span id="flashCheckedCount">(0件)</span></summary>
     <div class="advancedSettingsBody">
-      <p class="hint" style="margin-top:0;">現在のCSVでチェックしたカードを、ID・表・裏の内容で1枚のメモにまとめます。</p>
+      <p class="hint" style="margin-top:0;">
+        ID・表・裏を表形式で表示します。ID列だけコピーすると、Excelへ縦1列で貼り付けできます。
+      </p>
       <div class="row flashCheckedActions">
-        <button type="button" id="flashBuildMemoBtn" class="secondary">メモを更新</button>
-        <button type="button" id="flashCopyMemoBtn" class="secondary">メモをコピー</button>
-        <button type="button" id="flashSaveMemoBtn" class="secondary">メモを保存</button>
+        <button type="button" id="flashBuildMemoBtn" class="secondary">一覧を更新</button>
+        <button type="button" id="flashCopyIdsBtn" class="secondary">ID列をコピー</button>
+        <button type="button" id="flashCopyMemoBtn" class="secondary">表全体をコピー</button>
+        <button type="button" id="flashSaveMemoBtn" class="secondary">CSV保存</button>
         <button type="button" id="flashClearChecksBtn" class="secondary">チェックを全解除</button>
       </div>
-      <textarea id="flashCheckedMemo" class="flashCheckedMemo" readonly placeholder="チェックしたカードがここに表示されます。"></textarea>
+      <div class="flashCheckedTableWrap">
+        <table class="flashCheckedTable" id="flashCheckedTable">
+          <thead>
+            <tr><th>ID</th><th>表</th><th>裏</th></tr>
+          </thead>
+          <tbody id="flashCheckedTableBody">
+            <tr><td colspan="3" class="flashCheckedEmpty">チェックしたカードはありません。</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </details>
 </section>
@@ -2303,8 +2489,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.7";
-const APP_UPDATED="2026-08-21 19:29";
+const APP_VERSION="v3.8.8";
+const APP_UPDATED="2026-08-21 19:38";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -2420,7 +2606,7 @@ async function switchDataProfile(profile){
 
   updateProfileUi();
   loadFlashCheckedIds();
-  if($("flashCheckedMemo"))$("flashCheckedMemo").value="";
+  await buildFlashCheckedMemo();
   await refreshSummary();
   await refreshCurrentCsvFileName();
   updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
@@ -3736,41 +3922,97 @@ function flashSideMemoText(r,side){
   let bottom=flashFieldValue(r,cfg.bottom)||"（データなし）";
   return `${top} ／ ${bottom}`;
 }
-async function buildFlashCheckedMemo(){
-  const memo=$("flashCheckedMemo");
-  if(!memo)return "";
+async function getCheckedFlashRows(){
   const all=await getActiveProfileRecords();
-  const checked=all.filter(r=>flashCheckedIds.has(String(r.id)))
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
-  const text=checked.map(r=>{
-    return `${r.id}\n表：${flashSideMemoText(r,"front")}\n裏：${flashSideMemoText(r,"back")}`;
-  }).join("\n\n");
-  memo.value=text;
-  updateFlashCheckedCount();
-  return text;
+  return all.filter(r=>flashCheckedIds.has(String(r.id)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)))
+    .map(r=>({
+      id:String(r.id||""),
+      front:flashSideMemoText(r,"front"),
+      back:flashSideMemoText(r,"back")
+    }));
 }
-async function copyFlashCheckedMemo(){
-  const text=await buildFlashCheckedMemo();
+
+async function buildFlashCheckedMemo(){
+  const tbody=$("flashCheckedTableBody");
+  if(!tbody)return [];
+  const rows=await getCheckedFlashRows();
+  tbody.innerHTML="";
+  if(!rows.length){
+    const tr=document.createElement("tr");
+    const td=document.createElement("td");
+    td.colSpan=3;
+    td.className="flashCheckedEmpty";
+    td.textContent="チェックしたカードはありません。";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }else{
+    for(const row of rows){
+      const tr=document.createElement("tr");
+      for(const value of [row.id,row.front,row.back]){
+        const td=document.createElement("td");
+        td.textContent=value;
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+  updateFlashCheckedCount();
+  return rows;
+}
+
+async function copyTextCompat(text){
   if(!text)return;
   try{
     await navigator.clipboard.writeText(text);
-  }catch(e){
-    const ta=$("flashCheckedMemo");
-    ta?.focus();ta?.select();
-    try{document.execCommand("copy");}catch(_){}
-  }
+    return;
+  }catch(e){}
+  const ta=document.createElement("textarea");
+  ta.value=text;
+  ta.style.position="fixed";
+  ta.style.opacity="0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try{document.execCommand("copy");}catch(_){}
+  ta.remove();
 }
+
+async function copyFlashCheckedIds(){
+  const rows=await getCheckedFlashRows();
+  await copyTextCompat(rows.map(r=>r.id).join("\n"));
+}
+
+async function copyFlashCheckedMemo(){
+  const rows=await getCheckedFlashRows();
+  const tsv=[
+    ["ID","表","裏"].join("\t"),
+    ...rows.map(r=>[r.id,r.front,r.back].join("\t"))
+  ].join("\n");
+  await copyTextCompat(tsv);
+  await buildFlashCheckedMemo();
+}
+
+function csvEscape(v){
+  const s=String(v??"");
+  return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+}
+
 async function saveFlashCheckedMemoFile(){
-  const text=await buildFlashCheckedMemo();
-  if(!text)return;
+  const rows=await getCheckedFlashRows();
+  if(!rows.length)return;
+  const csv="\uFEFF"+[
+    ["ID","表","裏"].map(csvEscape).join(","),
+    ...rows.map(r=>[r.id,r.front,r.back].map(csvEscape).join(","))
+  ].join("\r\n");
   const d=new Date();
   const p=n=>String(n).padStart(2,"0");
   const stamp=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
-  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
   a.href=url;
-  a.download=`flash_checked_${activeCsvProfile}_${stamp}.txt`;
+  a.download=`flash_checked_${activeCsvProfile}_${stamp}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -3780,7 +4022,7 @@ async function clearFlashChecks(){
   flashCheckedIds.clear();
   saveFlashCheckedIds();
   updateFlashCheckUi();
-  if($("flashCheckedMemo"))$("flashCheckedMemo").value="";
+  await buildFlashCheckedMemo();
 }
 
 function flashFieldValue(r,key){
@@ -4168,6 +4410,7 @@ window.addEventListener("orientationchange",()=>{
 });
 
 $("flashBuildMemoBtn")?.addEventListener("click",buildFlashCheckedMemo);
+$("flashCopyIdsBtn")?.addEventListener("click",copyFlashCheckedIds);
 $("flashCopyMemoBtn")?.addEventListener("click",copyFlashCheckedMemo);
 $("flashSaveMemoBtn")?.addEventListener("click",saveFlashCheckedMemoFile);
 $("flashClearChecksBtn")?.addEventListener("click",clearFlashChecks);
