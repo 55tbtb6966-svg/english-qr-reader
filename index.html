@@ -2728,6 +2728,9 @@ button.flashActionAccepted{
   box-shadow:none !important;
 }
 </style>
+
+<link rel="preload" href="sounds/correct.mp3" as="audio" type="audio/mpeg"/>
+<link rel="preload" href="sounds/wrong.mp3" as="audio" type="audio/mpeg"/>
 </head>
 <body>
 <main>
@@ -2742,7 +2745,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.4 / 更新 2026-08-22 04:53</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.5 / 更新 2026-08-22 05:05</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3229,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.4";
-const APP_UPDATED="2026-08-22 04:53";
+const APP_VERSION="v4.1.5";
+const APP_UPDATED="2026-08-22 05:05";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3882,16 +3885,74 @@ function noiseBurst(ctx,start,duration,volume=0.10){
 }
 
 
+
+const bundledEffectAudio={
+  correct:new Audio("sounds/correct.mp3"),
+  wrong:new Audio("sounds/wrong.mp3")
+};
+Object.values(bundledEffectAudio).forEach(a=>{
+  a.preload="auto";
+  try{a.load();}catch(e){}
+});
+
+async function playBundledEffectSound(name,token){
+  const original=bundledEffectAudio[name];
+  if(!original || token!==speakingToken)return false;
+
+  try{
+    // Clone so rapid repeated correct/wrong sounds can restart cleanly.
+    const a=original.cloneNode(true);
+    a.preload="auto";
+    a.volume=1;
+    a.currentTime=0;
+
+    await new Promise((resolve,reject)=>{
+      let settled=false;
+      const done=()=>{
+        if(settled)return;
+        settled=true;
+        resolve();
+      };
+      const fail=()=>{
+        if(settled)return;
+        settled=true;
+        reject(new Error("audio playback failed"));
+      };
+      a.addEventListener("ended",done,{once:true});
+      a.addEventListener("error",fail,{once:true});
+
+      const p=a.play();
+      if(p && typeof p.then==="function"){
+        p.catch(fail);
+      }
+
+      // Safety timeout in case WebKit misses ended/error.
+      setTimeout(done,4000);
+    });
+
+    return token===speakingToken;
+  }catch(e){
+    return false;
+  }
+}
+
 async function playEffectSound(name,token){
   const ctx=await ensureSoundAudioReady();
   if(!ctx || token!==speakingToken)return;
 
   const sound=String(name||"").trim().toLowerCase();
+
+  // Correct / wrong use the bundled MP3 files supplied by the user.
+  // If playback is blocked or fails, fall back to the synthesized version below.
+  if(sound==="correct" || sound==="wrong"){
+    const played=await playBundledEffectSound(sound,token);
+    if(played || token!==speakingToken)return;
+  }
+
   const t=ctx.currentTime+0.035;
   let duration=0.7;
 
-  // Softer, more musical UI sounds for a learning app.
-  // Avoid harsh square/saw buzzer tones except for a very light warning texture.
+  // Synthesized fallback for correct/wrong; all other effects remain Web Audio.
   if(sound==="correct"){
     // Familiar Japanese quiz-style "pin-pon": two clear, rounded rising notes.
     // Use sine/triangle layers so it stays recognizable without becoming harsh.
