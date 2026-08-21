@@ -2729,12 +2729,16 @@ button.flashActionAccepted{
 }
 
 .selectedSourceStatus{
-  min-height:0;
+  min-height:1.35em;
   margin:6px 0 0;
   font-size:.88rem;
   line-height:1.35;
+  visibility:visible;
 }
-.selectedSourceStatus:empty{display:none;}
+.selectedSourceStatus:empty{
+  display:block;
+  visibility:hidden;
+}
 </style>
 </head>
 <body>
@@ -2750,7 +2754,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.2.9 / 更新 2026-08-22 07:34</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.3.0 / 更新 2026-08-22 07:41</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3236,8 +3240,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.2.9";
-const APP_UPDATED="2026-08-22 07:34";
+const APP_VERSION="v4.3.0";
+const APP_UPDATED="2026-08-22 07:41";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3276,6 +3280,7 @@ let selectedIds = new Set();
 let dataSelectionRevision=0;
 let qrSelectionRevision=-1;
 let flashSelectionRevision=-1;
+let resetSelectionOnNextDataOpen=false;
 
 function dataSelectionStorageKey(profile=activeCsvProfile){
   return "dataManagementSelectedIdsV1_"+profile;
@@ -3293,6 +3298,17 @@ function loadDataManagementSelection(){
     selectedIds=new Set();
   }
 }
+
+function resetDataManagementSelectionForNextRound(){
+  selectedIds.clear();
+  saveDataManagementSelection();
+  dataSelectionRevision++;
+  qrSelectionRevision=-1;
+  flashSelectionRevision=-1;
+  if($("qrSelectedStatus"))$("qrSelectedStatus").textContent="";
+  if($("flashSelectedStatus"))$("flashSelectedStatus").textContent="";
+}
+
 function latestDataManagementSelection(){
   syncVisibleDataSelection();
   saveDataManagementSelection();
@@ -3359,6 +3375,7 @@ async function switchDataProfile(profile){
     try{window.speechSynthesis?.cancel();}catch(e){}
     currentRecord=null;
     selectedIds.clear();
+    resetSelectionOnNextDataOpen=false;
     dataSelectionRevision++;
     qrSelectionRevision=-1;
     flashSelectionRevision=-1;
@@ -5474,6 +5491,7 @@ async function buildFlashcardsFromSelected(){
   if($("flashStatus")){
     $("flashStatus").textContent=`最新のチェック ${flashRecords.length}件から作成しました　CSV ${activeCsvProfile}`;
   }
+  resetSelectionOnNextDataOpen=true;
 }
 
 async function loadFlashcards(){
@@ -5646,8 +5664,13 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async
   b.classList.add("active");
   $(b.dataset.target).classList.add("active");
 
-  // Rebuild the data table when returning so its checkmarks always mirror selectedIds.
   if(b.dataset.target==="dataPanel"){
+    // After QR/flash was created from a selection, returning here starts
+    // a fresh selection round. Existing QR/flash output itself is untouched.
+    if(resetSelectionOnNextDataOpen){
+      resetDataManagementSelectionForNextRound();
+      resetSelectionOnNextDataOpen=false;
+    }
     await renderPage();
   }
 }));
@@ -5833,6 +5856,7 @@ $("makeSelectedQrBtn").addEventListener("click",async()=>{
   if($("printQrSheet"))$("printQrSheet").innerHTML="";
   renderQr(qrPageSource.slice(0,qrPageSize));
   setStatus($("qrStatus"),`最新のチェック ${qrPageSource.length}件からQRを作成しました。`);
+  resetSelectionOnNextDataOpen=true;
 });
 
 async function buildQrFromSearch(){
