@@ -2718,6 +2718,15 @@ button.flashActionAccepted{
     filter:brightness(.96);
   }
 }
+
+/* v4.1.0: accepted-action black outline removed.
+   Keep only the tactile press effect. */
+.flashActionAccepted,
+.qrActionAccepted{
+  animation:none !important;
+  outline:none !important;
+  box-shadow:none !important;
+}
 </style>
 </head>
 <body>
@@ -2733,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.0.9 / 更新 2026-08-21 23:43</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.0 / 更新 2026-08-21 23:49</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3221,8 +3230,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.0.9";
-const APP_UPDATED="2026-08-21 23:43";
+const APP_VERSION="v4.1.0";
+const APP_UPDATED="2026-08-21 23:49";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4697,11 +4706,7 @@ function flashSideMemoText(r,side){
 
 
 function flashAccepted(btn){
-  if(!btn)return;
-  btn.classList.remove("flashActionAccepted");
-  void btn.offsetWidth;
-  btn.classList.add("flashActionAccepted");
-  setTimeout(()=>btn.classList.remove("flashActionAccepted"),500);
+  return;
 }
 
 function normalizeFlashCheckedIdsFromText(text){
@@ -5421,9 +5426,7 @@ $("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;rende
 $("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
 
 function flashQrActionAccepted(btn){
-  // Use exactly the same acknowledgement used by
-  // "検索結果からフラッシュカードを作る".
-  flashAccepted(btn);
+  return;
 }
 
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
