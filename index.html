@@ -1484,6 +1484,91 @@
   font-size:.9rem;
   overflow-wrap:anywhere;
 }
+
+.flashQrLikeBar{
+  margin-top:12px;
+  background:#fff !important;
+}
+.flashQrLikeBar #flashFromSelectedBtn{
+  background:#e5e7eb !important;
+  color:#111827 !important;
+  border:1px solid #c9ced6 !important;
+}
+.flashSearchCard{
+  margin-top:10px;
+}
+
+/* Keep all controls in the same columns so 下段 never shifts left. */
+.flashSideSettings{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+.flashSideSettingBox{
+  display:grid !important;
+  grid-template-columns:72px minmax(0,1fr) minmax(0,1fr) !important;
+  gap:8px !important;
+  align-items:end !important;
+}
+.flashSideSettingBox .flashSettingTitle{
+  grid-column:1;
+  grid-row:1;
+  align-self:center;
+}
+.flashSideSettingBox > label:nth-of-type(1){
+  grid-column:2;
+  grid-row:1;
+}
+.flashSideSettingBox > label:nth-of-type(2){
+  grid-column:3;
+  grid-row:1;
+}
+.flashSideSettingBox > label:nth-of-type(3){
+  grid-column:3;
+  grid-row:2;
+}
+.flashSecondField.flashHidden{
+  visibility:hidden !important;
+  display:block !important;
+  pointer-events:none;
+}
+@media(max-width:700px){
+  .flashSideSettings{
+    grid-template-columns:1fr;
+  }
+  .flashSideSettingBox{
+    grid-template-columns:64px minmax(0,1fr) minmax(0,1fr) !important;
+  }
+  .flashSideSettingBox .flashSettingTitle{
+    grid-column:1;
+    grid-row:1;
+  }
+  .flashSideSettingBox > label:nth-of-type(1){
+    grid-column:2;
+    grid-row:1;
+  }
+  .flashSideSettingBox > label:nth-of-type(2){
+    grid-column:3;
+    grid-row:1;
+  }
+  .flashSideSettingBox > label:nth-of-type(3){
+    grid-column:3;
+    grid-row:2;
+  }
+}
+
+.flashAdvancedSettings{
+  margin-top:12px;
+}
+.flashPane{
+  white-space:normal !important;
+  overflow-wrap:break-word !important;
+  word-break:normal !important;
+}
+.flashPane.flashAutoFitActive{
+  overflow:hidden !important;
+}
 </style>
 </head>
 <body>
@@ -1499,7 +1584,7 @@
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.0 / 更新 2026-08-21 18:36</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.2 / 更新 2026-08-21 18:50</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -1842,17 +1927,41 @@
     <h2>フラッシュカード</h2>
     <p class="hint">現在選択中のCSVセットだけを使います。既存の読み取り・QR作成とは独立した機能です。</p>
     
-    <div class="flashSourceBox">
-      <div class="flashSourceTitle">フラッシュカードを作る</div>
-      <div class="flashSourceActions">
-        <button type="button" id="flashFromSelectedBtn" class="secondary">選択した項目から作る</button>
-        <button type="button" id="flashFromSearchBtn" class="secondary">検索結果から作る</button>
-      </div>
-      <p class="hint" style="margin:6px 0 0;">「選択した項目」はデータ管理でチェックした項目を使います。</p>
+    
+<div class="qrCompactBar flashQrLikeBar">
+  <div style="width:100%;">
+    <div style="font-weight:700; font-size:.95rem; margin-bottom:3px;">データ管理でチェックした項目から作る</div>
+    <div style="font-size:.84rem; color:#667085; margin-bottom:6px;">データ管理の一覧でチェックした項目だけをフラッシュカードにします。</div>
+    <div class="row" style="width:100%; margin-top:6px;">
+      <button type="button" id="flashFromSelectedBtn" class="secondary">選択した項目から作る</button>
     </div>
-<div class="flashSearchRow">
-      <label><span>検索</span><input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など"></label>
+  </div>
+</div>
+
+<div class="qrMethodCard qrSearchCard flashSearchCard">
+  <h3>検索結果から作る</h3>
+  <p>ID・英語・発音記号・日本語・読み・Comment・解説などで検索します。</p>
+  <label>
+    <span>検索（検索結果から作る用）</span>
+    <input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など">
+  </label>
+  <div class="row" style="margin-top:10px;">
+    <button type="button" id="flashFromSearchBtn" class="secondary">検索結果から作る</button>
+  </div>
+</div>
+
+    <details class="advancedSettings flashAdvancedSettings">
+  <summary>詳細設定（表示段数・項目・自動フォント）</summary>
+  <div class="advancedSettingsBody">
+    <div class="qrOptionRow" style="margin-bottom:12px;">
+      <label class="qrCheckLabel">
+        <input id="flashAutoFont" type="checkbox" checked>
+        <span>自動フォント調整</span>
+      </label>
     </div>
+    <p class="hint" style="margin:0 0 10px;">
+      長い文章は折り返し、枠に収まらない場合だけ自動で文字を小さくします。
+    </p>
     <div class="flashSideSettings">
       <div class="flashSideSettingBox">
         <div class="flashSettingTitle">表</div>
@@ -1862,13 +1971,15 @@
       </div>
       <div class="flashSideSettingBox">
         <div class="flashSettingTitle">裏</div>
-        <label><span>表示</span><select id="flashBackRows"><option value="1">1段</option><option value="2" selected>2段</option></select></label>
+        <label><span>表示</span><select id="flashBackRows"><option value="1" selected>1段</option><option value="2">2段</option></select></label>
         <label><span id="flashBackTopLabel">表示項目</span><select id="flashBackTopField"><option value="english">英語</option><option value="japanese" selected>日本語</option><option value="japaneseRead">日本語読み</option><option value="ipa">発音記号</option><option value="comment">Comment</option><option value="explanation">解説</option><option value="id">ID</option></select></label>
         <label class="flashSecondField" id="flashBackBottomWrap"><span>下段</span><select id="flashBackBottomField"><option value="english">英語</option><option value="japanese">日本語</option><option value="japaneseRead">日本語読み</option><option value="ipa">発音記号</option><option value="comment">Comment</option><option value="explanation" selected>解説</option><option value="id">ID</option></select></label>
       </div>
     </div>
-    <div class="row">
-      <button type="button" id="flashReloadBtn" class="secondary">現在の条件で再読込</button>
+  </div>
+</details>
+<div class="row">
+  <button type="button" id="flashReloadBtn" class="secondary">現在の条件で再読込</button>
       <button type="button" id="flashShuffleBtn" class="secondary">シャッフル</button>
     </div>
     <p class="hint" id="flashStatus">カードを読み込んでください。</p>
@@ -1898,8 +2009,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.0";
-const APP_UPDATED="2026-08-21 18:36";
+const APP_VERSION="v3.8.2";
+const APP_UPDATED="2026-08-21 18:50";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3310,24 +3421,72 @@ function saveFlashLayout(){
     frontRows:$("flashFrontRows")?.value||"1",
     frontTop:$("flashFrontTopField")?.value||"english",
     frontBottom:$("flashFrontBottomField")?.value||"explanation",
-    backRows:$("flashBackRows")?.value||"2",
+    backRows:$("flashBackRows")?.value||"1",
     backTop:$("flashBackTopField")?.value||"japanese",
-    backBottom:$("flashBackBottomField")?.value||"explanation"
+    backBottom:$("flashBackBottomField")?.value||"explanation",
+    autoFont:$("flashAutoFont")?.checked!==false
   };
   localStorage.setItem(FLASH_LAYOUT_KEY,JSON.stringify(data));
 }
 
 function loadFlashLayout(){
-  try{
-    const s=JSON.parse(localStorage.getItem(FLASH_LAYOUT_KEY)||"{}");
-    if(s.frontRows)$("flashFrontRows").value=s.frontRows;
-    if(s.frontTop)$("flashFrontTopField").value=s.frontTop;
-    if(s.frontBottom)$("flashFrontBottomField").value=s.frontBottom;
-    if(s.backRows)$("flashBackRows").value=s.backRows;
-    if(s.backTop)$("flashBackTopField").value=s.backTop;
-    if(s.backBottom)$("flashBackBottomField").value=s.backBottom;
-  }catch(e){}
+  const defaults={
+    frontRows:"1",
+    frontTop:"english",
+    frontBottom:"explanation",
+    backRows:"1",
+    backTop:"japanese",
+    backBottom:"explanation",
+    autoFont:true
+  };
+  let s={};
+  try{s=JSON.parse(localStorage.getItem(FLASH_LAYOUT_KEY)||"{}")||{};}catch(e){s={};}
+  const cfg={...defaults,...s};
+  $("flashFrontRows").value=cfg.frontRows;
+  $("flashFrontTopField").value=cfg.frontTop;
+  $("flashFrontBottomField").value=cfg.frontBottom;
+  $("flashBackRows").value=cfg.backRows;
+  $("flashBackTopField").value=cfg.backTop;
+  $("flashBackBottomField").value=cfg.backBottom;
+  if($("flashAutoFont"))$("flashAutoFont").checked=cfg.autoFont!==false;
   updateFlashLayoutControls();
+}
+
+
+function flashAutoFontEnabled(){
+  return $("flashAutoFont")?.checked!==false;
+}
+
+function resetFlashPaneFont(pane){
+  if(!pane)return;
+  pane.style.fontSize="";
+  pane.classList.toggle("flashAutoFitActive",flashAutoFontEnabled());
+}
+
+function fitFlashPaneFont(pane){
+  if(!pane)return;
+  resetFlashPaneFont(pane);
+  if(!flashAutoFontEnabled() || pane.hidden)return;
+
+  // Start from computed CSS size and shrink only if the pane overflows.
+  const computed=parseFloat(getComputedStyle(pane).fontSize)||32;
+  let size=computed;
+  const minSize=14;
+  const fits=()=>pane.scrollHeight<=pane.clientHeight+1 && pane.scrollWidth<=pane.clientWidth+1;
+
+  // Let the browser finish wrapping before measuring.
+  if(fits())return;
+  while(size>minSize && !fits()){
+    size=Math.max(minSize,size-1);
+    pane.style.fontSize=size+"px";
+  }
+}
+
+function fitFlashcardFonts(){
+  requestAnimationFrame(()=>{
+    fitFlashPaneFont($("flashTop"));
+    fitFlashPaneFont($("flashBottom"));
+  });
 }
 
 function renderFlashcard(){
@@ -3338,6 +3497,7 @@ function renderFlashcard(){
     if($("flashMain"))$("flashMain").classList.add("flashOneRow");
     if($("flashId"))$("flashId").textContent="";
     if($("flashStatus"))$("flashStatus").textContent="0件";
+    resetFlashPaneFont($("flashTop"));resetFlashPaneFont($("flashBottom"));
     return;
   }
 
@@ -3357,6 +3517,7 @@ function renderFlashcard(){
   $("flashId").textContent=r.id;
   $("flashSideLabel").textContent=flashBackShown?"裏":"表";
   $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  fitFlashcardFonts();
 }
 
 function flashMatchesSearch(r,q){
@@ -3443,7 +3604,7 @@ $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
 $("flashCard")?.addEventListener("click",flipFlashcard);
 $("flashCard")?.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}});
 $("flashSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")buildFlashcardsFromSearch();});
-["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField"].forEach(id=>{
+["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField","flashAutoFont"].forEach(id=>{
   $(id)?.addEventListener("change",()=>{
     updateFlashLayoutControls();
     saveFlashLayout();
