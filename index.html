@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.2.3 / 更新 2026-08-22 05:40</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.2.4 / 更新 2026-08-22 05:44</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.2.3";
-const APP_UPDATED="2026-08-22 05:40";
+const APP_VERSION="v4.2.4";
+const APP_UPDATED="2026-08-22 05:44";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3677,9 +3677,6 @@ async function speakText(text,lang,rate){
   if(!text)return;
 
   const tokenAtStart=speakingToken;
-  const afterEffect=speechImmediatelyAfterEffect;
-  speechImmediatelyAfterEffect=false;
-
   try{window.speechSynthesis?.resume();}catch(e){}
   await maybeWarmupSpeechEngine(tokenAtStart,lang);
   if(tokenAtStart!==speakingToken)return;
@@ -3700,26 +3697,17 @@ async function speakText(text,lang,rate){
         lastSpeechActivityAt=Date.now();
         speechWarmupStale=false;
       };
-      let speechFinished=false;
-      const finishSpeech=()=>{
-        if(speechFinished)return;
-        speechFinished=true;
+      u.onend=()=>{
+        lastSpeechActivityAt=Date.now();
+        speechWarmupStale=false;
+        resolve();
+      };
+      u.onerror=()=>{
         lastSpeechActivityAt=Date.now();
         resolve();
       };
-      u.onend=()=>{
-        speechWarmupStale=false;
-        finishSpeech();
-      };
-      u.onerror=finishSpeech;
       speechSynthesis.speak(u);
-      setTimeout(()=>{
-        if(!speechFinished){
-          try{speechSynthesis.cancel();}catch(e){}
-          finishSpeech();
-        }
-      },12000);
-    },afterEffect?200:350);
+    },350);
   });
 }
 
@@ -4060,8 +4048,6 @@ async function playEffectSound(name,token){
 
 
 
-let speechImmediatelyAfterEffect=false;
-
 async function releaseWebAudioForSpeech(){
   try{
     if(pauseAudioContext && pauseAudioContext.state==="running"){
@@ -4111,7 +4097,6 @@ async function playRecord(modeOverride=null){
         // handing playback to speechSynthesis.
         await releaseWebAudioForSpeech();
         if(token!==speakingToken)break;
-        speechImmediatelyAfterEffect=true;
       }
     }
 
