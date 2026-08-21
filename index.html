@@ -2199,6 +2199,48 @@ body.flashFullscreenBody{
     margin-left:0 !important;
   }
 }
+
+/* v3.9.2: keep check button label inside the button */
+.flashCheckControl{
+  min-width:104px !important;
+  width:auto !important;
+  max-width:112px !important;
+  padding-left:8px !important;
+  padding-right:8px !important;
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:clip !important;
+  font-size:.82rem !important;
+  line-height:1 !important;
+}
+.flashCheckControl.flashCheckedOn{
+  font-size:.78rem !important;
+}
+@media(max-width:700px){
+  .flashCheckControl{
+    min-width:98px !important;
+    max-width:104px !important;
+    font-size:.78rem !important;
+    padding-left:6px !important;
+    padding-right:6px !important;
+  }
+  .flashCheckControl.flashCheckedOn{
+    font-size:.72rem !important;
+  }
+
+  /* Expanded mode keeps the same safe width; do not squeeze it narrower. */
+  .flashStageCard.flashFullscreenMode .flashCheckControl{
+    min-width:98px !important;
+    width:98px !important;
+    max-width:98px !important;
+    font-size:.76rem !important;
+    padding-left:5px !important;
+    padding-right:5px !important;
+  }
+  .flashStageCard.flashFullscreenMode .flashCheckControl.flashCheckedOn{
+    font-size:.70rem !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2214,7 +2256,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.1 / 更新 2026-08-21 20:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.2 / 更新 2026-08-21 20:07</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2614,7 +2656,7 @@ body.flashFullscreenBody{
     <p class="hint" id="flashStatus">カードを読み込んでください。</p>
   </div>
   <div class="card flashStageCard">
-    <div class="flashCard" id="flashCard" role="button" tabindex="0" aria-label="タップして表裏を切り替え">
+    <div class="flashCard" id="flashCard" role="button" tabindex="0" aria-label="左で前、中央で表裏、右で次">
       <div class="flashSmall" id="flashId"></div>
       <div class="flashMain" id="flashMain">
         <div class="flashPane flashPaneTop" id="flashTop">フラッシュカード</div>
@@ -2637,7 +2679,7 @@ body.flashFullscreenBody{
       <button type="button" id="flashSpeakBtn" class="secondary flashControlBtn flashSpeakControl">🔊 発音</button>
       <button type="button" id="flashCheckBtn" class="secondary flashControlBtn flashCheckControl" aria-pressed="false">✓ チェック</button>
       <button type="button" id="flashShuffleToggleBtn" class="secondary flashControlBtn flashShuffleToggle" aria-pressed="false">シャッフル OFF</button>
-      <button type="button" id="flashFullscreenBtn" class="secondary flashControlBtn flashFullscreenControl">全画面</button>
+      <button type="button" id="flashFullscreenBtn" class="secondary flashControlBtn flashFullscreenControl">拡大</button>
     </div>
   </div>
 
@@ -2697,8 +2739,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.1";
-const APP_UPDATED="2026-08-21 20:00";
+const APP_VERSION="v3.9.2";
+const APP_UPDATED="2026-08-21 20:07";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4110,7 +4152,7 @@ function updateFlashCheckUi(){
   const checked=!!(r && flashCheckedIds.has(String(r.id)));
   btn.classList.toggle("flashCheckedOn",checked);
   btn.setAttribute("aria-pressed",String(checked));
-  btn.textContent=checked?"✓ チェック済":"✓ チェック";
+  btn.textContent=checked?"✓ 済":"✓ チェック";
   btn.disabled=!r;
 }
 function toggleCurrentFlashCheck(){
@@ -4602,7 +4644,7 @@ function updateFlashFullscreenUi(){
   );
 
   const btn=$("flashFullscreenBtn");
-  if(btn)btn.textContent=flashFullscreenActive?"拡大終了":"全画面";
+  if(btn)btn.textContent=flashFullscreenActive?"拡大終了":"拡大";
   fitFlashcardFonts();
 }
 
