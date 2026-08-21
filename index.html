@@ -342,8 +342,7 @@
       #printBtn,
       #pptBtn,
             #pptSaveControls,
-      #makeSelectedQrBtn,
-      #makeRangeQrBtn {
+      #makeSelectedQrBtn {
         display:none !important;
       }
 
@@ -518,22 +517,6 @@
       margin-bottom:3px;
     }
 
-    #qrStart{
-      width:120px;
-      min-width:120px;
-    }
-
-    /* Hide number spinners for the start-position input */
-    #qrStart::-webkit-outer-spin-button,
-    #qrStart::-webkit-inner-spin-button{
-      -webkit-appearance:none;
-      margin:0;
-    }
-    #qrStart{
-      -moz-appearance:textfield;
-      appearance:textfield;
-    }
-
     @media(max-width:520px){
       #qrPanel .qrInlineCompact{
         gap:6px;
@@ -553,7 +536,6 @@
     }
 
 
-    #makeRangeQrBtn,
     #makeSelectedQrBtn{
       width:100% !important;
       display:block !important;
@@ -566,10 +548,6 @@
     }
 
     #qrPanel .qrInlineCompact label{
-      flex:1 1 100%;
-    }
-
-    #qrPanel .qrInlineCompact #makeRangeQrBtn{
       flex:1 1 100%;
     }
 
@@ -2695,7 +2673,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.0.4 / 更新 2026-08-21 21:27</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.0.7 / 更新 2026-08-21 21:53</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2932,16 +2910,10 @@ body.flashFullscreenBody{
 </div>
 <div class="qrMethodCard qrSearchCard">
 <h3>検索結果から作る</h3>
-<p>ID・英語・日本語・日本語読み・Commentで検索し、結果をID順に表示します。</p>
+<p>ID・英語・日本語・日本語読み・Commentなどを、スペース区切りのAND検索で絞り込み、結果をID順に表示します。</p>
+<p class="hint">データ管理でチェックした項目がある場合は、その項目の中から検索します。チェックがない場合は、全項目から検索します。</p>
 <label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/></label>
 <div class="row" style="margin-top:10px;"><button class="secondary" id="makeSearchQrBtn">検索結果から作る</button></div>
-</div>
-<div style="font-weight:700; font-size:.95rem; margin:10px 2px 5px;">開始位置を指定</div>
-<div class="qrMethodCard compactCard">
-<div class="qrInlineCompact">
-<label><span>開始指定位置（チェック項目、検索結果の通し番号）</span><input id="qrStart" inputmode="numeric" min="1" pattern="[0-9]*" type="text" value="1"/></label>
-<button class="secondary" id="makeRangeQrBtn">指定位置から作る</button>
-</div>
 </div>
 <div class="grid2" style="margin-top:10px;">
 <div style="grid-column:1 / -1;">
@@ -3059,7 +3031,8 @@ body.flashFullscreenBody{
 
 <div class="qrMethodCard qrSearchCard flashSearchCard">
   <h3>検索結果から作る</h3>
-  <p>ID・英語・発音記号・日本語・読み・Comment・解説などで検索します。</p>
+  <p>ID・英語・発音記号・日本語・読み・Comment・解説などを、スペース区切りのAND検索で絞り込みます。</p>
+  <p class="hint">データ管理でチェックした項目がある場合は、その項目の中から検索します。チェックがない場合は、全項目から検索します。</p>
   <label>
     <span>検索（検索結果から作る用）</span>
     <input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など">
@@ -3185,8 +3158,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.0.4";
-const APP_UPDATED="2026-08-21 21:27";
+const APP_VERSION="v4.0.7";
+const APP_UPDATED="2026-08-21 21:53";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5001,25 +4974,42 @@ function renderFlashcard(){
   fitFlashcardFonts();
 }
 
-function flashMatchesSearch(r,q){
-  if(!q)return true;
-  return [
+function flashMatchesSearch(r,terms){
+  if(!terms.length)return true;
+  const searchable=[
     r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
     r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
-  ].some(v=>String(v??"").toLowerCase().includes(q));
+  ].map(v=>String(v??"").toLowerCase()).join(" ");
+  return terms.every(term=>searchable.includes(term));
 }
 
 async function buildFlashcardsFromSearch(){
   flashSourceMode="search";
-  const q=String($("flashSearch")?.value||"").trim().toLowerCase();
-  flashRecords=(await getActiveProfileRecords())
-    .filter(r=>flashMatchesSearch(r,q))
+  const terms=String($("flashSearch")?.value||"")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  let source=await getActiveProfileRecords();
+
+  if(selectedIds.size){
+    source=source.filter(r=>selectedIds.has(r.id));
+  }
+
+  flashRecords=source
+    .filter(r=>flashMatchesSearch(r,terms))
     .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+
   if(flashShuffleEnabled)shuffleFlashRecordOrder();
   flashIndex=0;
   flashBackShown=false;
   renderFlashcard();
-  if($("flashStatus"))$("flashStatus").textContent=`検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+
+  if($("flashStatus")){
+    const scope=selectedIds.size?"チェック項目内":"全項目";
+    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
 }
 
@@ -5351,24 +5341,46 @@ $("makeSelectedQrBtn").addEventListener("click",async()=>{
   renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
 });
 
-$("makeSearchQrBtn").addEventListener("click",async()=>{
-  flashQrActionAccepted($("makeSearchQrBtn"));
-  qrPageSource=await filteredAll("qrSearch");
+async function buildQrFromSearch(){
+  const terms=String($("qrSearch")?.value||"")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  let source=await getActiveProfileRecords();
+
+  if(selectedIds.size){
+    source=source.filter(r=>selectedIds.has(r.id));
+  }
+
+  qrPageSource=source.filter(r=>{
+    if(!terms.length)return true;
+    const searchable=[
+      r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+      r.sound,r.mode,r.version,r.comment,r.explanation
+    ].map(v=>String(v??"").toLowerCase()).join(" ");
+    return terms.every(term=>searchable.includes(term));
+  });
+
   qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
   qrPageStart=0;
   qrPageSize=Number($("qrCount").value)||10;
   renderQr(qrPageSource.slice(0,qrPageSize));
-  setStatus($("qrStatus"),`検索結果 ${qrPageSource.length}件をID順で表示しています。`);
+
+  const scope=selectedIds.size?"チェック項目内":"全項目";
+  setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件をID順で表示しています。`);
+  flashQrActionAccepted($("makeSearchQrBtn"));
+}
+
+$("makeSearchQrBtn").addEventListener("click",buildQrFromSearch);
+$("qrSearch")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    buildQrFromSearch();
+  }
 });
 
-$("makeRangeQrBtn").addEventListener("click",async()=>{
-  flashQrActionAccepted($("makeRangeQrBtn"));
-  qrPageSource=await filteredAll("qrSearch");
-  qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
-  qrPageStart=Math.max(1,Number($("qrStart").value)||1)-1;
-  qrPageSize=Number($("qrCount").value)||10;
-  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
-});
 $("prevQrPageBtn").addEventListener("click",()=>{
   qrPageStart=Math.max(0,qrPageStart-qrPageSize);
   renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
