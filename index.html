@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.1 / 更新 2026-08-22 00:01</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.2 / 更新 2026-08-22 04:23</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2838,12 +2838,12 @@ button.flashActionAccepted{
 <summary>詳細設定</summary>
 <div class="advancedSettingsBody">
 <p class="hint" style="margin:0 0 12px;">
-              短い単語や短い表現では、最初の音が欠けたり強く聞こえたりすることがあります。必要に応じて開始待機を調整できます。
+              iPhoneでは、しばらく発音していない時やSafariへ戻った直後に、最初の音が欠けることがあります。音声ウォームアップを使うと、必要な時だけ本番の発音前に音声エンジンを準備します。
             </p>
 <div class="qrOptionRow" style="margin-bottom:12px;">
 <label class="qrCheckLabel">
 <input checked="" id="settingSoftWordStart" type="checkbox"/>
-<span>短い英語の開始待機</span>
+<span>音声ウォームアップ</span>
 </label>
 <label class="qrCheckLabel">
 <input checked="" id="showIpa" type="checkbox"/>
@@ -2851,7 +2851,7 @@ button.flashActionAccepted{
 </label>
 </div>
 <p class="hint" style="margin:0 0 12px;">
-              「短い英語の開始待機」をONにすると、短い英語を読む前に少し待ち、先頭音の欠けや強い立ち上がりを抑えます。発音記号はIPAデータがある単語・語彙項目だけ表示されます。
+              ON：最後の発音から60秒以上空いた時、またはSafari・画面へ戻った直後に自動ウォームアップします。OFF：ウォームアップせず従来どおり発音します。発音記号はIPAデータがある単語・語彙項目だけ表示されます。
             </p>
 <div class="sizeSettingGrid">
 <label><span>英語音声</span><select id="englishVoiceSelect"></select></label>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.1";
-const APP_UPDATED="2026-08-22 00:01";
+const APP_VERSION="v4.1.2";
+const APP_UPDATED="2026-08-22 04:23";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3593,41 +3593,118 @@ function loadJapaneseVoices(){
   });
   if(old&&voices.some(v=>v.name===old))select.value=old;
 }
-function isShortEnglishExpression(text,lang){
-  if(!lang.startsWith("en"))return false;
-  const t=String(text||"").trim();
-  if(!t)return false;
-  // 1～3語程度の短い英語表現を対象にする。
-  // 文末記号は許可するが、長い例文には適用しない。
-  const cleaned=t.replace(/[.!?]+$/,"").trim();
-  const words=cleaned.split(/\s+/).filter(Boolean);
-  return words.length>=1 &&
-         words.length<=3 &&
-         cleaned.length<=28 &&
-         words.every(w=>/^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(w));
+
+const SPEECH_WARMUP_KEY="speechWarmupEnabledV1";
+const SPEECH_WARMUP_IDLE_MS=60000;
+let lastSpeechActivityAt=0;
+let speechWarmupStale=true;
+
+function speechWarmupEnabled(){
+  const el=$("settingSoftWordStart");
+  if(el)return el.checked!==false;
+  const saved=localStorage.getItem(SPEECH_WARMUP_KEY);
+  if(saved!==null)return saved!=="false";
+  return getSizeSettings().softWordStart!==false;
 }
 
-function speakText(text,lang,rate){
-  return new Promise(resolve=>{
-    if(!text){resolve();return;}
-    const softStart=isShortEnglishExpression(text,lang)&&getSizeSettings().softWordStart!==false;
-    setTimeout(()=>{
-      // 単語1語だけの場合は、同じ発話内の先頭に句読点ポーズを入れる。
-      // 別の無音発話は使わないため、音声経路の再起動音を起こしにくい。
-      const spokenText=text;
-      const u=new SpeechSynthesisUtterance(spokenText);
-      u.lang=lang;
-      u.rate=rate;
-      u.volume=softStart?0.9:1.0;
-      const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
-      if(v)u.voice=v;
-      u.onend=resolve;
-      u.onerror=resolve;
-      speechSynthesis.speak(u);
-    },softStart?650:350);
+function loadSpeechWarmupSetting(){
+  const el=$("settingSoftWordStart");
+  if(!el)return;
+  const saved=localStorage.getItem(SPEECH_WARMUP_KEY);
+  if(saved===null){
+    el.checked=getSizeSettings().softWordStart!==false;
+    localStorage.setItem(SPEECH_WARMUP_KEY,String(el.checked));
+  }else{
+    el.checked=saved!=="false";
+  }
+  el.addEventListener("change",()=>{
+    localStorage.setItem(SPEECH_WARMUP_KEY,String(el.checked));
+    if(el.checked)speechWarmupStale=true;
   });
 }
 
+async function maybeWarmupSpeechEngine(token,lang="en-US"){
+  if(!speechWarmupEnabled())return;
+  if(!("speechSynthesis" in window))return;
+  if(token!==speakingToken)return;
+
+  const now=Date.now();
+  const idle=now-lastSpeechActivityAt;
+  if(!speechWarmupStale && lastSpeechActivityAt>0 && idle<SPEECH_WARMUP_IDLE_MS)return;
+
+  await new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      resolve();
+    };
+    try{
+      const u=new SpeechSynthesisUtterance("ready");
+      u.lang=lang.startsWith("ja")?"ja-JP":"en-US";
+      u.rate=2;
+      // Practically inaudible, but non-zero so WebKit still initializes the audio path.
+      u.volume=0.001;
+      const v=u.lang.startsWith("ja")?japaneseVoice():englishVoice();
+      if(v)u.voice=v;
+      u.onend=finish;
+      u.onerror=finish;
+      speechSynthesis.speak(u);
+      setTimeout(finish,900);
+    }catch(e){
+      finish();
+    }
+  });
+
+  if(token!==speakingToken)return;
+  lastSpeechActivityAt=Date.now();
+  speechWarmupStale=false;
+  // Give Safari a short moment to keep the newly opened TTS/audio path active.
+  await new Promise(r=>setTimeout(r,180));
+}
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    speechWarmupStale=true;
+  }
+});
+window.addEventListener("pageshow",()=>{
+  speechWarmupStale=true;
+});
+
+async function speakText(text,lang,rate){
+  if(!text)return;
+
+  const tokenAtStart=speakingToken;
+  await maybeWarmupSpeechEngine(tokenAtStart,lang);
+  if(tokenAtStart!==speakingToken)return;
+
+  await new Promise(resolve=>{
+    setTimeout(()=>{
+      if(tokenAtStart!==speakingToken){resolve();return;}
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang=lang;
+      u.rate=rate;
+      u.volume=1.0;
+      const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
+      if(v)u.voice=v;
+      u.onstart=()=>{
+        lastSpeechActivityAt=Date.now();
+        speechWarmupStale=false;
+      };
+      u.onend=()=>{
+        lastSpeechActivityAt=Date.now();
+        speechWarmupStale=false;
+        resolve();
+      };
+      u.onerror=()=>{
+        lastSpeechActivityAt=Date.now();
+        resolve();
+      };
+      speechSynthesis.speak(u);
+    },350);
+  });
+}
 
 
 
@@ -4427,7 +4504,7 @@ function loadSizeSettingsControls(){
   $("settingJapaneseReadSize").value=s.japaneseReadSize;
   if($("settingQrDefaultCount"))$("settingQrDefaultCount").value=String(s.qrDefaultCount||50);
   if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
-  $("settingSoftWordStart").checked=s.softWordStart!==false;
+  if(localStorage.getItem(SPEECH_WARMUP_KEY)===null)$("settingSoftWordStart").checked=s.softWordStart!==false;
   applySizeSettingsToCss(s);
   if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
 }
@@ -4471,6 +4548,7 @@ function saveAndApplySizeSettings(){
 function resetSizeSettings(){
   localStorage.removeItem("qrCardSizeSettings");
   loadSizeSettingsControls();
+loadSpeechWarmupSetting();
   if(qrPageSource.length){
     renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
   }
