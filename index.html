@@ -1764,6 +1764,81 @@ body.flashFullscreenBody{
   border:2px solid #111827 !important;
   font-weight:800 !important;
 }
+
+/* v3.8.7 flash controls */
+.flashSpeakControl{
+  border-radius:10px !important;
+  min-width:150px !important;
+  min-height:48px !important;
+  padding-left:20px !important;
+  padding-right:20px !important;
+  font-size:1.05rem !important;
+  font-weight:800 !important;
+}
+.flashShuffleToggle{
+  min-width:88px !important;
+  min-height:36px !important;
+  padding:5px 8px !important;
+  font-size:.78rem !important;
+}
+.flashCheckControl{
+  border-radius:10px !important;
+  min-width:98px !important;
+}
+.flashCheckControl.flashCheckedOn{
+  background:#d1d5db !important;
+  color:#111827 !important;
+  border:2px solid #111827 !important;
+  font-weight:800 !important;
+}
+.flashCheckedPanel{
+  margin-top:12px;
+}
+.flashCheckedActions{
+  gap:8px;
+  flex-wrap:wrap;
+}
+.flashCheckedActions button{
+  width:auto !important;
+  margin:0 !important;
+}
+.flashCheckedMemo{
+  display:block;
+  width:100%;
+  min-height:240px;
+  margin-top:10px;
+  box-sizing:border-box;
+  resize:vertical;
+  white-space:pre-wrap;
+  font-family:inherit;
+  font-size:.95rem;
+  line-height:1.55;
+}
+@media(max-width:700px){
+  .flashSpeakControl{
+    min-width:132px !important;
+    min-height:46px !important;
+    padding-left:16px !important;
+    padding-right:16px !important;
+  }
+  .flashShuffleToggle{
+    min-width:82px !important;
+    padding:4px 6px !important;
+    font-size:.74rem !important;
+  }
+  .flashCheckControl{
+    min-width:92px !important;
+  }
+  .flashStageCard.flashFullscreenMode .flashSpeakControl{
+    min-width:132px !important;
+    min-height:44px !important;
+  }
+  .flashStageCard.flashFullscreenMode .flashShuffleToggle{
+    min-width:78px !important;
+    min-height:34px !important;
+    font-size:.72rem !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1779,7 +1854,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.6 / 更新 2026-08-21 19:22</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.7 / 更新 2026-08-21 19:29</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2200,10 +2275,25 @@ body.flashFullscreenBody{
         <button type="button" id="flashBackBtn" class="secondary flashControlBtn">裏</button>
       </div>
       <button type="button" id="flashSpeakBtn" class="secondary flashControlBtn flashSpeakControl">🔊 発音</button>
+      <button type="button" id="flashCheckBtn" class="secondary flashControlBtn flashCheckControl" aria-pressed="false">✓ チェック</button>
       <button type="button" id="flashShuffleToggleBtn" class="secondary flashControlBtn flashShuffleToggle" aria-pressed="false">シャッフル OFF</button>
       <button type="button" id="flashFullscreenBtn" class="secondary flashControlBtn flashFullscreenControl">全画面</button>
     </div>
   </div>
+
+  <details class="advancedSettings flashCheckedPanel" id="flashCheckedPanel">
+    <summary>チェックした項目を確認 <span id="flashCheckedCount">(0件)</span></summary>
+    <div class="advancedSettingsBody">
+      <p class="hint" style="margin-top:0;">現在のCSVでチェックしたカードを、ID・表・裏の内容で1枚のメモにまとめます。</p>
+      <div class="row flashCheckedActions">
+        <button type="button" id="flashBuildMemoBtn" class="secondary">メモを更新</button>
+        <button type="button" id="flashCopyMemoBtn" class="secondary">メモをコピー</button>
+        <button type="button" id="flashSaveMemoBtn" class="secondary">メモを保存</button>
+        <button type="button" id="flashClearChecksBtn" class="secondary">チェックを全解除</button>
+      </div>
+      <textarea id="flashCheckedMemo" class="flashCheckedMemo" readonly placeholder="チェックしたカードがここに表示されます。"></textarea>
+    </div>
+  </details>
 </section>
 
 </main>
@@ -2213,8 +2303,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.6";
-const APP_UPDATED="2026-08-21 19:22";
+const APP_VERSION="v3.8.7";
+const APP_UPDATED="2026-08-21 19:29";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -2329,6 +2419,8 @@ async function switchDataProfile(profile){
   }
 
   updateProfileUi();
+  loadFlashCheckedIds();
+  if($("flashCheckedMemo"))$("flashCheckedMemo").value="";
   await refreshSummary();
   await refreshCurrentCsvFileName();
   updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
@@ -3589,7 +3681,107 @@ let flashIndex=0;
 let flashBackShown=false;
 let flashSourceMode="search";
 let flashShuffleEnabled=false;
+let flashCheckedIds=new Set();
 const FLASH_LAYOUT_KEY="flashLayoutV1";
+const FLASH_CHECKED_KEY_PREFIX="flashCheckedV1_";
+
+
+function flashCheckedStorageKey(){
+  return FLASH_CHECKED_KEY_PREFIX+activeCsvProfile;
+}
+function loadFlashCheckedIds(){
+  try{
+    const a=JSON.parse(localStorage.getItem(flashCheckedStorageKey())||"[]");
+    flashCheckedIds=new Set(Array.isArray(a)?a.map(String):[]);
+  }catch(e){
+    flashCheckedIds=new Set();
+  }
+  updateFlashCheckedCount();
+}
+function saveFlashCheckedIds(){
+  localStorage.setItem(flashCheckedStorageKey(),JSON.stringify([...flashCheckedIds]));
+  updateFlashCheckedCount();
+}
+function updateFlashCheckedCount(){
+  const el=$("flashCheckedCount");
+  if(el)el.textContent=`(${flashCheckedIds.size}件)`;
+}
+function currentFlashRecord(){
+  return flashRecords[flashIndex]||null;
+}
+function updateFlashCheckUi(){
+  const btn=$("flashCheckBtn");
+  if(!btn)return;
+  const r=currentFlashRecord();
+  const checked=!!(r && flashCheckedIds.has(String(r.id)));
+  btn.classList.toggle("flashCheckedOn",checked);
+  btn.setAttribute("aria-pressed",String(checked));
+  btn.textContent=checked?"✓ チェック済":"✓ チェック";
+  btn.disabled=!r;
+}
+function toggleCurrentFlashCheck(){
+  const r=currentFlashRecord();
+  if(!r)return;
+  const id=String(r.id||"");
+  if(!id)return;
+  if(flashCheckedIds.has(id))flashCheckedIds.delete(id);
+  else flashCheckedIds.add(id);
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+}
+function flashSideMemoText(r,side){
+  const cfg=getFlashSideConfig(side);
+  let top=flashFieldValue(r,cfg.top)||"（データなし）";
+  if(cfg.rows!==2)return top;
+  let bottom=flashFieldValue(r,cfg.bottom)||"（データなし）";
+  return `${top} ／ ${bottom}`;
+}
+async function buildFlashCheckedMemo(){
+  const memo=$("flashCheckedMemo");
+  if(!memo)return "";
+  const all=await getActiveProfileRecords();
+  const checked=all.filter(r=>flashCheckedIds.has(String(r.id)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  const text=checked.map(r=>{
+    return `${r.id}\n表：${flashSideMemoText(r,"front")}\n裏：${flashSideMemoText(r,"back")}`;
+  }).join("\n\n");
+  memo.value=text;
+  updateFlashCheckedCount();
+  return text;
+}
+async function copyFlashCheckedMemo(){
+  const text=await buildFlashCheckedMemo();
+  if(!text)return;
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta=$("flashCheckedMemo");
+    ta?.focus();ta?.select();
+    try{document.execCommand("copy");}catch(_){}
+  }
+}
+async function saveFlashCheckedMemoFile(){
+  const text=await buildFlashCheckedMemo();
+  if(!text)return;
+  const d=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  const stamp=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`flash_checked_${activeCsvProfile}_${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function clearFlashChecks(){
+  flashCheckedIds.clear();
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+  if($("flashCheckedMemo"))$("flashCheckedMemo").value="";
+}
 
 function flashFieldValue(r,key){
   if(!r)return "";
@@ -3706,6 +3898,7 @@ function renderFlashcard(){
     $("flashBackBtn")?.classList.remove("flashSideActive");
     $("flashFrontBtn")?.setAttribute("aria-pressed","false");
     $("flashBackBtn")?.setAttribute("aria-pressed","false");
+    updateFlashCheckUi();
     resetFlashPaneFont($("flashTop"));resetFlashPaneFont($("flashBottom"));
     return;
   }
@@ -3730,6 +3923,7 @@ function renderFlashcard(){
   $("flashFrontBtn")?.setAttribute("aria-pressed",String(!flashBackShown));
   $("flashBackBtn")?.setAttribute("aria-pressed",String(flashBackShown));
   $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  updateFlashCheckUi();
   fitFlashcardFonts();
 }
 
@@ -3900,9 +4094,10 @@ $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
 $("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
+$("flashCheckBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleCurrentFlashCheck();});
 $("flashShuffleToggleBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashShuffle();});
 $("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashFullscreen();});
-["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn","flashShuffleToggleBtn"].forEach(id=>{
+["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn","flashCheckBtn","flashShuffleToggleBtn"].forEach(id=>{
   $(id)?.addEventListener("pointerdown",e=>e.stopPropagation());
   $(id)?.addEventListener("click",e=>e.stopPropagation());
 });
@@ -3972,6 +4167,10 @@ window.addEventListener("orientationchange",()=>{
   });
 });
 
+$("flashBuildMemoBtn")?.addEventListener("click",buildFlashCheckedMemo);
+$("flashCopyMemoBtn")?.addEventListener("click",copyFlashCheckedMemo);
+$("flashSaveMemoBtn")?.addEventListener("click",saveFlashCheckedMemoFile);
+$("flashClearChecksBtn")?.addEventListener("click",clearFlashChecks);
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
@@ -5723,6 +5922,7 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
 updateProfileUi();
 loadFlashLayout();
 updateFlashShuffleUi();
+loadFlashCheckedIds();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
 setTimeout(async()=>{
