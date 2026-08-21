@@ -2658,6 +2658,31 @@ body.flashFullscreenBody{
   box-shadow:none !important;
   transform:none !important;
 }
+
+.dataSearchField{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:end;
+}
+.dataSearchField label{
+  min-width:0;
+}
+#dataSearchBtn{
+  min-width:86px;
+  min-height:42px;
+  margin:0;
+}
+@media(max-width:700px){
+  .dataSearchField{
+    grid-template-columns:minmax(0,1fr) 78px;
+  }
+  #dataSearchBtn{
+    min-width:78px;
+    padding-left:8px;
+    padding-right:8px;
+  }
+}
 </style>
 </head>
 <body>
@@ -2673,7 +2698,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.0.7 / 更新 2026-08-21 21:53</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.0.8 / 更新 2026-08-21 22:08</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2828,8 +2853,11 @@ body.flashFullscreenBody{
 </div></div></section>
 <section class="panel" id="dataPanel">
 <div class="card">
-<div class="grid2" style="margin-top:14px;">
-<label><span>検索</span><input id="searchText" placeholder="ID・英語・発音記号・日本語・日本語読み・Comment" type="text"/></label>
+<div class="grid2 dataSearchGrid" style="margin-top:14px;">
+<div class="dataSearchField">
+  <label><span>検索（スペース区切りAND検索）</span><input id="searchText" placeholder="例：apple red" type="text"/></label>
+  <button class="secondary" id="dataSearchBtn" type="button">検索</button>
+</div>
 <label><span>1ページの件数</span>
 <select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
 </label>
@@ -3158,8 +3186,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.0.7";
-const APP_UPDATED="2026-08-21 21:53";
+const APP_VERSION="v4.0.8";
+const APP_UPDATED="2026-08-21 22:08";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3257,6 +3285,8 @@ async function switchDataProfile(profile){
     currentRecord=null;
     selectedIds.clear();
     currentPage=0;
+    dataSearchQuery="";
+    if($("searchText"))$("searchText").value="";
     qrPageSource=[];
     qrPageStart=0;
     flashRecords=[];
@@ -4258,14 +4288,31 @@ async function editRecord(id){
   $("editJapaneseRate").value=String(r.japaneseRate);$("editRepeat").value=String(r.repeat);
   $("editGap").value=String(r.gap);$("editVersion").value=r.version||"";$("editExplanation").value=r.explanation||"";
 }
+let dataSearchQuery="";
+
+function splitAndSearchTerms(text){
+  return String(text||"")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 async function filteredAll(searchId){
-  const q=String($(searchId)?.value||"").trim().toLowerCase();
+  const sourceText=searchId==="searchText"
+    ? dataSearchQuery
+    : String($(searchId)?.value||"");
+  const terms=splitAndSearchTerms(sourceText);
   const all=await getAllRecords();
+
   return all
     .filter(r=>{
-      if(!q)return true;
-      return [r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,r.sound,r.comment,r.explanation]
-        .some(v=>String(v??"").toLowerCase().includes(q));
+      if(!terms.length)return true;
+      const searchable=[
+        r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+        r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+      ].map(v=>String(v??"").toLowerCase()).join(" ");
+      return terms.every(term=>searchable.includes(term));
     })
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
 }
@@ -5305,7 +5352,20 @@ $("saveBtn").addEventListener("click",saveEditor);$("clearEditorBtn").addEventLi
 $("toggleDataEditorBtn").addEventListener("click",()=>{
   $("dataEditorPanel").classList.toggle("dataEditorHidden");
 });
-$("searchText").addEventListener("input",()=>{currentPage=0;renderPage();});
+async function executeDataSearch(){
+  dataSearchQuery=String($("searchText")?.value||"");
+  currentPage=0;
+  await renderPage();
+  flashAccepted($("dataSearchBtn"));
+}
+
+$("dataSearchBtn")?.addEventListener("click",executeDataSearch);
+$("searchText")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    executeDataSearch();
+  }
+});
 $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
 
 $("selectAllFilteredBtn").addEventListener("click",async()=>{
