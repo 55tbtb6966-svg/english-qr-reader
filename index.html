@@ -2543,6 +2543,50 @@ body.flashFullscreenBody{
     min-height:450px !important;
   }
 }
+
+/* v3.9.6 PC expanded controls: keep text alignment stable */
+@media(min-width:701px){
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    align-items:center !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashControlBtn,
+  .flashStageCard.flashFullscreenMode .flashButtonPair .flashControlBtn{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    height:44px !important;
+    min-height:44px !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
+    line-height:1 !important;
+    vertical-align:middle !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashButtonPair{
+    display:inline-flex !important;
+    align-items:center !important;
+    height:44px !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashSpeakControl,
+  .flashStageCard.flashFullscreenMode .flashCheckControl,
+  .flashStageCard.flashFullscreenMode .flashShuffleToggle,
+  .flashStageCard.flashFullscreenMode .flashFullscreenControl{
+    height:44px !important;
+    min-height:44px !important;
+    line-height:1 !important;
+  }
+}
+
+/* Checked state: no blink/temporary outline, just persistent darker border/background. */
+.flashCheckControl.flashCheckedOn{
+  background:#d1d5db !important;
+  color:#111827 !important;
+  border:2px solid #111827 !important;
+  box-shadow:none !important;
+  outline:none !important;
+}
 </style>
 </head>
 <body>
@@ -2558,7 +2602,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.5 / 更新 2026-08-21 20:32</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.6 / 更新 2026-08-21 20:37</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3041,8 +3085,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.5";
-const APP_UPDATED="2026-08-21 20:32";
+const APP_VERSION="v3.9.6";
+const APP_UPDATED="2026-08-21 20:37";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4466,7 +4510,6 @@ function toggleCurrentFlashCheck(){
   else flashCheckedIds.add(id);
   saveFlashCheckedIds();
   updateFlashCheckUi();
-  flashAccepted($("flashCheckBtn"));
 }
 function flashSideMemoText(r,side){
   const cfg=getFlashSideConfig(side);
