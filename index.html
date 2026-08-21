@@ -1569,6 +1569,55 @@
 .flashPane.flashAutoFitActive{
   overflow:hidden !important;
 }
+
+.flashControlBar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.flashButtonPair{
+  display:inline-flex;
+  gap:0;
+}
+.flashControlBtn{
+  margin:0 !important;
+  width:auto !important;
+  min-width:72px;
+  background:#e5e7eb !important;
+  color:#111827 !important;
+  border:1px solid #c9ced6 !important;
+  box-shadow:none !important;
+}
+.flashButtonPair .flashControlBtn:first-child{
+  border-radius:10px 0 0 10px !important;
+}
+.flashButtonPair .flashControlBtn:last-child{
+  border-radius:0 10px 10px 0 !important;
+  margin-left:-1px !important;
+}
+.flashSideButtons .flashControlBtn.flashSideActive{
+  background:#e5e7eb !important;
+  color:#111827 !important;
+  border:2px solid #111827 !important;
+  font-weight:800;
+  position:relative;
+  z-index:1;
+}
+.flashSpeakControl{
+  border-radius:10px !important;
+}
+@media(max-width:600px){
+  .flashControlBar{
+    gap:8px;
+  }
+  .flashControlBtn{
+    min-width:68px;
+    padding-left:10px !important;
+    padding-right:10px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1584,7 +1633,7 @@
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.2 / 更新 2026-08-21 18:50</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.3 / 更新 2026-08-21 19:01</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -1993,11 +2042,16 @@
       </div>
       <div class="flashSideLabel" id="flashSideLabel">表</div>
     </div>
-    <div class="row">
-      <button type="button" id="flashPrevBtn" class="secondary">← 前</button>
-      <button type="button" id="flashFlipBtn">表／裏</button>
-      <button type="button" id="flashNextBtn" class="secondary">次 →</button>
-      <button type="button" id="flashSpeakBtn" class="secondary">🔊 発音</button>
+    <div class="flashControlBar">
+      <div class="flashButtonPair" aria-label="カード移動">
+        <button type="button" id="flashPrevBtn" class="secondary flashControlBtn">← 前</button>
+        <button type="button" id="flashNextBtn" class="secondary flashControlBtn">次 →</button>
+      </div>
+      <div class="flashButtonPair flashSideButtons" aria-label="表裏切替">
+        <button type="button" id="flashFrontBtn" class="secondary flashControlBtn">表</button>
+        <button type="button" id="flashBackBtn" class="secondary flashControlBtn">裏</button>
+      </div>
+      <button type="button" id="flashSpeakBtn" class="secondary flashControlBtn flashSpeakControl">🔊 発音</button>
     </div>
   </div>
 </section>
@@ -2009,8 +2063,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.2";
-const APP_UPDATED="2026-08-21 18:50";
+const APP_VERSION="v3.8.3";
+const APP_UPDATED="2026-08-21 19:01";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3497,6 +3551,10 @@ function renderFlashcard(){
     if($("flashMain"))$("flashMain").classList.add("flashOneRow");
     if($("flashId"))$("flashId").textContent="";
     if($("flashStatus"))$("flashStatus").textContent="0件";
+    $("flashFrontBtn")?.classList.remove("flashSideActive");
+    $("flashBackBtn")?.classList.remove("flashSideActive");
+    $("flashFrontBtn")?.setAttribute("aria-pressed","false");
+    $("flashBackBtn")?.setAttribute("aria-pressed","false");
     resetFlashPaneFont($("flashTop"));resetFlashPaneFont($("flashBottom"));
     return;
   }
@@ -3516,6 +3574,10 @@ function renderFlashcard(){
   // ID is a search key and small reference, independent of selected content.
   $("flashId").textContent=r.id;
   $("flashSideLabel").textContent=flashBackShown?"裏":"表";
+  $("flashFrontBtn")?.classList.toggle("flashSideActive",!flashBackShown);
+  $("flashBackBtn")?.classList.toggle("flashSideActive",flashBackShown);
+  $("flashFrontBtn")?.setAttribute("aria-pressed",String(!flashBackShown));
+  $("flashBackBtn")?.setAttribute("aria-pressed",String(flashBackShown));
   $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　CSV ${activeCsvProfile}`;
   fitFlashcardFonts();
 }
@@ -3564,6 +3626,10 @@ async function loadFlashcards(){
     await buildFlashcardsFromSearch();
   }
 }
+function setFlashcardSide(side){
+  flashBackShown=side==="back";
+  renderFlashcard();
+}
 function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
 function stepFlashcard(delta){
   if(!flashRecords.length)return;
@@ -3599,7 +3665,8 @@ $("flashReloadBtn")?.addEventListener("click",loadFlashcards);
 $("flashShuffleBtn")?.addEventListener("click",shuffleFlashcards);
 $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
 $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
-$("flashFlipBtn")?.addEventListener("click",flipFlashcard);
+$("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
+$("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
 $("flashCard")?.addEventListener("click",flipFlashcard);
 $("flashCard")?.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}});
