@@ -2335,6 +2335,160 @@ body.flashFullscreenBody{
     padding:7px !important;
   }
 }
+
+/* v3.9.4: stable iPhone controls; expansion changes only card size */
+@media(max-width:700px){
+  .flashControlBar,
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    position:static !important;
+    left:auto !important;
+    right:auto !important;
+    top:auto !important;
+    bottom:auto !important;
+    z-index:auto !important;
+    display:flex !important;
+    flex-wrap:wrap !important;
+    align-items:center !important;
+    justify-content:flex-start !important;
+    align-content:normal !important;
+    gap:6px !important;
+    width:auto !important;
+    margin-top:10px !important;
+    padding:0 !important;
+    background:transparent !important;
+    border:0 !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
+    overflow:visible !important;
+  }
+
+  .flashControlBtn,
+  .flashStageCard.flashFullscreenMode .flashControlBtn{
+    height:40px !important;
+    min-height:40px !important;
+    margin:0 !important;
+    padding:5px 8px !important;
+    font-size:.78rem !important;
+    line-height:1 !important;
+    box-sizing:border-box !important;
+  }
+
+  .flashButtonPair,
+  .flashStageCard.flashFullscreenMode .flashButtonPair{
+    display:inline-flex !important;
+    align-items:center !important;
+    height:40px !important;
+    margin:0 !important;
+  }
+
+  .flashButtonPair .flashControlBtn,
+  .flashStageCard.flashFullscreenMode .flashButtonPair .flashControlBtn{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    height:40px !important;
+    min-height:40px !important;
+  }
+
+  #flashPrevBtn, #flashNextBtn,
+  .flashStageCard.flashFullscreenMode #flashPrevBtn,
+  .flashStageCard.flashFullscreenMode #flashNextBtn{
+    width:58px !important;
+    min-width:58px !important;
+  }
+
+  #flashFrontBtn, #flashBackBtn,
+  .flashStageCard.flashFullscreenMode #flashFrontBtn,
+  .flashStageCard.flashFullscreenMode #flashBackBtn{
+    width:44px !important;
+    min-width:44px !important;
+  }
+
+  .flashSpeakControl,
+  .flashStageCard.flashFullscreenMode .flashSpeakControl{
+    width:112px !important;
+    min-width:112px !important;
+    font-size:.9rem !important;
+    font-weight:800 !important;
+  }
+
+  .flashCheckControl,
+  .flashCheckControl.flashCheckedOn,
+  .flashStageCard.flashFullscreenMode .flashCheckControl,
+  .flashStageCard.flashFullscreenMode .flashCheckControl.flashCheckedOn{
+    width:78px !important;
+    min-width:78px !important;
+    max-width:78px !important;
+    font-size:.72rem !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+  }
+
+  .flashShuffleToggle,
+  .flashStageCard.flashFullscreenMode .flashShuffleToggle{
+    width:58px !important;
+    min-width:58px !important;
+    height:40px !important;
+    min-height:40px !important;
+    padding:3px 3px !important;
+    font-size:.66rem !important;
+  }
+
+  .flashFullscreenControl,
+  .flashStageCard.flashFullscreenMode .flashFullscreenControl{
+    width:72px !important;
+    min-width:72px !important;
+    font-size:.76rem !important;
+  }
+
+  /* Mobile expansion: keep everything in normal flow and enlarge only the card. */
+  .flashStageCard.flashFullscreenMode{
+    position:relative !important;
+    inset:auto !important;
+    left:auto !important;
+    right:auto !important;
+    top:auto !important;
+    bottom:auto !important;
+    z-index:auto !important;
+    width:100% !important;
+    height:auto !important;
+    max-width:none !important;
+    max-height:none !important;
+    transform:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    padding-bottom:0 !important;
+    overflow:visible !important;
+    background:transparent !important;
+    display:block !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashCard{
+    width:100% !important;
+    height:62dvh !important;
+    min-height:470px !important;
+    max-height:none !important;
+    margin:0 !important;
+  }
+}
+
+@media(max-width:430px){
+  .flashStageCard.flashFullscreenMode .flashCard{
+    height:60dvh !important;
+    min-height:440px !important;
+  }
+}
+
+/* Brief navigation acknowledgement on 前 / 次. */
+.flashNavAccepted{
+  animation:flashNavAcceptedBlink .38s ease-out 1 !important;
+}
+@keyframes flashNavAcceptedBlink{
+  0%{outline:0 solid transparent; outline-offset:0;}
+  30%{outline:3px solid #111827; outline-offset:2px;}
+  70%{outline:2px solid #111827; outline-offset:2px;}
+  100%{outline:0 solid transparent; outline-offset:0;}
+}
 </style>
 </head>
 <body>
@@ -2350,7 +2504,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.3 / 更新 2026-08-21 20:15</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.4 / 更新 2026-08-21 20:25</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2833,8 +2987,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.3";
-const APP_UPDATED="2026-08-21 20:15";
+const APP_VERSION="v3.9.4";
+const APP_UPDATED="2026-08-21 20:25";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4685,10 +4839,21 @@ function setFlashcardSide(side){
   renderFlashcard();
 }
 function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
+function flashNavAccepted(delta){
+  const btn=$(delta<0?"flashPrevBtn":"flashNextBtn");
+  if(!btn)return;
+  btn.classList.remove("flashNavAccepted");
+  void btn.offsetWidth;
+  btn.classList.add("flashNavAccepted");
+  setTimeout(()=>btn.classList.remove("flashNavAccepted"),460);
+}
+
 function stepFlashcard(delta){
   if(!flashRecords.length)return;
   flashIndex=(flashIndex+delta+flashRecords.length)%flashRecords.length;
-  flashBackShown=false;renderFlashcard();
+  flashBackShown=false;
+  renderFlashcard();
+  flashNavAccepted(delta);
 }
 function shuffleFlashRecordOrder(){
   for(let i=flashRecords.length-1;i>0;i--){
@@ -4753,21 +4918,22 @@ async function enterFlashFullscreen(){
 
   const stage=$("flashCard")?.closest(".flashStageCard");
 
-  // iPhone/mobile: keep it in-page, enlarge the card, and pin controls to the
-  // bottom of the browser so they are immediately tappable.
+  // iPhone/mobile: enlarge only the card. Then move the page so the normal
+  // control row sits inside the visible browser area without requiring a swipe.
   if(isTouchMobileFlash()){
     setTimeout(()=>{
+      const controls=stage?.querySelector(".flashControlBar");
       try{
-        stage?.scrollIntoView({block:"start",behavior:"smooth"});
+        controls?.scrollIntoView({block:"end",behavior:"auto"});
       }catch(e){
-        stage?.scrollIntoView();
+        controls?.scrollIntoView(false);
       }
       fitFlashcardFonts();
-    },60);
+    },80);
     return;
   }
 
-  // Desktop: native fullscreen is still allowed.
+  // Desktop keeps the existing native fullscreen behavior.
   try{
     if(stage?.requestFullscreen && !document.fullscreenElement){
       await stage.requestFullscreen();
@@ -4781,15 +4947,23 @@ async function enterFlashFullscreen(){
 async function exitFlashFullscreen(){
   flashFullscreenActive=false;
   updateFlashFullscreenUi();
-  if(!isTouchMobileFlash()){
-    try{
-      if(document.fullscreenElement && document.exitFullscreen){
-        await document.exitFullscreen();
-      }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
-        document.webkitExitFullscreen();
-      }
-    }catch(e){}
+  if(isTouchMobileFlash()){
+    const stage=$("flashCard")?.closest(".flashStageCard");
+    setTimeout(()=>{
+      try{
+        stage?.scrollIntoView({block:"center",behavior:"auto"});
+      }catch(e){}
+      fitFlashcardFonts();
+    },60);
+    return;
   }
+  try{
+    if(document.fullscreenElement && document.exitFullscreen){
+      await document.exitFullscreen();
+    }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
+      document.webkitExitFullscreen();
+    }
+  }catch(e){}
   setTimeout(fitFlashcardFonts,120);
 }
 
