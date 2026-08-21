@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.6 / 更新 2026-08-22 05:09</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.7 / 更新 2026-08-22 05:12</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.6";
-const APP_UPDATED="2026-08-22 05:09";
+const APP_VERSION="v4.1.7";
+const APP_UPDATED="2026-08-22 05:12";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3952,6 +3952,8 @@ async function playBundledEffectSound(name,token){
       };
 
       src.onended=()=>done(token===speakingToken);
+      const st=$("scanStatus");
+      if(st)st.textContent=`MP3効果音：${name}`;
       try{
         src.start(0);
       }catch(e){
@@ -3963,6 +3965,8 @@ async function playBundledEffectSound(name,token){
     });
   }catch(e){
     console.warn("Bundled effect playback failed:",name,e);
+    const st=$("scanStatus");
+    if(st)st.textContent=`MP3効果音の再生に失敗しました：${name}`;
     return false;
   }
 }
@@ -3992,32 +3996,19 @@ async function playEffectSound(name,token){
   // Correct / wrong use the bundled MP3 decoded into Web Audio.
   // This avoids iPhone Safari rejecting delayed HTMLAudioElement.play().
   if(sound==="correct" || sound==="wrong"){
-    const played=await playBundledEffectSound(sound,token);
-    if(played || token!==speakingToken)return;
+    // Diagnostic/production path: these two effects are MP3-only.
+    // Do not fall back to the synthesized quiz tones.
+    await playBundledEffectSound(sound,token);
+    return;
   }
 
-  // Fallback synthesized effects, plus the remaining five built-in effects.
+  // The remaining five effects use Web Audio synthesis.
   const ctx=await ensureSoundAudioReady();
   if(!ctx || token!==speakingToken)return;
   const t=ctx.currentTime+0.035;
   let duration=0.7;
 
-  // Synthesized fallback for correct/wrong; all other effects remain Web Audio.
-  if(sound==="correct"){
-    // Familiar Japanese quiz-style "pin-pon": two clear, rounded rising notes.
-    // Use sine/triangle layers so it stays recognizable without becoming harsh.
-    toneAt(ctx,t,784,0.24,0.13,"sine",830);
-    toneAt(ctx,t+0.20,1047,0.46,0.14,"sine",1175);
-    toneAt(ctx,t+0.205,1568,0.28,0.035,"triangle",1760);
-    duration=0.76;
-  }else if(sound==="wrong"){
-    // Familiar "buu-buu": two short low buzzer notes, rounded to avoid harshness.
-    toneAt(ctx,t,196,0.30,0.12,"triangle",165);
-    toneAt(ctx,t+0.34,185,0.34,0.12,"triangle",147);
-    toneAt(ctx,t+0.01,98,0.27,0.035,"sine",82);
-    toneAt(ctx,t+0.35,92,0.31,0.035,"sine",73);
-    duration=0.78;
-  }else if(sound==="ding"){
+  if(sound==="ding"){
     // Bell-like single cue with a faint overtone.
     toneAt(ctx,t,1047,0.48,0.10,"sine",990);
     toneAt(ctx,t+0.015,2093,0.28,0.035,"sine",1900);
