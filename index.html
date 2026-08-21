@@ -1618,6 +1618,88 @@
     padding-right:10px !important;
   }
 }
+
+.flashCard{
+  position:relative;
+  touch-action:manipulation;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.flashTouchGuide{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:4px;
+  display:grid;
+  grid-template-columns:1fr 2fr 1fr;
+  pointer-events:none;
+  opacity:.34;
+  font-size:.68rem;
+  color:#667085;
+  text-align:center;
+}
+.flashTouchGuide span{
+  padding:2px 4px;
+}
+.flashFullscreenControl{
+  border-radius:10px !important;
+}
+.flashStageCard.flashFullscreenMode{
+  position:fixed !important;
+  inset:0 !important;
+  z-index:10000 !important;
+  width:100vw !important;
+  height:100vh !important;
+  height:100dvh !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:max(10px, env(safe-area-inset-top))
+          max(10px, env(safe-area-inset-right))
+          max(10px, env(safe-area-inset-bottom))
+          max(10px, env(safe-area-inset-left)) !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:#fff !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+}
+.flashStageCard.flashFullscreenMode .flashCard{
+  flex:1 1 auto !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  margin:0 !important;
+}
+.flashStageCard.flashFullscreenMode .flashControlBar{
+  flex:0 0 auto;
+  justify-content:center;
+  margin-top:0;
+}
+.flashStageCard.flashFullscreenMode .flashPane{
+  font-size:clamp(2rem,6vw,5rem);
+}
+body.flashFullscreenBody{
+  overflow:hidden !important;
+}
+@media(max-width:600px){
+  .flashStageCard.flashFullscreenMode{
+    padding:max(6px, env(safe-area-inset-top))
+            max(6px, env(safe-area-inset-right))
+            max(6px, env(safe-area-inset-bottom))
+            max(6px, env(safe-area-inset-left)) !important;
+  }
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    gap:6px;
+  }
+  .flashStageCard.flashFullscreenMode .flashControlBtn{
+    min-width:58px;
+    padding-left:8px !important;
+    padding-right:8px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1633,7 +1715,7 @@
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.3 / 更新 2026-08-21 19:01</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.4 / 更新 2026-08-21 19:08</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2041,6 +2123,9 @@
         <div class="flashPane flashPaneBottom" id="flashBottom" hidden></div>
       </div>
       <div class="flashSideLabel" id="flashSideLabel">表</div>
+      <div class="flashTouchGuide" aria-hidden="true">
+        <span>前</span><span>表 / 裏</span><span>次</span>
+      </div>
     </div>
     <div class="flashControlBar">
       <div class="flashButtonPair" aria-label="カード移動">
@@ -2052,6 +2137,7 @@
         <button type="button" id="flashBackBtn" class="secondary flashControlBtn">裏</button>
       </div>
       <button type="button" id="flashSpeakBtn" class="secondary flashControlBtn flashSpeakControl">🔊 発音</button>
+      <button type="button" id="flashFullscreenBtn" class="secondary flashControlBtn flashFullscreenControl">全画面</button>
     </div>
   </div>
 </section>
@@ -2063,8 +2149,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.3";
-const APP_UPDATED="2026-08-21 19:01";
+const APP_VERSION="v3.8.4";
+const APP_UPDATED="2026-08-21 19:08";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3643,6 +3729,53 @@ function shuffleFlashcards(){
   }
   flashIndex=0;flashBackShown=false;renderFlashcard();
 }
+
+let flashFullscreenActive=false;
+
+function updateFlashFullscreenUi(){
+  const stage=$("flashCard")?.closest(".flashStageCard");
+  if(stage)stage.classList.toggle("flashFullscreenMode",flashFullscreenActive);
+  document.body.classList.toggle("flashFullscreenBody",flashFullscreenActive);
+  const btn=$("flashFullscreenBtn");
+  if(btn)btn.textContent=flashFullscreenActive?"全画面終了":"全画面";
+  fitFlashcardFonts();
+}
+
+async function enterFlashFullscreen(){
+  flashFullscreenActive=true;
+  updateFlashFullscreenUi();
+
+  // Desktop browsers can also enter native fullscreen.
+  // iPhone Safari may not support this for arbitrary elements, so CSS fullscreen remains the fallback.
+  const stage=$("flashCard")?.closest(".flashStageCard");
+  try{
+    if(stage?.requestFullscreen && !document.fullscreenElement){
+      await stage.requestFullscreen();
+    }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
+      stage.webkitRequestFullscreen();
+    }
+  }catch(e){}
+  setTimeout(fitFlashcardFonts,60);
+}
+
+async function exitFlashFullscreen(){
+  flashFullscreenActive=false;
+  updateFlashFullscreenUi();
+  try{
+    if(document.fullscreenElement && document.exitFullscreen){
+      await document.exitFullscreen();
+    }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
+      document.webkitExitFullscreen();
+    }
+  }catch(e){}
+  setTimeout(fitFlashcardFonts,60);
+}
+
+async function toggleFlashFullscreen(){
+  if(flashFullscreenActive)await exitFlashFullscreen();
+  else await enterFlashFullscreen();
+}
+
 async function speakCurrentFlashcard(){
   const r=flashRecords[flashIndex];
   if(!r)return;
@@ -3668,9 +3801,45 @@ $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
 $("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
-$("flashCard")?.addEventListener("click",flipFlashcard);
-$("flashCard")?.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}});
+$("flashFullscreenBtn")?.addEventListener("click",toggleFlashFullscreen);
+$("flashCard")?.addEventListener("click",e=>{
+  // Card width: left 1/4 = previous, center 1/2 = flip, right 1/4 = next.
+  const card=e.currentTarget;
+  const rect=card.getBoundingClientRect();
+  if(!rect.width)return;
+  const x=e.clientX-rect.left;
+  const ratio=x/rect.width;
+  if(ratio<0.25){
+    stepFlashcard(-1);
+  }else if(ratio>0.75){
+    stepFlashcard(1);
+  }else{
+    flipFlashcard();
+  }
+});
+$("flashCard")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}
+  else if(e.key==="ArrowLeft"){e.preventDefault();stepFlashcard(-1);}
+  else if(e.key==="ArrowRight"){e.preventDefault();stepFlashcard(1);}
+});
 $("flashSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")buildFlashcardsFromSearch();});
+
+document.addEventListener("fullscreenchange",()=>{
+  if(!document.fullscreenElement && flashFullscreenActive){
+    flashFullscreenActive=false;
+    updateFlashFullscreenUi();
+  }
+});
+document.addEventListener("webkitfullscreenchange",()=>{
+  if(!document.webkitFullscreenElement && flashFullscreenActive){
+    flashFullscreenActive=false;
+    updateFlashFullscreenUi();
+  }
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape" && flashFullscreenActive)exitFlashFullscreen();
+});
+
 ["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField","flashAutoFont"].forEach(id=>{
   $(id)?.addEventListener("change",()=>{
     updateFlashLayoutControls();
