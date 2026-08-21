@@ -2636,6 +2636,27 @@ body.flashFullscreenBody{
     font-size:.72rem !important;
   }
 }
+
+.csvReplaceBtn{
+  background:#e5e7eb !important;
+  color:#111827 !important;
+  border:1px solid #c9ced6 !important;
+  font-weight:700 !important;
+}
+.csvAdvancedActions summary{
+  cursor:pointer;
+}
+.configuredReadBtn{
+  background:#d1d5db !important;
+  color:#111827 !important;
+  border:2px solid #111827 !important;
+  font-weight:800 !important;
+}
+.configuredReadBtn:hover,
+.configuredReadBtn:focus{
+  background:#d1d5db !important;
+  color:#111827 !important;
+}
 </style>
 </head>
 <body>
@@ -2651,7 +2672,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.8 / 更新 2026-08-21 20:48</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.0.0 / 更新 2026-08-21 21:00</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2715,7 +2736,7 @@ body.flashFullscreenBody{
 <div class="hint" style="margin-top:14px;">日本語読み</div>
 <div id="japaneseReadDisplay"></div>
 <div class="row">
-<button id="playConfiguredBtn">▶ 設定どおり読む</button>
+<button class="secondary configuredReadBtn" id="playConfiguredBtn">▶ 設定どおり読む</button>
 <button class="secondary" id="playEnglishBtn">英語だけ</button>
 <button class="secondary" id="playJapaneseBtn">日本語だけ</button>
 <button class="secondary" id="playBothBtn">英語→日本語</button>
@@ -2787,10 +2808,18 @@ body.flashFullscreenBody{
 </div>
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
-<button id="replaceImportBtn">全置換で読み込む</button>
-<button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
-<button class="secondary" id="exportBtn">CSVを書き出す</button>
-</div><p class="status" id="importStatus"></p>
+<button class="secondary csvReplaceBtn" id="replaceImportBtn">全置換で読み込む</button>
+</div>
+<details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+  <summary>詳細設定（追加・書き出し）</summary>
+  <div class="advancedSettingsBody">
+    <div class="row">
+      <button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
+      <button class="secondary" id="exportBtn">CSVを書き出す</button>
+    </div>
+  </div>
+</details>
+<p class="status" id="importStatus"></p>
 <div class="metric">
 <div>登録件数：<strong id="recordCount">0</strong></div>
 <div>データ版：<strong id="dataVersion">未設定</strong></div>
@@ -3133,8 +3162,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.8";
-const APP_UPDATED="2026-08-21 20:48";
+const APP_VERSION="v4.0.0";
+const APP_UPDATED="2026-08-21 21:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3208,19 +3237,13 @@ async function refreshCurrentCsvFileName(){
   const el=$("currentCsvFileName");
   if(!el)return;
 
-  // IndexedDB is authoritative; localStorage is a redundant fallback so that
-  // the filename survives UI/cache changes more reliably.
+  const profile=activeCsvProfile;
   let name="";
-  try{name=String((await getMeta(csvFileNameMetaKey()))||"").trim();}catch(e){}
-  if(!name)name=String(localStorage.getItem(csvFileNameLocalKey())||"").trim();
+  try{name=String((await getMeta(csvFileNameMetaKey(profile)))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem(csvFileNameLocalKey(profile))||"").trim();
 
-  // If the user has already chosen a file in the current CSV tab, show it
-  // immediately even before pressing import.
-  const selected=$("csvFile")?.files?.[0]?.name||"";
-  if(selected)name=selected;
-
-  el.textContent=name||"記録なし（CSVを一度再読込してください）";
-  el.title=el.textContent;
+  el.textContent=`${profile}：${name||"記録なし（CSVを一度再読込してください）"}`;
+  el.title=`CSV ${profile}：${name||"記録なし"}`;
 }
 
 async function getActiveProfileRecords(){return await getAllRecords();}
@@ -3246,6 +3269,7 @@ async function switchDataProfile(profile){
 
     activeCsvProfile=profile;
     localStorage.setItem(ACTIVE_PROFILE_KEY,profile);
+    if($("csvFile"))$("csvFile").value="";
 
     if($("qrSheet"))$("qrSheet").innerHTML="";
     if($("printQrSheet"))$("printQrSheet").innerHTML="";
@@ -3397,17 +3421,23 @@ function csvToRecords(rows) {
 async function importCsv(replace) {
   const file=$("csvFile").files[0];
   if(!file){setStatus($("importStatus"),"CSVを選択してください。",false);return;}
+  const importProfile=activeCsvProfile;
+  const importStore=activeStoreName();
   try{
     const parsed=csvToRecords(parseCsv(await file.text()));
+    if(importProfile!==activeCsvProfile){
+      setStatus($("importStatus"),"CSV切替後にもう一度読み込んでください。",false);
+      return;
+    }
     if(replace) await clearRecords();
-    const transaction=db.transaction(activeStoreName(),"readwrite");
-    const store=transaction.objectStore(activeStoreName());
+    const transaction=db.transaction(importStore,"readwrite");
+    const store=transaction.objectStore(importStore);
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
-    if(parsed.version) await putMeta("version_"+activeCsvProfile,parsed.version);
-    await saveCurrentCsvFileName(file.name||"");
+    if(parsed.version) await putMeta("version_"+importProfile,parsed.version);
+    await saveCurrentCsvFileName(file.name||"",importProfile);
     await refreshCurrentCsvFileName();
-    setStatus($("importStatus"),"CSV "+activeCsvProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
+    setStatus($("importStatus"),"CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
@@ -5235,7 +5265,6 @@ $("flashCopyIdsBtn")?.addEventListener("click",async()=>{await copyFlashCheckedI
 $("flashCopyMemoBtn")?.addEventListener("click",async()=>{await copyFlashCheckedMemo();flashAccepted($("flashCopyMemoBtn"));});
 $("flashSaveMemoBtn")?.addEventListener("click",async()=>{await saveFlashCheckedMemoFile();flashAccepted($("flashSaveMemoBtn"));});
 $("flashClearChecksBtn")?.addEventListener("click",async()=>{await clearFlashChecks();flashAccepted($("flashClearChecksBtn"));});
-$("csvFile")?.addEventListener("change",refreshCurrentCsvFileName);
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
