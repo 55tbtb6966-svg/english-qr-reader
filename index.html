@@ -1245,7 +1245,7 @@
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.7.0 / 更新 2026-08-21 07:07</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.7.2 / 更新 2026-08-21 15:32</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1256,8 +1256,13 @@
 <button class="tabBtn" data-target="flashcardPanel">フラッシュカード</button>
 </div>
 <div class="profileSwitchBar" id="profileSwitchBar">
-  <div class="profileSwitchTitle">CSVセット</div>
-  <button type="button" class="profileBtn active" data-prefix="C">① 子供用</button>
+  <div class="profileSwitchTitle">CSV</div>
+  <button type="button" class="profileBtn active" data-profile="A">A</button>
+  <button type="button" class="profileBtn" data-profile="B">B</button>
+  <button type="button" class="profileBtn" data-profile="C">C</button>
+  <span class="profileStatus" id="profileStatus">CSV：A</span>
+</div>
+<button type="button" class="profileBtn active" data-prefix="C">① 子供用</button>
   <button type="button" class="profileBtn" data-prefix="A">② 大人用</button>
   <button type="button" class="profileBtn" data-prefix="B">③ 大人用2</button>
   <span class="profileStatus" id="profileStatus">① 子供用 / ID先頭 C</span>
@@ -1384,7 +1389,7 @@
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
-<p class="hint" id="profileCsvHint">選択中：① 子供用（IDは C で始まるCSV）。「全置換」はこのCSVセットだけを置き換え、他のセットは残します。</p>
+<p class="hint" id="profileCsvHint">選択中：CSV A。「全置換」はAだけを置き換え、B/Cは残します。ID先頭文字による制限はありません。</p>
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
 <button id="replaceImportBtn">全置換で読み込む</button>
@@ -1424,6 +1429,7 @@
 <label><span>日本語</span><input id="editJapanese" type="text"/></label>
 </div>
 <label style="margin-top:10px;"><span>英文</span><textarea id="editEnglish"></textarea></label>
+<label style="margin-top:10px;"><span>解説（フラッシュカード用・任意）</span><textarea id="editExplanation" placeholder="例：この表現の使い方、文法メモ、補足説明"></textarea></label>
 <label style="margin-top:10px;"><span>発音記号 IPA（単語のみ・任意）</span><input id="editIpa" placeholder="/ˈæpəl/" type="text"/></label>
 <label style="margin-top:10px;"><span>日本語読み（任意・ひらがな推奨）</span><textarea id="editJapaneseRead" placeholder="これは りんご です。"></textarea></label>
 <div class="grid3" style="margin-top:10px;">
@@ -1593,9 +1599,9 @@
     <h2>フラッシュカード</h2>
     <p class="hint">現在選択中のCSVセットだけを使います。既存の読み取り・QR作成とは独立した機能です。</p>
     <div class="flashControlsGrid">
-      <label><span>絞り込み</span><input id="flashSearch" type="text" placeholder="英語・日本語・Comment・ID"></label>
-      <label><span>表</span><select id="flashFrontField"><option value="english" selected>英語</option><option value="japanese">日本語</option><option value="japaneseRead">日本語読み</option></select></label>
-      <label><span>裏</span><select id="flashBackField"><option value="japanese" selected>日本語</option><option value="japaneseRead">日本語読み</option><option value="english">英語</option><option value="comment">Comment</option></select></label>
+      <label><span>絞り込み</span><input id="flashSearch" type="text" placeholder="英語・発音記号・日本語・読み・Comment・解説など"></label>
+      <label><span>表</span><select id="flashFrontField"><option value="english" selected>英語</option><option value="japanese">日本語</option><option value="japaneseRead">日本語読み</option><option value="explanation">解説</option></select></label>
+      <label><span>裏</span><select id="flashBackField"><option value="japanese" selected>日本語</option><option value="japaneseRead">日本語読み</option><option value="english">英語</option><option value="comment">Comment</option><option value="explanation">解説</option></select></label>
     </div>
     <div class="row">
       <button type="button" id="flashReloadBtn" class="secondary">カードを読み込む</button>
@@ -1625,8 +1631,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.7.0";
-const APP_UPDATED="2026-08-21 07:07";
+const APP_VERSION="v3.7.2";
+const APP_UPDATED="2026-08-21 15:32";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1646,9 +1652,15 @@ function updateVersionBadge(csvVersion=""){
 }
 
 const DB_NAME = "EnglishQrReaderDB";
-const DB_VERSION = 1;
-const STORE = "records";
+const DB_VERSION = 2;
+const LEGACY_STORE = "records";
+const STORE_A = "records_A";
+const STORE_B = "records_B";
+const STORE_C = "records_C";
 const META = "meta";
+function activeStoreName(){
+  return activeCsvProfile==="B"?STORE_B:activeCsvProfile==="C"?STORE_C:STORE_A;
+}
 const $ = id => document.getElementById(id);
 
 let db;
@@ -1672,53 +1684,67 @@ let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
 
-const DATA_PROFILES={
-  C:{label:"① 子供用",prefix:"C"},
-  A:{label:"② 大人用",prefix:"A"},
-  B:{label:"③ 大人用2",prefix:"B"}
-};
-const ACTIVE_PROFILE_KEY="activeCsvProfileV1";
-let activeProfilePrefix=localStorage.getItem(ACTIVE_PROFILE_KEY)||"C";
-if(!DATA_PROFILES[activeProfilePrefix])activeProfilePrefix="C";
+const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"}};
+const ACTIVE_PROFILE_KEY="activeCsvProfileV2";
+let activeCsvProfile=localStorage.getItem(ACTIVE_PROFILE_KEY)||"A";
+if(!CSV_PROFILES[activeCsvProfile])activeCsvProfile="A";
 
-function recordProfilePrefix(recordOrId){
-  const id=typeof recordOrId==="string"?recordOrId:recordOrId?.id;
-  return String(id||"").trim().charAt(0).toUpperCase();
-}
-function isActiveProfileRecord(r){return recordProfilePrefix(r)===activeProfilePrefix;}
-function activeProfileInfo(){return DATA_PROFILES[activeProfilePrefix]||DATA_PROFILES.C;}
-async function getActiveProfileRecords(){return (await getAllRecords()).filter(isActiveProfileRecord);}
-
-async function deleteActiveProfileRecords(){
-  const all=await getAllRecords();
-  const ids=all.filter(isActiveProfileRecord).map(r=>r.id);
-  if(!ids.length)return;
-  const transaction=db.transaction(STORE,"readwrite");
-  const store=transaction.objectStore(STORE);
-  ids.forEach(id=>store.delete(id));
-  await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
-}
+function activeProfileInfo(){return CSV_PROFILES[activeCsvProfile];}
+async function getActiveProfileRecords(){return await getAllRecords();}
 
 function updateProfileUi(){
-  document.querySelectorAll(".profileBtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.prefix===activeProfilePrefix));
-  const p=activeProfileInfo();
-  if($("profileStatus"))$("profileStatus").textContent=`${p.label} / ID先頭 ${p.prefix}`;
-  if($("profileCsvHint"))$("profileCsvHint").textContent=`選択中：${p.label}（IDは ${p.prefix} で始まるCSV）。「全置換」はこのCSVセットだけを置き換え、他のセットは残します。`;
+  document.querySelectorAll(".profileBtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.profile===activeCsvProfile));
+  if($("profileStatus"))$("profileStatus").textContent=`CSV：${activeCsvProfile}`;
+  if($("profileCsvHint"))$("profileCsvHint").textContent=`選択中：CSV ${activeCsvProfile}。「全置換」は${activeCsvProfile}だけを置き換え、他のCSVは残します。ID先頭文字による制限はありません。`;
 }
 
-async function switchDataProfile(prefix){
-  if(!DATA_PROFILES[prefix])return;
-  activeProfilePrefix=prefix;
-  localStorage.setItem(ACTIVE_PROFILE_KEY,prefix);
-  selectedIds.clear(); currentPage=0; qrPageSource=[]; qrPageStart=0;
+async function switchDataProfile(profile){
+  if(!CSV_PROFILES[profile] || profile===activeCsvProfile){
+    updateProfileUi();
+    return;
+  }
+
+  // Stop anything originating from the previous CSV immediately.
+  speakingToken++;
+  try{window.speechSynthesis?.cancel();}catch(e){}
+  currentRecord=null;
+  selectedIds.clear();
+  currentPage=0;
+  qrPageSource=[];
+  qrPageStart=0;
+  flashRecords=[];
+  flashIndex=0;
+  flashBackShown=false;
+
+  activeCsvProfile=profile;
+  localStorage.setItem(ACTIVE_PROFILE_KEY,profile);
+
+  // Clear every data-dependent view from the previous CSV.
   if($("qrSheet"))$("qrSheet").innerHTML="";
+  if($("printQrSheet"))$("printQrSheet").innerHTML="";
+  if($("qrPageStatus"))$("qrPageStatus").textContent="";
+  if($("qrStatus"))$("qrStatus").textContent="";
+  if($("manualId"))$("manualId").value="";
+  if($("idBadge"))$("idBadge").textContent="ID：未選択";
+  if($("modeBadge"))$("modeBadge").textContent="読み方：未選択";
+  if($("english")){
+    $("english").classList.add("initialPrompt");
+    $("english").textContent=`CSV ${profile} を選択中です`;
+  }
+  if($("ipaDisplay"))$("ipaDisplay").textContent="";
+  if($("japanese"))$("japanese").textContent="";
+  if($("japaneseReadDisplay"))$("japaneseReadDisplay").textContent="";
+  if($("scanStatus"))$("scanStatus").textContent="";
+  if($("flashMain"))$("flashMain").textContent="フラッシュカード";
+  if($("flashId"))$("flashId").textContent="";
+  if($("flashStatus"))$("flashStatus").textContent="カードを読み込んでください。";
+
   updateProfileUi();
   await refreshSummary();
+  updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
   await renderPage();
   await loadFlashcards();
 }
-
-
 function setStatus(el, msg, ok=true) {
   el.textContent = msg;
   el.className = "status " + (ok ? "ok" : "error");
@@ -1730,16 +1756,33 @@ function openDb() {
   return new Promise((resolve,reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
-      const d = e.target.result;
-      if (!d.objectStoreNames.contains(STORE)) {
-        const s = d.createObjectStore(STORE, { keyPath:"id" });
-        s.createIndex("english","english",{unique:false});
-        s.createIndex("japanese","japanese",{unique:false});
+      const d=e.target.result;
+      for(const storeName of [STORE_A,STORE_B,STORE_C]){
+        if(!d.objectStoreNames.contains(storeName)){
+          const st=d.createObjectStore(storeName,{keyPath:"id"});
+          st.createIndex("english","english",{unique:false});
+          st.createIndex("japanese","japanese",{unique:false});
+        }
       }
-      if (!d.objectStoreNames.contains(META)) d.createObjectStore(META,{keyPath:"key"});
+      if(!d.objectStoreNames.contains(META))d.createObjectStore(META,{keyPath:"key"});
+      if(d.objectStoreNames.contains(LEGACY_STORE)){
+        try{
+          const oldStore=e.target.transaction.objectStore(LEGACY_STORE);
+          const newStore=e.target.transaction.objectStore(STORE_A);
+          oldStore.openCursor().onsuccess=ev=>{
+            const c=ev.target.result;
+            if(c){
+              const r={...c.value};
+              if(/^[EC]\d{6}$/i.test(r.id))r.id="A"+r.id.slice(1);
+              newStore.put(r);
+              c.continue();
+            }
+          };
+        }catch(err){}
+      }
     };
-    req.onsuccess = () => { db=req.result; resolve(db); };
-    req.onerror = () => reject(req.error);
+    req.onsuccess=()=>{db=req.result;resolve(db);};
+    req.onerror=()=>reject(req.error);
   });
 }
 async function ensureDb(){
@@ -1748,17 +1791,23 @@ async function ensureDb(){
 }
 
 function tx(store, mode="readonly") { if(!db)throw new Error("IndexedDB is not initialized"); return db.transaction(store,mode).objectStore(store); }
-function reqPromise(req) {
-  return new Promise((resolve,reject)=>{ req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); });
-}
+function reqPromise(req) { return new Promise((resolve,reject)=>{ req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
 async function putMeta(key,value) { await ensureDb(); await reqPromise(tx(META,"readwrite").put({key,value})); }
 async function getMeta(key) { await ensureDb(); const r=await reqPromise(tx(META).get(key)); return r?.value; }
-async function countRecords() { await ensureDb(); return await reqPromise(tx(STORE).count()); }
-async function getRecord(id) { await ensureDb(); return await reqPromise(tx(STORE).get(id)); }
-async function putRecord(record) { await ensureDb(); await reqPromise(tx(STORE,"readwrite").put(record)); }
-async function deleteRecord(id) { await ensureDb(); await reqPromise(tx(STORE,"readwrite").delete(id)); }
-async function clearRecords() { await ensureDb(); await reqPromise(tx(STORE,"readwrite").clear()); }
-async function getAllRecords() { await ensureDb(); return await reqPromise(tx(STORE).getAll()); }
+async function countRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).count()); }
+async function getRecord(id) { await ensureDb(); return await reqPromise(tx(activeStoreName()).get(id)); }
+async function getRecordFromAnyCsv(id) {
+  await ensureDb();
+  const order=[activeStoreName(),STORE_A,STORE_B,STORE_C].filter((v,i,a)=>a.indexOf(v)===i);
+  for(const storeName of order){
+    const r=await reqPromise(tx(storeName).get(id));
+    if(r)return r;
+  }
+}
+async function putRecord(record) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").put(record)); }
+async function deleteRecord(id) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").delete(id)); }
+async function clearRecords() { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").clear()); }
+async function getAllRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).getAll()); }
 
 function parseCsv(text) {
   const rows=[]; let row=[],cell="",quoted=false;
@@ -1787,6 +1836,7 @@ function csvToRecords(rows) {
   const iMode=idx(["mode","読み方"]), iER=idx(["englishrate","english_rate","英語速度"]);
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
   const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
+  const iExplanation=idx(["explanation","解説","説明","note","notes"]);
   if(iId<0||iEn<0) throw new Error("ID列とEnglish列が必要です。");
   const out=[]; let version="";
   for(let i=1;i<rows.length;i++){
@@ -1805,7 +1855,8 @@ function csvToRecords(rows) {
       repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1,
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
       version:iVer>=0?String(c[iVer]||"").trim():"",
-      comment:iComment>=0?String(c[iComment]||"").trim():""};
+      comment:iComment>=0?String(c[iComment]||"").trim():"",
+      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():""};
     if(rec.version) version=rec.version;
     out.push(rec);
   }
@@ -1816,33 +1867,28 @@ async function importCsv(replace) {
   if(!file){setStatus($("importStatus"),"CSVを選択してください。",false);return;}
   try{
     const parsed=csvToRecords(parseCsv(await file.text()));
-    const bad=parsed.records.filter(r=>recordProfilePrefix(r)!==activeProfilePrefix);
-    if(bad.length){
-      const p=activeProfileInfo();
-      throw new Error(`${p.label}では、IDが ${p.prefix} で始まるCSVを読み込んでください。（不一致 ${bad.length}件）`);
-    }
-    if(replace) await deleteActiveProfileRecords();
-    const transaction=db.transaction(STORE,"readwrite");
-    const store=transaction.objectStore(STORE);
+    if(replace) await clearRecords();
+    const transaction=db.transaction(activeStoreName(),"readwrite");
+    const store=transaction.objectStore(activeStoreName());
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
-    if(parsed.version) await putMeta("version",parsed.version);
-    setStatus($("importStatus"),activeProfileInfo().label+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
+    if(parsed.version) await putMeta("version_"+activeCsvProfile,parsed.version);
+    setStatus($("importStatus"),"CSV "+activeCsvProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getActiveProfileRecords()).sort((a,b)=>a.id.localeCompare(b.id));
-  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment"];
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
-    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||""
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||"",r.explanation||""
   ].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=`words_${activeProfilePrefix}.csv`;
+  a.download=`words_${activeCsvProfile}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -1854,7 +1900,7 @@ async function refreshSummary(){
   }
 
   try{
-    $("dataVersion").textContent=(await getMeta("version"))||"未設定";
+    $("dataVersion").textContent=(await getMeta("version_"+activeCsvProfile))||"未設定";
   }catch{
     $("dataVersion").textContent="取得エラー";
   }
@@ -2369,13 +2415,10 @@ function normalizeScannedId(raw){
   // スキャナー入力に混ざる空白・改行・タブを除去
   t=t.replace(/[\s\u3000]+/g,"");
 
-  // iPhone日本語入力で先頭 E が日本語化された場合を補正
-  // 例: え000005 / エ000005 / e000005 / Ｅ000005
-  t=t.replace(/^(?:え|エ|e|E)(?=\d{6}$)/i,"E");
-
-  // 既存ID形式に合わせ、E + 6桁なら大文字Eへ統一
-  const idMatch=t.match(/^e(\d{6})$/i);
-  if(idMatch)t="E"+idMatch[1];
+  // 英字 + 6桁のIDは先頭英字を大文字へ統一。
+  // CSVスロット名(A/B/C)とID先頭文字は独立しています。
+  const idMatch=t.match(/^([a-z])(\d{6})$/i);
+  if(idMatch)t=idMatch[1].toUpperCase()+idMatch[2];
 
   return t;
 }
@@ -2393,7 +2436,7 @@ async function handleExternalScannerSubmit(raw){
 function scannerCharFromCode(e){
   // KeyboardEvent.code is based on the physical HID key and is independent
   // of the active Japanese/English IME for the characters used in our IDs.
-  if(e.code==="KeyE")return "E";
+  if(/^Key[A-Z]$/.test(e.code))return e.code.slice(-1).toUpperCase();
   if(/^Digit[0-9]$/.test(e.code))return e.code.slice(-1);
   if(/^Numpad[0-9]$/.test(e.code))return e.code.slice(-1);
   return "";
@@ -2633,7 +2676,7 @@ async function startScanner(){
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
 function clearEditor(){
-  ["editId","editJapanese","editJapaneseRead","editEnglish","editIpa","editVersion"].forEach(id=>$(id).value="");
+  ["editId","editJapanese","editJapaneseRead","editEnglish","editIpa","editVersion","editExplanation"].forEach(id=>$(id).value="");
   $("editMode").value="both";$("editEnglishRate").value="1";$("editJapaneseRate").value="1";
   $("editRepeat").value="1";$("editGap").value="0.5";
 }
@@ -2643,8 +2686,8 @@ async function saveEditor(){
   const r={id,english,ipa:$("editIpa").value.trim(),japanese:$("editJapanese").value.trim(),japaneseRead:$("editJapaneseRead").value.trim(),mode:$("editMode").value,
     englishRate:Number($("editEnglishRate").value)||1,japaneseRate:Number($("editJapaneseRate").value)||1,
     repeat:Math.max(1,parseInt($("editRepeat").value,10)||1),gap:Math.max(0,Number($("editGap").value)||0),
-    version:$("editVersion").value.trim()};
-  await putRecord(r);if(r.version)await putMeta("version",r.version);
+    version:$("editVersion").value.trim(),explanation:$("editExplanation").value.trim()};
+  await putRecord(r);if(r.version)await putMeta("version_"+activeCsvProfile,r.version);
   setStatus($("editStatus"),id+" を保存しました。");await refreshSummary();await renderPage();
 }
 async function editRecord(id){
@@ -2653,15 +2696,15 @@ async function editRecord(id){
   $("editId").value=r.id;$("editEnglish").value=r.english;$("editIpa").value=r.ipa||"";$("editJapanese").value=r.japanese;$("editJapaneseRead").value=r.japaneseRead||"";
   $("editMode").value=r.mode;$("editEnglishRate").value=String(r.englishRate);
   $("editJapaneseRate").value=String(r.japaneseRate);$("editRepeat").value=String(r.repeat);
-  $("editGap").value=String(r.gap);$("editVersion").value=r.version||"";
+  $("editGap").value=String(r.gap);$("editVersion").value=r.version||"";$("editExplanation").value=r.explanation||"";
 }
 async function filteredAll(searchId){
   const q=String($(searchId)?.value||"").trim().toLowerCase();
-  const all=(await getAllRecords()).filter(isActiveProfileRecord);
+  const all=await getAllRecords();
   return all
     .filter(r=>{
       if(!q)return true;
-      return [r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,r.sound,r.comment]
+      return [r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,r.sound,r.comment,r.explanation]
         .some(v=>String(v??"").toLowerCase().includes(q));
     })
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
@@ -2958,6 +3001,7 @@ function flashFieldValue(r,key){
   if(key==="japanese")return r.japanese||r.japaneseRead||"";
   if(key==="japaneseRead")return r.japaneseRead||r.japanese||"";
   if(key==="comment")return r.comment||"";
+  if(key==="explanation")return r.explanation||"";
   return r.english||"";
 }
 function renderFlashcard(){
@@ -2981,7 +3025,10 @@ async function loadFlashcards(){
   const q=String($("flashSearch")?.value||"").trim().toLowerCase();
   flashRecords=(await getActiveProfileRecords()).filter(r=>{
     if(!q)return true;
-    return [r.id,r.english,r.englishSpeak,r.japanese,r.japaneseRead,r.comment].some(v=>String(v||"").toLowerCase().includes(q));
+    return [
+      r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+      r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+    ].some(v=>String(v??"").toLowerCase().includes(q));
   }).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   flashIndex=0;flashBackShown=false;renderFlashcard();
 }
@@ -3007,7 +3054,7 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
   if(b.dataset.target==="flashcardPanel")loadFlashcards();
 }));
 
-document.querySelectorAll(".profileBtn").forEach(btn=>btn.addEventListener("click",()=>switchDataProfile(btn.dataset.prefix)));
+document.querySelectorAll(".profileBtn").forEach(btn=>btn.addEventListener("click",()=>switchDataProfile(btn.dataset.profile)));
 $("flashReloadBtn")?.addEventListener("click",loadFlashcards);
 $("flashShuffleBtn")?.addEventListener("click",shuffleFlashcards);
 $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
@@ -4771,7 +4818,12 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
 updateProfileUi();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
-setTimeout(()=>{refreshSummary();renderPage();loadFlashcards();},0);
+setTimeout(async()=>{
+  await refreshSummary();
+  updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
+  await renderPage();
+  await loadFlashcards();
+},0);
 
 (function ensureDefaultQrFieldToggles(){
   try{
