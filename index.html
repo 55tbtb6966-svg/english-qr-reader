@@ -2651,7 +2651,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.7 / 更新 2026-08-21 20:42</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.8 / 更新 2026-08-21 20:48</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2782,7 +2782,7 @@ body.flashFullscreenBody{
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
 <div class="currentCsvFileNameBox">
-  <span class="currentCsvFileNameLabel">現在のCSV</span>
+  <span class="currentCsvFileNameLabel">最後に読み込んだCSV</span>
   <strong id="currentCsvFileName">未登録</strong>
 </div>
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
@@ -3133,8 +3133,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.7";
-const APP_UPDATED="2026-08-21 20:42";
+const APP_VERSION="v3.9.8";
+const APP_UPDATED="2026-08-21 20:48";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3195,12 +3195,32 @@ function activeProfileInfo(){return CSV_PROFILES[activeCsvProfile];}
 function csvFileNameMetaKey(profile=activeCsvProfile){
   return "csv_filename_"+profile;
 }
+function csvFileNameLocalKey(profile=activeCsvProfile){
+  return "lastCsvFileName_"+profile;
+}
+async function saveCurrentCsvFileName(name,profile=activeCsvProfile){
+  const safe=String(name||"").trim();
+  if(!safe)return;
+  await putMeta(csvFileNameMetaKey(profile),safe);
+  localStorage.setItem(csvFileNameLocalKey(profile),safe);
+}
 async function refreshCurrentCsvFileName(){
   const el=$("currentCsvFileName");
   if(!el)return;
-  const name=(await getMeta(csvFileNameMetaKey()))||"未登録";
-  el.textContent=name;
-  el.title=name;
+
+  // IndexedDB is authoritative; localStorage is a redundant fallback so that
+  // the filename survives UI/cache changes more reliably.
+  let name="";
+  try{name=String((await getMeta(csvFileNameMetaKey()))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem(csvFileNameLocalKey())||"").trim();
+
+  // If the user has already chosen a file in the current CSV tab, show it
+  // immediately even before pressing import.
+  const selected=$("csvFile")?.files?.[0]?.name||"";
+  if(selected)name=selected;
+
+  el.textContent=name||"記録なし（CSVを一度再読込してください）";
+  el.title=el.textContent;
 }
 
 async function getActiveProfileRecords(){return await getAllRecords();}
@@ -3385,7 +3405,7 @@ async function importCsv(replace) {
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
     if(parsed.version) await putMeta("version_"+activeCsvProfile,parsed.version);
-    await putMeta(csvFileNameMetaKey(),file.name||"");
+    await saveCurrentCsvFileName(file.name||"");
     await refreshCurrentCsvFileName();
     setStatus($("importStatus"),"CSV "+activeCsvProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
@@ -5215,6 +5235,7 @@ $("flashCopyIdsBtn")?.addEventListener("click",async()=>{await copyFlashCheckedI
 $("flashCopyMemoBtn")?.addEventListener("click",async()=>{await copyFlashCheckedMemo();flashAccepted($("flashCopyMemoBtn"));});
 $("flashSaveMemoBtn")?.addEventListener("click",async()=>{await saveFlashCheckedMemoFile();flashAccepted($("flashSaveMemoBtn"));});
 $("flashClearChecksBtn")?.addEventListener("click",async()=>{await clearFlashChecks();flashAccepted($("flashClearChecksBtn"));});
+$("csvFile")?.addEventListener("change",refreshCurrentCsvFileName);
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
