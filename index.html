@@ -2587,6 +2587,55 @@ body.flashFullscreenBody{
   box-shadow:none !important;
   outline:none !important;
 }
+
+/* v3.9.7: no card-side label; shuffle is always two lines */
+.flashSideLabel{
+  display:none !important;
+}
+
+.flashShuffleToggle,
+.flashStageCard.flashFullscreenMode .flashShuffleToggle{
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+  white-space:normal !important;
+  line-height:1.0 !important;
+  overflow:hidden !important;
+  padding:2px 3px !important;
+}
+
+.flashShuffleToggle span,
+.flashStageCard.flashFullscreenMode .flashShuffleToggle span{
+  display:block !important;
+  width:100% !important;
+  margin:0 !important;
+  padding:0 !important;
+  white-space:nowrap !important;
+  text-align:center !important;
+}
+
+.flashShuffleToggle span:first-child{
+  font-size:.62rem !important;
+  line-height:1.05 !important;
+}
+
+.flashShuffleToggle .flashShuffleState{
+  font-size:.76rem !important;
+  line-height:1.05 !important;
+  font-weight:800 !important;
+  margin-top:2px !important;
+}
+
+@media(max-width:700px){
+  .flashShuffleToggle span:first-child{
+    font-size:.58rem !important;
+  }
+  .flashShuffleToggle .flashShuffleState{
+    font-size:.72rem !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2602,7 +2651,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.6 / 更新 2026-08-21 20:37</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.7 / 更新 2026-08-21 20:42</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3008,7 +3057,6 @@ body.flashFullscreenBody{
         <div class="flashPane flashPaneTop" id="flashTop">フラッシュカード</div>
         <div class="flashPane flashPaneBottom" id="flashBottom" hidden></div>
       </div>
-      <div class="flashSideLabel" id="flashSideLabel">表</div>
       <div class="flashTouchGuide" aria-hidden="true">
         <span>前</span><span>表 / 裏</span><span>次</span>
       </div>
@@ -3085,8 +3133,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.6";
-const APP_UPDATED="2026-08-21 20:37";
+const APP_VERSION="v3.9.7";
+const APP_UPDATED="2026-08-21 20:42";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4871,8 +4919,7 @@ function renderFlashcard(){
 
   // ID is a search key and small reference, independent of selected content.
   $("flashId").textContent=r.id;
-  $("flashSideLabel").textContent=flashBackShown?"裏":"表";
-  $("flashFrontBtn")?.classList.toggle("flashSideActive",!flashBackShown);
+    $("flashFrontBtn")?.classList.toggle("flashSideActive",!flashBackShown);
   $("flashBackBtn")?.classList.toggle("flashSideActive",flashBackShown);
   $("flashFrontBtn")?.setAttribute("aria-pressed",String(!flashBackShown));
   $("flashBackBtn")?.setAttribute("aria-pressed",String(flashBackShown));
