@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.9 / 更新 2026-08-22 05:22</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.2.0 / 更新 2026-08-22 05:28</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.9";
-const APP_UPDATED="2026-08-22 05:22";
+const APP_VERSION="v4.2.0";
+const APP_UPDATED="2026-08-22 05:28";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3660,7 +3660,8 @@ async function maybeWarmupSpeechEngine(token,lang="en-US"){
   lastSpeechActivityAt=Date.now();
   speechWarmupStale=false;
   // Give Safari a short moment to keep the newly opened TTS/audio path active.
-  await new Promise(r=>setTimeout(r,180));
+  await new Promise(r=>setTimeout(r,260));
+  try{window.speechSynthesis?.resume();}catch(e){}
 }
 
 document.addEventListener("visibilitychange",()=>{
@@ -3676,8 +3677,10 @@ async function speakText(text,lang,rate){
   if(!text)return;
 
   const tokenAtStart=speakingToken;
+  try{window.speechSynthesis?.resume();}catch(e){}
   await maybeWarmupSpeechEngine(tokenAtStart,lang);
   if(tokenAtStart!==speakingToken)return;
+  try{window.speechSynthesis?.resume();}catch(e){}
 
   await new Promise(resolve=>{
     setTimeout(()=>{
@@ -4075,7 +4078,15 @@ async function playRecord(modeOverride=null){
     if(hasSound){
       await playEffectSound(currentRecord.sound,token);
       if(token!==speakingToken)break;
-      if(englishSpeech || japaneseSpeech)await new Promise(r=>setTimeout(r,140));
+
+      if(englishSpeech || japaneseSpeech){
+        // iPhone Safari can leave speechSynthesis suspended after a Web Audio effect.
+        // Explicitly wake it, then allow a short hand-off gap before speech.
+        try{window.speechSynthesis?.resume();}catch(e){}
+        await new Promise(r=>setTimeout(r,420));
+        if(token!==speakingToken)break;
+        try{window.speechSynthesis?.resume();}catch(e){}
+      }
     }
 
     if(mode==="english"){
