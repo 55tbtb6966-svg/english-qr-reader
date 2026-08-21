@@ -1318,10 +1318,83 @@
   .flashSettingTitle{grid-row:1 / span 2;}
   .flashPane{font-size:clamp(1.55rem,8vw,3rem);padding:12px;}
 }
+
+.profileSwitchBar{display:none!important;}
+
+.flashSourceBox{
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid #d9dee7;
+  border-radius:12px;
+  background:#fff;
+}
+.flashSourceTitle{
+  font-weight:800;
+  margin-bottom:8px;
+}
+.flashSourceActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.flashSourceActions button{
+  margin:0;
+  width:auto;
+}
+
+.flashStageCard{
+  min-height:0;
+}
+.flashCard{
+  height:320px;
+  min-height:320px;
+  max-height:320px;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+.flashMain{
+  height:100%;
+  min-height:0;
+  max-height:100%;
+  display:grid !important;
+  grid-template-rows:1fr;
+  align-items:stretch;
+  justify-items:stretch;
+}
+.flashMain.flashTwoRows{
+  grid-template-rows:minmax(0,1fr) minmax(0,1fr);
+}
+.flashMain.flashOneRow{
+  grid-template-rows:minmax(0,1fr);
+}
+.flashPane{
+  min-height:0;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:auto;
+  box-sizing:border-box;
+  margin:0;
+}
+.flashPaneBottom{
+  border-top:1px solid #e1e5eb;
+}
+.flashMain.flashOneRow .flashPaneBottom{
+  display:none!important;
+}
+@media(max-width:700px){
+  .flashCard{
+    height:280px;
+    min-height:280px;
+    max-height:280px;
+  }
+}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.7.3 / 更新 2026-08-21 15:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.7.4 / 更新 2026-08-21 15:52</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1330,11 +1403,6 @@
 <button class="tabBtn" data-target="dataPanel">データ管理</button>
 <button class="tabBtn" data-target="qrPanel">QR作成</button>
 <button class="tabBtn" data-target="flashcardPanel">フラッシュカード</button>
-</div>
-<div class="profileSwitchBar" id="profileSwitchBar">
-  <button type="button" class="profileBtn active" data-profile="A">A</button>
-  <button type="button" class="profileBtn" data-profile="B">B</button>
-  <button type="button" class="profileBtn" data-profile="C">C</button>
 </div>
 <button type="button" class="profileBtn active" data-profile="A">A</button>
   <button type="button" class="profileBtn" data-profile="B">B</button>
@@ -1677,7 +1745,16 @@
   <div class="card">
     <h2>フラッシュカード</h2>
     <p class="hint">現在選択中のCSVセットだけを使います。既存の読み取り・QR作成とは独立した機能です。</p>
-    <div class="flashSearchRow">
+    
+    <div class="flashSourceBox">
+      <div class="flashSourceTitle">フラッシュカードを作る</div>
+      <div class="flashSourceActions">
+        <button type="button" id="flashFromSelectedBtn" class="secondary">選択した項目から作る</button>
+        <button type="button" id="flashFromSearchBtn" class="secondary">検索結果から作る</button>
+      </div>
+      <p class="hint" style="margin:6px 0 0;">「選択した項目」はデータ管理でチェックした項目を使います。</p>
+    </div>
+<div class="flashSearchRow">
       <label><span>検索</span><input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など"></label>
     </div>
     <div class="flashSideSettings">
@@ -1695,7 +1772,7 @@
       </div>
     </div>
     <div class="row">
-      <button type="button" id="flashReloadBtn" class="secondary">カードを読み込む</button>
+      <button type="button" id="flashReloadBtn" class="secondary">現在の条件で再読込</button>
       <button type="button" id="flashShuffleBtn" class="secondary">シャッフル</button>
     </div>
     <p class="hint" id="flashStatus">カードを読み込んでください。</p>
@@ -1725,8 +1802,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.7.3";
-const APP_UPDATED="2026-08-21 15:46";
+const APP_VERSION="v3.7.4";
+const APP_UPDATED="2026-08-21 15:52";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1787,10 +1864,8 @@ function activeProfileInfo(){return CSV_PROFILES[activeCsvProfile];}
 async function getActiveProfileRecords(){return await getAllRecords();}
 
 function updateProfileUi(){
-  document.querySelectorAll(".profileBtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.profile===activeCsvProfile));
   if($("profileCsvHint"))$("profileCsvHint").textContent=`選択中：CSV ${activeCsvProfile}。「全置換」は${activeCsvProfile}だけを置き換え、他のCSVは残します。ID先頭文字による制限はありません。`;
 }
-
 async function switchDataProfile(profile){
   if(!CSV_PROFILES[profile] || profile===activeCsvProfile){
     updateProfileUi();
@@ -3088,6 +3163,7 @@ function renderQr(records){
 let flashRecords=[];
 let flashIndex=0;
 let flashBackShown=false;
+let flashSourceMode="search";
 const FLASH_LAYOUT_KEY="flashLayoutV1";
 
 function flashFieldValue(r,key){
@@ -3166,6 +3242,7 @@ function renderFlashcard(){
   $("flashBottom").textContent=bottom;
   $("flashBottom").hidden=cfg.rows!==2;
   $("flashMain").classList.toggle("flashOneRow",cfg.rows===1);
+  $("flashMain").classList.toggle("flashTwoRows",cfg.rows===2);
 
   // ID is a search key and small reference, independent of selected content.
   $("flashId").textContent=r.id;
@@ -3173,19 +3250,50 @@ function renderFlashcard(){
   $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　CSV ${activeCsvProfile}`;
 }
 
-async function loadFlashcards(){
-  if(!$("flashTop"))return;
-  const q=String($("flashSearch")?.value||"").trim().toLowerCase();
-  flashRecords=(await getActiveProfileRecords()).filter(r=>{
-    if(!q)return true;
-    return [
-      r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
-      r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
-    ].some(v=>String(v??"").toLowerCase().includes(q));
-  }).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
-  flashIndex=0;flashBackShown=false;renderFlashcard();
+function flashMatchesSearch(r,q){
+  if(!q)return true;
+  return [
+    r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+    r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+  ].some(v=>String(v??"").toLowerCase().includes(q));
 }
 
+async function buildFlashcardsFromSearch(){
+  flashSourceMode="search";
+  const q=String($("flashSearch")?.value||"").trim().toLowerCase();
+  flashRecords=(await getActiveProfileRecords())
+    .filter(r=>flashMatchesSearch(r,q))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+  if($("flashStatus"))$("flashStatus").textContent=`検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+}
+
+async function buildFlashcardsFromSelected(){
+  flashSourceMode="selected";
+  const all=await getActiveProfileRecords();
+  flashRecords=all
+    .filter(r=>selectedIds.has(r.id))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+  if($("flashStatus")){
+    $("flashStatus").textContent=flashRecords.length
+      ? `選択項目から ${flashRecords.length}件　CSV ${activeCsvProfile}`
+      : "データ管理で項目をチェックしてください。";
+  }
+}
+
+async function loadFlashcards(){
+  if(!$("flashTop"))return;
+  if(flashSourceMode==="selected"){
+    await buildFlashcardsFromSelected();
+  }else{
+    await buildFlashcardsFromSearch();
+  }
+}
 function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
 function stepFlashcard(delta){
   if(!flashRecords.length)return;
@@ -3213,6 +3321,8 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
 }));
 
 document.querySelectorAll(".profileBtn").forEach(btn=>btn.addEventListener("click",()=>switchDataProfile(btn.dataset.profile)));
+$("flashFromSelectedBtn")?.addEventListener("click",buildFlashcardsFromSelected);
+$("flashFromSearchBtn")?.addEventListener("click",buildFlashcardsFromSearch);
 $("flashReloadBtn")?.addEventListener("click",loadFlashcards);
 $("flashShuffleBtn")?.addEventListener("click",shuffleFlashcards);
 $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
@@ -3221,7 +3331,7 @@ $("flashFlipBtn")?.addEventListener("click",flipFlashcard);
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
 $("flashCard")?.addEventListener("click",flipFlashcard);
 $("flashCard")?.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}});
-$("flashSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadFlashcards();});
+$("flashSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")buildFlashcardsFromSearch();});
 ["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField"].forEach(id=>{
   $(id)?.addEventListener("change",()=>{
     updateFlashLayoutControls();
