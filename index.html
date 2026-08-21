@@ -1391,10 +1391,44 @@
     max-height:280px;
   }
 }
+
+.abcCsvSwitch{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0 0 14px;
+  padding:0;
+  width:max-content;
+  max-width:100%;
+}
+.abcCsvBtn{
+  width:58px;
+  min-width:58px;
+  height:42px;
+  min-height:42px;
+  padding:0;
+  margin:0;
+  border:2px solid transparent;
+  border-radius:12px;
+  background:#fff;
+  color:#111;
+  font-weight:800;
+  box-shadow:none;
+}
+.abcCsvBtn.active{
+  background:#111 !important;
+  color:#fff !important;
+  border-color:#111 !important;
+}
+.abcCsvBtn:active{
+  outline:2px solid #111;
+  outline-offset:2px;
+}
+@media print{.abcCsvSwitch{display:none!important;}}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.7.4 / 更新 2026-08-21 15:52</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.7.5 / 更新 2026-08-21 17:33</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1407,12 +1441,18 @@
 <button type="button" class="profileBtn active" data-profile="A">A</button>
   <button type="button" class="profileBtn" data-profile="B">B</button>
   <button type="button" class="profileBtn" data-profile="C">C</button>
-  <span class="profileStatus" id="profileStatus">CSV：A</span>
+  
 </div>
 <button type="button" class="profileBtn active" data-prefix="C"></button>
   <button type="button" class="profileBtn" data-prefix="A"></button>
   <button type="button" class="profileBtn" data-prefix="B"></button>
-  <span class="profileStatus" id="profileStatus"></span>
+  
+</div>
+
+<div class="abcCsvSwitch" id="abcCsvSwitch">
+  <button type="button" class="abcCsvBtn" data-profile="A">A</button>
+  <button type="button" class="abcCsvBtn" data-profile="B">B</button>
+  <button type="button" class="abcCsvBtn" data-profile="C">C</button>
 </div>
 <section class="panel active" id="readerPanel">
 <input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
@@ -1536,7 +1576,6 @@
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
-<p class="hint" id="profileCsvHint">選択中：CSV A。「全置換」はAだけを置き換え、B/Cは残します。ID先頭文字による制限はありません。</p>
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
 <button id="replaceImportBtn">全置換で読み込む</button>
@@ -1802,8 +1841,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.7.4";
-const APP_UPDATED="2026-08-21 15:52";
+const APP_VERSION="v3.7.5";
+const APP_UPDATED="2026-08-21 17:33";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1864,54 +1903,54 @@ function activeProfileInfo(){return CSV_PROFILES[activeCsvProfile];}
 async function getActiveProfileRecords(){return await getAllRecords();}
 
 function updateProfileUi(){
-  if($("profileCsvHint"))$("profileCsvHint").textContent=`選択中：CSV ${activeCsvProfile}。「全置換」は${activeCsvProfile}だけを置き換え、他のCSVは残します。ID先頭文字による制限はありません。`;
+  document.querySelectorAll(".abcCsvBtn").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.profile===activeCsvProfile);
+  });
 }
 async function switchDataProfile(profile){
-  if(!CSV_PROFILES[profile] || profile===activeCsvProfile){
-    updateProfileUi();
-    return;
+  if(!CSV_PROFILES[profile])return;
+
+  if(profile!==activeCsvProfile){
+    speakingToken++;
+    try{window.speechSynthesis?.cancel();}catch(e){}
+    currentRecord=null;
+    selectedIds.clear();
+    currentPage=0;
+    qrPageSource=[];
+    qrPageStart=0;
+    flashRecords=[];
+    flashIndex=0;
+    flashBackShown=false;
+
+    activeCsvProfile=profile;
+    localStorage.setItem(ACTIVE_PROFILE_KEY,profile);
+
+    if($("qrSheet"))$("qrSheet").innerHTML="";
+    if($("printQrSheet"))$("printQrSheet").innerHTML="";
+    if($("qrPageStatus"))$("qrPageStatus").textContent="";
+    if($("qrStatus"))$("qrStatus").textContent="";
+    if($("manualId"))$("manualId").value="";
+    if($("idBadge"))$("idBadge").textContent="ID：未選択";
+    if($("modeBadge"))$("modeBadge").textContent="読み方：未選択";
+    if($("english")){
+      $("english").classList.add("initialPrompt");
+      $("english").textContent="CSVを登録してQRコードを読み取ってください";
+    }
+    if($("ipaDisplay"))$("ipaDisplay").textContent="";
+    if($("japanese"))$("japanese").textContent="";
+    if($("japaneseReadDisplay"))$("japaneseReadDisplay").textContent="";
+    if($("scanStatus"))$("scanStatus").textContent="";
+    if($("flashTop"))$("flashTop").textContent="フラッシュカード";
+    if($("flashBottom")){$("flashBottom").textContent="";$("flashBottom").hidden=true;}
+    if($("flashId"))$("flashId").textContent="";
+    if($("flashStatus"))$("flashStatus").textContent="カードを読み込んでください。";
   }
-
-  // Stop anything originating from the previous CSV immediately.
-  speakingToken++;
-  try{window.speechSynthesis?.cancel();}catch(e){}
-  currentRecord=null;
-  selectedIds.clear();
-  currentPage=0;
-  qrPageSource=[];
-  qrPageStart=0;
-  flashRecords=[];
-  flashIndex=0;
-  flashBackShown=false;
-
-  activeCsvProfile=profile;
-  localStorage.setItem(ACTIVE_PROFILE_KEY,profile);
-
-  // Clear every data-dependent view from the previous CSV.
-  if($("qrSheet"))$("qrSheet").innerHTML="";
-  if($("printQrSheet"))$("printQrSheet").innerHTML="";
-  if($("qrPageStatus"))$("qrPageStatus").textContent="";
-  if($("qrStatus"))$("qrStatus").textContent="";
-  if($("manualId"))$("manualId").value="";
-  if($("idBadge"))$("idBadge").textContent="ID：未選択";
-  if($("modeBadge"))$("modeBadge").textContent="読み方：未選択";
-  if($("english")){
-    $("english").classList.add("initialPrompt");
-    $("english").textContent=`CSV ${profile} を選択中です`;
-  }
-  if($("ipaDisplay"))$("ipaDisplay").textContent="";
-  if($("japanese"))$("japanese").textContent="";
-  if($("japaneseReadDisplay"))$("japaneseReadDisplay").textContent="";
-  if($("scanStatus"))$("scanStatus").textContent="";
-  if($("flashMain"))$("flashMain").textContent="フラッシュカード";
-  if($("flashId"))$("flashId").textContent="";
-  if($("flashStatus"))$("flashStatus").textContent="カードを読み込んでください。";
 
   updateProfileUi();
   await refreshSummary();
   updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
   await renderPage();
-  await loadFlashcards();
+  if(document.querySelector("#flashcardPanel.active"))await loadFlashcards();
 }
 function setStatus(el, msg, ok=true) {
   el.textContent = msg;
@@ -3320,7 +3359,9 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
   if(b.dataset.target==="flashcardPanel")loadFlashcards();
 }));
 
-document.querySelectorAll(".profileBtn").forEach(btn=>btn.addEventListener("click",()=>switchDataProfile(btn.dataset.profile)));
+document.querySelectorAll(".abcCsvBtn").forEach(btn=>{
+  btn.addEventListener("click",()=>switchDataProfile(btn.dataset.profile));
+});
 $("flashFromSelectedBtn")?.addEventListener("click",buildFlashcardsFromSelected);
 $("flashFromSearchBtn")?.addEventListener("click",buildFlashcardsFromSearch);
 $("flashReloadBtn")?.addEventListener("click",loadFlashcards);
