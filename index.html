@@ -2728,9 +2728,6 @@ button.flashActionAccepted{
   box-shadow:none !important;
 }
 </style>
-
-<link rel="preload" href="sounds/correct.mp3" as="audio" type="audio/mpeg"/>
-<link rel="preload" href="sounds/wrong.mp3" as="audio" type="audio/mpeg"/>
 </head>
 <body>
 <main>
@@ -2745,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.5 / 更新 2026-08-22 05:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.6 / 更新 2026-08-22 05:09</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3229,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.5";
-const APP_UPDATED="2026-08-22 05:05";
+const APP_VERSION="v4.1.6";
+const APP_UPDATED="2026-08-22 05:09";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3886,69 +3883,122 @@ function noiseBurst(ctx,start,duration,volume=0.10){
 
 
 
-const bundledEffectAudio={
-  correct:new Audio("sounds/correct.mp3"),
-  wrong:new Audio("sounds/wrong.mp3")
+
+const bundledEffectUrls={
+  correct:"sounds/correct-v416.mp3",
+  wrong:"sounds/wrong-v416.mp3"
 };
-Object.values(bundledEffectAudio).forEach(a=>{
-  a.preload="auto";
-  try{a.load();}catch(e){}
-});
+const bundledEffectBuffers=new Map();
+const bundledEffectLoads=new Map();
 
-async function playBundledEffectSound(name,token){
-  const original=bundledEffectAudio[name];
-  if(!original || token!==speakingToken)return false;
+async function loadBundledEffectBuffer(name){
+  if(bundledEffectBuffers.has(name))return bundledEffectBuffers.get(name);
+  if(bundledEffectLoads.has(name))return bundledEffectLoads.get(name);
 
-  try{
-    // Clone so rapid repeated correct/wrong sounds can restart cleanly.
-    const a=original.cloneNode(true);
-    a.preload="auto";
-    a.volume=1;
-    a.currentTime=0;
+  const task=(async()=>{
+    const ctx=soundAudioContext();
+    if(!ctx)throw new Error("AudioContext unavailable");
+    const url=bundledEffectUrls[name];
+    if(!url)throw new Error("Unknown bundled effect");
 
-    await new Promise((resolve,reject)=>{
-      let settled=false;
-      const done=()=>{
-        if(settled)return;
-        settled=true;
-        resolve();
-      };
-      const fail=()=>{
-        if(settled)return;
-        settled=true;
-        reject(new Error("audio playback failed"));
-      };
-      a.addEventListener("ended",done,{once:true});
-      a.addEventListener("error",fail,{once:true});
+    const res=await fetch(url,{cache:"no-store"});
+    if(!res.ok)throw new Error("Effect audio load failed");
+    const ab=await res.arrayBuffer();
 
-      const p=a.play();
-      if(p && typeof p.then==="function"){
-        p.catch(fail);
+    const buffer=await new Promise((resolve,reject)=>{
+      const copy=ab.slice(0);
+      const maybePromise=ctx.decodeAudioData(copy,resolve,reject);
+      if(maybePromise && typeof maybePromise.then==="function"){
+        maybePromise.then(resolve).catch(reject);
       }
-
-      // Safety timeout in case WebKit misses ended/error.
-      setTimeout(done,4000);
     });
 
-    return token===speakingToken;
+    bundledEffectBuffers.set(name,buffer);
+    return buffer;
+  })();
+
+  bundledEffectLoads.set(name,task);
+  try{
+    return await task;
+  }finally{
+    bundledEffectLoads.delete(name);
+  }
+}
+
+async function playBundledEffectSound(name,token){
+  if(token!==speakingToken)return false;
+  try{
+    const ctx=await ensureSoundAudioReady();
+    if(!ctx || token!==speakingToken)return false;
+
+    const buffer=await loadBundledEffectBuffer(name);
+    if(!buffer || token!==speakingToken)return false;
+
+    return await new Promise(resolve=>{
+      const src=ctx.createBufferSource();
+      const gain=ctx.createGain();
+      src.buffer=buffer;
+      gain.gain.value=1;
+      src.connect(gain);
+      gain.connect(ctx.destination);
+
+      let finished=false;
+      const done=ok=>{
+        if(finished)return;
+        finished=true;
+        try{src.disconnect();}catch(e){}
+        try{gain.disconnect();}catch(e){}
+        resolve(ok);
+      };
+
+      src.onended=()=>done(token===speakingToken);
+      try{
+        src.start(0);
+      }catch(e){
+        done(false);
+        return;
+      }
+
+      setTimeout(()=>done(token===speakingToken),Math.max(1000,(buffer.duration+0.5)*1000));
+    });
   }catch(e){
+    console.warn("Bundled effect playback failed:",name,e);
     return false;
   }
 }
 
-async function playEffectSound(name,token){
-  const ctx=await ensureSoundAudioReady();
-  if(!ctx || token!==speakingToken)return;
+// Start loading both MP3s early. On iPhone, the AudioContext itself is also
+// resumed on the first real user touch/click so later scanner playback works.
+setTimeout(()=>{
+  loadBundledEffectBuffer("correct").catch(()=>{});
+  loadBundledEffectBuffer("wrong").catch(()=>{});
+},0);
 
+function unlockBundledEffectAudio(){
+  const ctx=soundAudioContext();
+  if(ctx && ctx.state==="suspended"){
+    try{ctx.resume();}catch(e){}
+  }
+  loadBundledEffectBuffer("correct").catch(()=>{});
+  loadBundledEffectBuffer("wrong").catch(()=>{});
+}
+document.addEventListener("pointerdown",unlockBundledEffectAudio,{passive:true});
+document.addEventListener("touchstart",unlockBundledEffectAudio,{passive:true});
+
+
+async function playEffectSound(name,token){
   const sound=String(name||"").trim().toLowerCase();
 
-  // Correct / wrong use the bundled MP3 files supplied by the user.
-  // If playback is blocked or fails, fall back to the synthesized version below.
+  // Correct / wrong use the bundled MP3 decoded into Web Audio.
+  // This avoids iPhone Safari rejecting delayed HTMLAudioElement.play().
   if(sound==="correct" || sound==="wrong"){
     const played=await playBundledEffectSound(sound,token);
     if(played || token!==speakingToken)return;
   }
 
+  // Fallback synthesized effects, plus the remaining five built-in effects.
+  const ctx=await ensureSoundAudioReady();
+  if(!ctx || token!==speakingToken)return;
   const t=ctx.currentTime+0.035;
   let duration=0.7;
 
