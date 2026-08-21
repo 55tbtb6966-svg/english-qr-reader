@@ -1417,16 +1417,20 @@
   white-space:nowrap;
 }
 .csvProfileSelectWrap select{
-  width:64px;
-  min-width:64px;
-  height:38px;
-  padding:5px 24px 5px 10px;
+  width:76px;
+  min-width:76px;
+  height:40px;
+  padding:4px 28px 4px 12px;
   margin:0;
   border:1px solid #cfd5de;
   border-radius:10px;
   background:#fff;
   font-weight:800;
   font-size:1rem;
+  line-height:1.2;
+  box-sizing:border-box;
+  text-align:left;
+  text-align-last:left;
 }
 @media(max-width:520px){
   .appTitleRow{
@@ -1440,10 +1444,12 @@
     display:none;
   }
   .csvProfileSelectWrap select{
-    width:58px;
-    min-width:58px;
-    height:36px;
-    font-size:.95rem;
+    width:72px;
+    min-width:72px;
+    height:38px;
+    padding:3px 26px 3px 11px;
+    font-size:1rem;
+    line-height:1.2;
   }
   .appVersionBadge{
     margin-top:6px;
@@ -1470,7 +1476,7 @@
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.7.8 / 更新 2026-08-21 18:22</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.7.9 / 更新 2026-08-21 18:26</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -1865,8 +1871,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.7.8";
-const APP_UPDATED="2026-08-21 18:22";
+const APP_VERSION="v3.7.9";
+const APP_UPDATED="2026-08-21 18:26";
 
 function outputDateTimeStamp(){
   const d=new Date();
