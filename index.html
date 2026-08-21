@@ -1753,6 +1753,17 @@ body.flashFullscreenBody{
     transform:none !important;
   }
 }
+
+.flashShuffleToggle{
+  border-radius:10px !important;
+  min-width:112px !important;
+}
+.flashShuffleToggle.flashShuffleOn{
+  background:#d1d5db !important;
+  color:#111827 !important;
+  border:2px solid #111827 !important;
+  font-weight:800 !important;
+}
 </style>
 </head>
 <body>
@@ -1768,7 +1779,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.5 / 更新 2026-08-21 19:14</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.6 / 更新 2026-08-21 19:22</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2164,7 +2175,6 @@ body.flashFullscreenBody{
 </details>
 <div class="row">
   <button type="button" id="flashReloadBtn" class="secondary">現在の条件で再読込</button>
-      <button type="button" id="flashShuffleBtn" class="secondary">シャッフル</button>
     </div>
     <p class="hint" id="flashStatus">カードを読み込んでください。</p>
   </div>
@@ -2190,6 +2200,7 @@ body.flashFullscreenBody{
         <button type="button" id="flashBackBtn" class="secondary flashControlBtn">裏</button>
       </div>
       <button type="button" id="flashSpeakBtn" class="secondary flashControlBtn flashSpeakControl">🔊 発音</button>
+      <button type="button" id="flashShuffleToggleBtn" class="secondary flashControlBtn flashShuffleToggle" aria-pressed="false">シャッフル OFF</button>
       <button type="button" id="flashFullscreenBtn" class="secondary flashControlBtn flashFullscreenControl">全画面</button>
     </div>
   </div>
@@ -2202,8 +2213,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.5";
-const APP_UPDATED="2026-08-21 19:14";
+const APP_VERSION="v3.8.6";
+const APP_UPDATED="2026-08-21 19:22";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3577,6 +3588,7 @@ let flashRecords=[];
 let flashIndex=0;
 let flashBackShown=false;
 let flashSourceMode="search";
+let flashShuffleEnabled=false;
 const FLASH_LAYOUT_KEY="flashLayoutV1";
 
 function flashFieldValue(r,key){
@@ -3735,6 +3747,7 @@ async function buildFlashcardsFromSearch(){
   flashRecords=(await getActiveProfileRecords())
     .filter(r=>flashMatchesSearch(r,q))
     .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
   flashIndex=0;
   flashBackShown=false;
   renderFlashcard();
@@ -3747,6 +3760,7 @@ async function buildFlashcardsFromSelected(){
   flashRecords=all
     .filter(r=>selectedIds.has(r.id))
     .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
   flashIndex=0;
   flashBackShown=false;
   renderFlashcard();
@@ -3775,12 +3789,36 @@ function stepFlashcard(delta){
   flashIndex=(flashIndex+delta+flashRecords.length)%flashRecords.length;
   flashBackShown=false;renderFlashcard();
 }
-function shuffleFlashcards(){
+function shuffleFlashRecordOrder(){
   for(let i=flashRecords.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
     [flashRecords[i],flashRecords[j]]=[flashRecords[j],flashRecords[i]];
   }
-  flashIndex=0;flashBackShown=false;renderFlashcard();
+}
+
+function updateFlashShuffleUi(){
+  const btn=$("flashShuffleToggleBtn");
+  if(!btn)return;
+  btn.textContent=flashShuffleEnabled?"シャッフル ON":"シャッフル OFF";
+  btn.classList.toggle("flashShuffleOn",flashShuffleEnabled);
+  btn.setAttribute("aria-pressed",String(flashShuffleEnabled));
+}
+
+function toggleFlashShuffle(){
+  flashShuffleEnabled=!flashShuffleEnabled;
+  if(flashShuffleEnabled && flashRecords.length>1){
+    const currentId=flashRecords[flashIndex]?.id||"";
+    shuffleFlashRecordOrder();
+    // Start at the first shuffled card, but avoid staying on the exact same first card
+    // when possible so ON is visibly effective.
+    flashIndex=0;
+    if(flashRecords.length>1 && flashRecords[0]?.id===currentId){
+      [flashRecords[0],flashRecords[1]]=[flashRecords[1],flashRecords[0]];
+    }
+    flashBackShown=false;
+    renderFlashcard();
+  }
+  updateFlashShuffleUi();
 }
 
 let flashFullscreenActive=false;
@@ -3857,24 +3895,38 @@ $("csvProfileSelect")?.addEventListener("change",async()=>{
 $("flashFromSelectedBtn")?.addEventListener("click",buildFlashcardsFromSelected);
 $("flashFromSearchBtn")?.addEventListener("click",buildFlashcardsFromSearch);
 $("flashReloadBtn")?.addEventListener("click",loadFlashcards);
-$("flashShuffleBtn")?.addEventListener("click",shuffleFlashcards);
 $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
 $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
 $("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
+$("flashShuffleToggleBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashShuffle();});
 $("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashFullscreen();});
-["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn"].forEach(id=>{
+["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn","flashShuffleToggleBtn"].forEach(id=>{
   $(id)?.addEventListener("pointerdown",e=>e.stopPropagation());
   $(id)?.addEventListener("click",e=>e.stopPropagation());
 });
 $("flashCard")?.addEventListener("click",e=>{
-  // Card width: left 1/4 = previous, center 1/2 = flip, right 1/4 = next.
+  // Normal/landscape: horizontal X axis.
+  // iPhone portrait fullscreen is visually rotated 90deg clockwise, so its
+  // landscape left-to-right axis corresponds to the physical screen Y axis.
   const card=e.currentTarget;
   const rect=card.getBoundingClientRect();
-  if(!rect.width)return;
-  const x=e.clientX-rect.left;
-  const ratio=x/rect.width;
+  const rotatedPortrait=
+    flashFullscreenActive &&
+    isTouchMobileFlash() &&
+    window.matchMedia?.("(orientation: portrait)").matches;
+
+  let ratio;
+  if(rotatedPortrait){
+    if(!rect.height)return;
+    ratio=(e.clientY-rect.top)/rect.height;
+  }else{
+    if(!rect.width)return;
+    ratio=(e.clientX-rect.left)/rect.width;
+  }
+
+  ratio=Math.max(0,Math.min(1,ratio));
   if(ratio<0.25){
     stepFlashcard(-1);
   }else if(ratio>0.75){
@@ -5670,6 +5722,7 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
 
 updateProfileUi();
 loadFlashLayout();
+updateFlashShuffleUi();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
 setTimeout(async()=>{
