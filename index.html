@@ -1700,6 +1700,59 @@ body.flashFullscreenBody{
     padding-right:8px !important;
   }
 }
+
+/* v3.8.5: safer iPhone fullscreen / landscape presentation */
+.flashStageCard.flashFullscreenMode{
+  overflow:hidden !important;
+}
+.flashStageCard.flashFullscreenMode .flashCard{
+  position:relative !important;
+  z-index:1 !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+.flashStageCard.flashFullscreenMode .flashControlBar{
+  position:relative !important;
+  z-index:20 !important;
+  flex-shrink:0 !important;
+  pointer-events:auto !important;
+}
+.flashStageCard.flashFullscreenMode .flashControlBar button{
+  position:relative !important;
+  z-index:21 !important;
+  pointer-events:auto !important;
+  touch-action:manipulation !important;
+}
+
+/* On iPhone/small touch devices, use CSS fullscreen only.
+   If the phone is held portrait, rotate the app overlay so the flashcard remains landscape. */
+@media (max-width: 700px) and (orientation: portrait){
+  .flashStageCard.flashFullscreenMode{
+    width:100dvh !important;
+    height:100vw !important;
+    max-width:none !important;
+    max-height:none !important;
+    left:50% !important;
+    top:50% !important;
+    right:auto !important;
+    bottom:auto !important;
+    transform:translate(-50%,-50%) rotate(90deg) !important;
+    transform-origin:center center !important;
+    padding:
+      max(6px, env(safe-area-inset-left))
+      max(6px, env(safe-area-inset-top))
+      max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) !important;
+  }
+}
+@media (max-width:700px) and (orientation: landscape){
+  .flashStageCard.flashFullscreenMode{
+    inset:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    transform:none !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -1715,7 +1768,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.4 / 更新 2026-08-21 19:08</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.5 / 更新 2026-08-21 19:14</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2149,8 +2202,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.4";
-const APP_UPDATED="2026-08-21 19:08";
+const APP_VERSION="v3.8.5";
+const APP_UPDATED="2026-08-21 19:14";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3741,34 +3794,43 @@ function updateFlashFullscreenUi(){
   fitFlashcardFonts();
 }
 
+function isTouchMobileFlash(){
+  return window.matchMedia?.("(max-width: 700px)").matches ||
+         /iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+}
+
 async function enterFlashFullscreen(){
   flashFullscreenActive=true;
   updateFlashFullscreenUi();
 
-  // Desktop browsers can also enter native fullscreen.
-  // iPhone Safari may not support this for arbitrary elements, so CSS fullscreen remains the fallback.
-  const stage=$("flashCard")?.closest(".flashStageCard");
-  try{
-    if(stage?.requestFullscreen && !document.fullscreenElement){
-      await stage.requestFullscreen();
-    }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
-      stage.webkitRequestFullscreen();
-    }
-  }catch(e){}
-  setTimeout(fitFlashcardFonts,60);
+  // iPhone/mobile: CSS fullscreen only. This avoids Safari fullscreen quirks
+  // and keeps every control button reliably tappable.
+  if(!isTouchMobileFlash()){
+    const stage=$("flashCard")?.closest(".flashStageCard");
+    try{
+      if(stage?.requestFullscreen && !document.fullscreenElement){
+        await stage.requestFullscreen();
+      }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
+        stage.webkitRequestFullscreen();
+      }
+    }catch(e){}
+  }
+  setTimeout(fitFlashcardFonts,120);
 }
 
 async function exitFlashFullscreen(){
   flashFullscreenActive=false;
   updateFlashFullscreenUi();
-  try{
-    if(document.fullscreenElement && document.exitFullscreen){
-      await document.exitFullscreen();
-    }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
-      document.webkitExitFullscreen();
-    }
-  }catch(e){}
-  setTimeout(fitFlashcardFonts,60);
+  if(!isTouchMobileFlash()){
+    try{
+      if(document.fullscreenElement && document.exitFullscreen){
+        await document.exitFullscreen();
+      }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
+        document.webkitExitFullscreen();
+      }
+    }catch(e){}
+  }
+  setTimeout(fitFlashcardFonts,120);
 }
 
 async function toggleFlashFullscreen(){
@@ -3801,7 +3863,11 @@ $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
 $("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
 $("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
-$("flashFullscreenBtn")?.addEventListener("click",toggleFlashFullscreen);
+$("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashFullscreen();});
+["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn"].forEach(id=>{
+  $(id)?.addEventListener("pointerdown",e=>e.stopPropagation());
+  $(id)?.addEventListener("click",e=>e.stopPropagation());
+});
 $("flashCard")?.addEventListener("click",e=>{
   // Card width: left 1/4 = previous, center 1/2 = flip, right 1/4 = next.
   const card=e.currentTarget;
@@ -3838,6 +3904,12 @@ document.addEventListener("webkitfullscreenchange",()=>{
 });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape" && flashFullscreenActive)exitFlashFullscreen();
+});
+window.addEventListener("resize",()=>{
+  if(flashFullscreenActive)setTimeout(fitFlashcardFonts,120);
+});
+window.addEventListener("orientationchange",()=>{
+  if(flashFullscreenActive)setTimeout(fitFlashcardFonts,180);
 });
 
 ["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField","flashAutoFont"].forEach(id=>{
