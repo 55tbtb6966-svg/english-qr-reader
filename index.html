@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.2.4 / 更新 2026-08-22 05:44</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.2.5 / 更新 2026-08-22 05:47</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.2.4";
-const APP_UPDATED="2026-08-22 05:44";
+const APP_VERSION="v4.2.5";
+const APP_UPDATED="2026-08-22 05:47";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3677,40 +3677,78 @@ async function speakText(text,lang,rate){
   if(!text)return;
 
   const tokenAtStart=speakingToken;
-  try{window.speechSynthesis?.resume();}catch(e){}
   await maybeWarmupSpeechEngine(tokenAtStart,lang);
   if(tokenAtStart!==speakingToken)return;
+
   try{window.speechSynthesis?.resume();}catch(e){}
-  await new Promise(r=>setTimeout(r,120));
+  await new Promise(r=>setTimeout(r,180));
   if(tokenAtStart!==speakingToken)return;
 
   await new Promise(resolve=>{
-    setTimeout(()=>{
-      if(tokenAtStart!==speakingToken){resolve();return;}
+    let finished=false;
+    let watchdog=null;
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      if(watchdog)clearTimeout(watchdog);
+      lastSpeechActivityAt=Date.now();
+      resolve();
+    };
+
+    try{
       const u=new SpeechSynthesisUtterance(text);
       u.lang=lang;
       u.rate=rate;
       u.volume=1.0;
+
       const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
       if(v)u.voice=v;
+
       u.onstart=()=>{
         lastSpeechActivityAt=Date.now();
         speechWarmupStale=false;
       };
       u.onend=()=>{
-        lastSpeechActivityAt=Date.now();
         speechWarmupStale=false;
-        resolve();
+        finish();
       };
-      u.onerror=()=>{
-        lastSpeechActivityAt=Date.now();
-        resolve();
-      };
-      speechSynthesis.speak(u);
-    },350);
+      u.onerror=finish;
+
+      // Clear any stale pending utterance just before the real speech.
+      try{
+        if(speechSynthesis.speaking || speechSynthesis.pending){
+          speechSynthesis.cancel();
+        }
+      }catch(e){}
+
+      setTimeout(()=>{
+        if(tokenAtStart!==speakingToken){
+          finish();
+          return;
+        }
+        try{speechSynthesis.resume();}catch(e){}
+        try{
+          speechSynthesis.speak(u);
+        }catch(e){
+          finish();
+          return;
+        }
+
+        // Safari sometimes fails to emit onend/onerror. Never leave the
+        // playback button waiting forever.
+        watchdog=setTimeout(()=>{
+          if(!finished){
+            try{speechSynthesis.cancel();}catch(e){}
+            finish();
+          }
+        },10000);
+      },220);
+    }catch(e){
+      finish();
+    }
   });
 }
-
 
 
 
@@ -4054,8 +4092,13 @@ async function releaseWebAudioForSpeech(){
       await pauseAudioContext.suspend();
     }
   }catch(e){}
+
+  // iPhone Safari can leave speechSynthesis in a stale/pending state after
+  // Web Audio. Fully reset it before starting the next utterance.
+  try{window.speechSynthesis?.cancel();}catch(e){}
+  await new Promise(r=>setTimeout(r,180));
   try{window.speechSynthesis?.resume();}catch(e){}
-  await new Promise(r=>setTimeout(r,220));
+  await new Promise(r=>setTimeout(r,260));
 }
 
 async function playRecord(modeOverride=null){
