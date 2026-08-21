@@ -2241,6 +2241,100 @@ body.flashFullscreenBody{
     font-size:.70rem !important;
   }
 }
+
+/* v3.9.3 iPhone expanded mode: keep controls immediately tappable */
+@media(max-width:700px){
+  .flashStageCard.flashFullscreenMode{
+    position:relative !important;
+    padding-bottom:86px !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashCard{
+    height:min(62dvh,700px) !important;
+    min-height:430px !important;
+    margin-bottom:0 !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    position:fixed !important;
+    left:max(8px, env(safe-area-inset-left)) !important;
+    right:max(8px, env(safe-area-inset-right)) !important;
+    bottom:max(8px, env(safe-area-inset-bottom)) !important;
+    z-index:11000 !important;
+
+    display:flex !important;
+    flex-wrap:wrap !important;
+    align-items:center !important;
+    justify-content:center !important;
+    align-content:center !important;
+    gap:6px !important;
+
+    width:auto !important;
+    margin:0 !important;
+    padding:8px !important;
+
+    background:rgba(255,255,255,.96) !important;
+    border:1px solid #d0d5dd !important;
+    border-radius:12px !important;
+    box-shadow:0 2px 10px rgba(0,0,0,.10) !important;
+
+    pointer-events:auto !important;
+  }
+
+  /* Keep the navigation/side pairs vertically centered in the bar. */
+  .flashStageCard.flashFullscreenMode .flashButtonPair{
+    display:inline-flex !important;
+    align-items:center !important;
+    align-self:center !important;
+    height:44px !important;
+    margin:0 !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashButtonPair .flashControlBtn{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    height:44px !important;
+    min-height:44px !important;
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+    line-height:1 !important;
+  }
+
+  .flashStageCard.flashFullscreenMode #flashPrevBtn,
+  .flashStageCard.flashFullscreenMode #flashNextBtn,
+  .flashStageCard.flashFullscreenMode #flashFrontBtn,
+  .flashStageCard.flashFullscreenMode #flashBackBtn{
+    vertical-align:middle !important;
+    transform:none !important;
+  }
+
+  /* Other buttons share the same vertical center. */
+  .flashStageCard.flashFullscreenMode > .flashControlBar > .flashControlBtn{
+    align-self:center !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+  }
+}
+
+@media(max-width:430px){
+  .flashStageCard.flashFullscreenMode{
+    padding-bottom:132px !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashCard{
+    height:56dvh !important;
+    min-height:390px !important;
+  }
+
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    gap:5px !important;
+    padding:7px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2256,7 +2350,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.9.2 / 更新 2026-08-21 20:07</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.9.3 / 更新 2026-08-21 20:15</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2739,8 +2833,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.9.2";
-const APP_UPDATED="2026-08-21 20:07";
+const APP_VERSION="v3.9.3";
+const APP_UPDATED="2026-08-21 20:15";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4657,18 +4751,30 @@ async function enterFlashFullscreen(){
   flashFullscreenActive=true;
   updateFlashFullscreenUi();
 
-  // iPhone/mobile: CSS fullscreen only. This avoids Safari fullscreen quirks
-  // and keeps every control button reliably tappable.
-  if(!isTouchMobileFlash()){
-    const stage=$("flashCard")?.closest(".flashStageCard");
-    try{
-      if(stage?.requestFullscreen && !document.fullscreenElement){
-        await stage.requestFullscreen();
-      }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
-        stage.webkitRequestFullscreen();
+  const stage=$("flashCard")?.closest(".flashStageCard");
+
+  // iPhone/mobile: keep it in-page, enlarge the card, and pin controls to the
+  // bottom of the browser so they are immediately tappable.
+  if(isTouchMobileFlash()){
+    setTimeout(()=>{
+      try{
+        stage?.scrollIntoView({block:"start",behavior:"smooth"});
+      }catch(e){
+        stage?.scrollIntoView();
       }
-    }catch(e){}
+      fitFlashcardFonts();
+    },60);
+    return;
   }
+
+  // Desktop: native fullscreen is still allowed.
+  try{
+    if(stage?.requestFullscreen && !document.fullscreenElement){
+      await stage.requestFullscreen();
+    }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
+      stage.webkitRequestFullscreen();
+    }
+  }catch(e){}
   setTimeout(fitFlashcardFonts,120);
 }
 
