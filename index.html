@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.1.7 / 更新 2026-08-22 05:12</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.1.8 / 更新 2026-08-22 05:16</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.1.7";
-const APP_UPDATED="2026-08-22 05:12";
+const APP_VERSION="v4.1.8";
+const APP_UPDATED="2026-08-22 05:16";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3884,120 +3884,109 @@ function noiseBurst(ctx,start,duration,volume=0.10){
 
 
 
-const bundledEffectUrls={
-  correct:"sounds/correct-v416.mp3",
-  wrong:"sounds/wrong-v416.mp3"
+
+const bundledEffectAudio={
+  correct:new Audio("sounds/correct-v416.mp3"),
+  wrong:new Audio("sounds/wrong-v416.mp3")
 };
-const bundledEffectBuffers=new Map();
-const bundledEffectLoads=new Map();
 
-async function loadBundledEffectBuffer(name){
-  if(bundledEffectBuffers.has(name))return bundledEffectBuffers.get(name);
-  if(bundledEffectLoads.has(name))return bundledEffectLoads.get(name);
+Object.values(bundledEffectAudio).forEach(a=>{
+  a.preload="auto";
+  a.playsInline=true;
+  try{a.load();}catch(e){}
+});
 
-  const task=(async()=>{
-    const ctx=soundAudioContext();
-    if(!ctx)throw new Error("AudioContext unavailable");
-    const url=bundledEffectUrls[name];
-    if(!url)throw new Error("Unknown bundled effect");
+let bundledEffectUnlocked=false;
+let bundledEffectUnlocking=false;
 
-    const res=await fetch(url,{cache:"no-store"});
-    if(!res.ok)throw new Error("Effect audio load failed");
-    const ab=await res.arrayBuffer();
+async function unlockBundledEffectAudio(){
+  if(bundledEffectUnlocked || bundledEffectUnlocking)return;
+  bundledEffectUnlocking=true;
 
-    const buffer=await new Promise((resolve,reject)=>{
-      const copy=ab.slice(0);
-      const maybePromise=ctx.decodeAudioData(copy,resolve,reject);
-      if(maybePromise && typeof maybePromise.then==="function"){
-        maybePromise.then(resolve).catch(reject);
-      }
-    });
-
-    bundledEffectBuffers.set(name,buffer);
-    return buffer;
-  })();
-
-  bundledEffectLoads.set(name,task);
   try{
-    return await task;
+    // iPhone Safari: use the real Audio elements once during a genuine
+    // user gesture. Later QR/scanner-triggered playback can then reuse them.
+    for(const a of Object.values(bundledEffectAudio)){
+      try{
+        const oldVolume=a.volume;
+        a.volume=0.001;
+        a.currentTime=0;
+        const p=a.play();
+        if(p && typeof p.then==="function")await p;
+        a.pause();
+        a.currentTime=0;
+        a.volume=oldVolume;
+      }catch(e){
+        try{
+          a.pause();
+          a.currentTime=0;
+          a.volume=1;
+        }catch(_){}
+      }
+    }
+    bundledEffectUnlocked=true;
   }finally{
-    bundledEffectLoads.delete(name);
+    bundledEffectUnlocking=false;
   }
 }
 
+// The user's first tap/click unlocks the actual MP3 players.
+// Keep listeners capture-phase so normal button actions still work unchanged.
+document.addEventListener("pointerdown",()=>{unlockBundledEffectAudio();},{capture:true,passive:true});
+document.addEventListener("touchstart",()=>{unlockBundledEffectAudio();},{capture:true,passive:true});
+
 async function playBundledEffectSound(name,token){
-  if(token!==speakingToken)return false;
+  const a=bundledEffectAudio[name];
+  if(!a || token!==speakingToken)return false;
+
   try{
-    const ctx=await ensureSoundAudioReady();
-    if(!ctx || token!==speakingToken)return false;
+    // If the user is pressing a playback/start button right now, this also
+    // acts as an unlock attempt. If already unlocked, it is a no-op.
+    await unlockBundledEffectAudio();
 
-    const buffer=await loadBundledEffectBuffer(name);
-    if(!buffer || token!==speakingToken)return false;
+    if(token!==speakingToken)return false;
 
-    return await new Promise(resolve=>{
-      const src=ctx.createBufferSource();
-      const gain=ctx.createGain();
-      src.buffer=buffer;
-      gain.gain.value=1;
-      src.connect(gain);
-      gain.connect(ctx.destination);
+    a.pause();
+    a.currentTime=0;
+    a.volume=1;
 
-      let finished=false;
-      const done=ok=>{
-        if(finished)return;
-        finished=true;
-        try{src.disconnect();}catch(e){}
-        try{gain.disconnect();}catch(e){}
-        resolve(ok);
+    const playPromise=a.play();
+    if(playPromise && typeof playPromise.then==="function"){
+      await playPromise;
+    }
+
+    const st=$("scanStatus");
+    if(st)st.textContent=`MP3効果音：${name}`;
+
+    await new Promise(resolve=>{
+      let done=false;
+      const finish=()=>{
+        if(done)return;
+        done=true;
+        a.removeEventListener("ended",finish);
+        a.removeEventListener("error",finish);
+        resolve();
       };
-
-      src.onended=()=>done(token===speakingToken);
-      const st=$("scanStatus");
-      if(st)st.textContent=`MP3効果音：${name}`;
-      try{
-        src.start(0);
-      }catch(e){
-        done(false);
-        return;
-      }
-
-      setTimeout(()=>done(token===speakingToken),Math.max(1000,(buffer.duration+0.5)*1000));
+      a.addEventListener("ended",finish,{once:true});
+      a.addEventListener("error",finish,{once:true});
+      setTimeout(finish,4500);
     });
+
+    return token===speakingToken;
   }catch(e){
-    console.warn("Bundled effect playback failed:",name,e);
+    console.warn("Bundled MP3 playback failed:",name,e);
     const st=$("scanStatus");
     if(st)st.textContent=`MP3効果音の再生に失敗しました：${name}`;
     return false;
   }
 }
 
-// Start loading both MP3s early. On iPhone, the AudioContext itself is also
-// resumed on the first real user touch/click so later scanner playback works.
-setTimeout(()=>{
-  loadBundledEffectBuffer("correct").catch(()=>{});
-  loadBundledEffectBuffer("wrong").catch(()=>{});
-},0);
-
-function unlockBundledEffectAudio(){
-  const ctx=soundAudioContext();
-  if(ctx && ctx.state==="suspended"){
-    try{ctx.resume();}catch(e){}
-  }
-  loadBundledEffectBuffer("correct").catch(()=>{});
-  loadBundledEffectBuffer("wrong").catch(()=>{});
-}
-document.addEventListener("pointerdown",unlockBundledEffectAudio,{passive:true});
-document.addEventListener("touchstart",unlockBundledEffectAudio,{passive:true});
-
 
 async function playEffectSound(name,token){
   const sound=String(name||"").trim().toLowerCase();
 
-  // Correct / wrong use the bundled MP3 decoded into Web Audio.
-  // This avoids iPhone Safari rejecting delayed HTMLAudioElement.play().
+  // Correct / wrong are MP3-only.
   if(sound==="correct" || sound==="wrong"){
-    // Diagnostic/production path: these two effects are MP3-only.
-    // Do not fall back to the synthesized quiz tones.
     await playBundledEffectSound(sound,token);
     return;
   }
@@ -4339,6 +4328,7 @@ function resumeExternalScannerFocus(){
 
 function startExternalScanner(){
   if(scanInputMode!=="external")return;
+  unlockBundledEffectAudio();
   externalScannerStartedOnce=true;
   scannerTextEditing=false;
   externalScannerArmed=true;
