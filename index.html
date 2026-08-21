@@ -2012,6 +2012,77 @@ body.flashFullscreenBody{
     overflow:hidden !important;
   }
 }
+
+/* v3.8.9: iPhone fullscreen stays portrait / no forced rotation */
+@media (max-width:700px){
+  .flashStageCard.flashFullscreenMode{
+    position:fixed !important;
+    inset:0 !important;
+    left:0 !important;
+    top:0 !important;
+    right:0 !important;
+    bottom:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    max-width:none !important;
+    max-height:none !important;
+    transform:none !important;
+    transform-origin:center center !important;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left)) !important;
+    overflow:hidden !important;
+  }
+  .flashStageCard.flashFullscreenMode .flashControlBar{
+    flex-wrap:wrap !important;
+    row-gap:6px !important;
+  }
+}
+
+/* Checked-ID import area */
+.flashCheckedImportBox{
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid #d9dee7;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.flashCheckedImportBox h4{
+  margin:0 0 8px;
+  font-size:.95rem;
+}
+.flashCheckedImportGrid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:10px;
+}
+.flashCheckedImportBox textarea{
+  width:100%;
+  min-height:110px;
+  box-sizing:border-box;
+  resize:vertical;
+}
+.flashCheckedImportBox input[type="file"]{
+  width:100%;
+  box-sizing:border-box;
+}
+.flashCheckedImportActions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.flashCheckedImportActions button{
+  width:auto !important;
+  margin:0 !important;
+}
+@media(max-width:700px){
+  .flashCheckedImportGrid{
+    grid-template-columns:1fr;
+  }
+}
 </style>
 </head>
 <body>
@@ -2027,7 +2098,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v3.8.8 / 更新 2026-08-21 19:38</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.8.9 / 更新 2026-08-21 19:46</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2468,7 +2539,28 @@ body.flashFullscreenBody{
         <button type="button" id="flashSaveMemoBtn" class="secondary">CSV保存</button>
         <button type="button" id="flashClearChecksBtn" class="secondary">チェックを全解除</button>
       </div>
-      <div class="flashCheckedTableWrap">
+      
+      <div class="flashCheckedImportBox">
+        <h4>チェックIDからフラッシュカードを作る</h4>
+        <div class="flashCheckedImportGrid">
+          <label>
+            <span>IDを貼り付け</span>
+            <textarea id="flashCheckedIdInput" placeholder="A000001&#10;A000025&#10;A000104"></textarea>
+          </label>
+          <label>
+            <span>チェックCSVを読み込む</span>
+            <input id="flashCheckedCsvInput" type="file" accept=".csv,.txt,text/csv,text/plain">
+          </label>
+        </div>
+        <div class="flashCheckedImportActions">
+          <button type="button" id="flashLoadIdsBtn" class="secondary">IDをチェックに反映</button>
+          <button type="button" id="flashLoadCheckedCsvBtn" class="secondary">CSVをチェックに反映</button>
+          <button type="button" id="flashBuildFromChecksBtn" class="secondary">チェック項目だけでフラッシュカード作成</button>
+        </div>
+        <p class="hint" id="flashCheckedImportStatus" style="margin:8px 0 0;"></p>
+      </div>
+
+<div class="flashCheckedTableWrap">
         <table class="flashCheckedTable" id="flashCheckedTable">
           <thead>
             <tr><th>ID</th><th>表</th><th>裏</th></tr>
@@ -2489,8 +2581,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.8.8";
-const APP_UPDATED="2026-08-21 19:38";
+const APP_VERSION="v3.8.9";
+const APP_UPDATED="2026-08-21 19:46";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3922,6 +4014,110 @@ function flashSideMemoText(r,side){
   let bottom=flashFieldValue(r,cfg.bottom)||"（データなし）";
   return `${top} ／ ${bottom}`;
 }
+
+function normalizeFlashCheckedIdsFromText(text){
+  const out=[];
+  const seen=new Set();
+  const raw=String(text||"").replace(/\r/g,"");
+  const lines=raw.split("\n");
+
+  for(const line of lines){
+    if(!line.trim())continue;
+
+    // CSV/TSV: first column is treated as ID. Plain-text ID-per-line also works.
+    let first=line;
+    if(line.includes("\t"))first=line.split("\t")[0];
+    else if(line.includes(","))first=line.split(",")[0];
+
+    first=String(first||"").trim().replace(/^"|"$/g,"");
+    if(!first)continue;
+    if(/^id$/i.test(first))continue;
+
+    // Accept generic letter + 6 digits, matching the app's ID policy.
+    const m=first.match(/^([A-Za-z])(\d{6})$/);
+    if(!m)continue;
+    const id=m[1].toUpperCase()+m[2];
+    if(!seen.has(id)){
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+async function applyCheckedIds(ids,sourceLabel="ID"){
+  const all=await getActiveProfileRecords();
+  const available=new Set(all.map(r=>String(r.id)));
+  const matched=ids.filter(id=>available.has(id));
+  const missing=ids.filter(id=>!available.has(id));
+
+  flashCheckedIds=new Set(matched);
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+  await buildFlashCheckedMemo();
+
+  const status=$("flashCheckedImportStatus");
+  if(status){
+    status.textContent=`${sourceLabel}：${matched.length}件をチェックに反映`
+      +(missing.length?`（現在のCSVにないID ${missing.length}件）`:"");
+  }
+  return matched;
+}
+
+async function importCheckedIdsFromTextarea(){
+  const ids=normalizeFlashCheckedIdsFromText($("flashCheckedIdInput")?.value||"");
+  if(!ids.length){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="有効なIDがありません。";
+    return;
+  }
+  await applyCheckedIds(ids,"貼り付けID");
+}
+
+async function importCheckedIdsFromCsv(){
+  const file=$("flashCheckedCsvInput")?.files?.[0];
+  if(!file){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVファイルを選択してください。";
+    return;
+  }
+  let text="";
+  try{
+    text=await file.text();
+  }catch(e){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVを読み込めませんでした。";
+    return;
+  }
+  const ids=normalizeFlashCheckedIdsFromText(text);
+  if(!ids.length){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVから有効なIDを見つけられませんでした。";
+    return;
+  }
+  await applyCheckedIds(ids,file.name);
+}
+
+async function buildFlashcardsFromCheckedIds(){
+  const all=await getActiveProfileRecords();
+  flashSourceMode="checked";
+  flashRecords=all
+    .filter(r=>flashCheckedIds.has(String(r.id)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+
+  if($("flashStatus")){
+    $("flashStatus").textContent=flashRecords.length
+      ? `チェック項目から ${flashRecords.length}件　CSV ${activeCsvProfile}`
+      : "チェック項目がありません。";
+  }
+  if($("flashCheckedImportStatus")){
+    $("flashCheckedImportStatus").textContent=flashRecords.length
+      ? `${flashRecords.length}件でフラッシュカードを作成しました。`
+      : "現在のCSVに一致するチェックIDがありません。";
+  }
+}
+
 async function getCheckedFlashRows(){
   const all=await getActiveProfileRecords();
   return all.filter(r=>flashCheckedIds.has(String(r.id)))
@@ -4211,6 +4407,8 @@ async function loadFlashcards(){
   if(!$("flashTop"))return;
   if(flashSourceMode==="selected"){
     await buildFlashcardsFromSelected();
+  }else if(flashSourceMode==="checked"){
+    await buildFlashcardsFromCheckedIds();
   }else{
     await buildFlashcardsFromSearch();
   }
@@ -4344,25 +4542,12 @@ $("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggle
   $(id)?.addEventListener("click",e=>e.stopPropagation());
 });
 $("flashCard")?.addEventListener("click",e=>{
-  // Normal/landscape: horizontal X axis.
-  // iPhone portrait fullscreen is visually rotated 90deg clockwise, so its
-  // landscape left-to-right axis corresponds to the physical screen Y axis.
+  // Left 1/4 = previous, center 1/2 = flip, right 1/4 = next.
+  // iPhone fullscreen is no longer rotated, so the X axis is always used.
   const card=e.currentTarget;
   const rect=card.getBoundingClientRect();
-  const rotatedPortrait=
-    flashFullscreenActive &&
-    isTouchMobileFlash() &&
-    window.matchMedia?.("(orientation: portrait)").matches;
-
-  let ratio;
-  if(rotatedPortrait){
-    if(!rect.height)return;
-    ratio=(e.clientY-rect.top)/rect.height;
-  }else{
-    if(!rect.width)return;
-    ratio=(e.clientX-rect.left)/rect.width;
-  }
-
+  if(!rect.width)return;
+  let ratio=(e.clientX-rect.left)/rect.width;
   ratio=Math.max(0,Math.min(1,ratio));
   if(ratio<0.25){
     stepFlashcard(-1);
@@ -4409,6 +4594,9 @@ window.addEventListener("orientationchange",()=>{
   });
 });
 
+$("flashLoadIdsBtn")?.addEventListener("click",importCheckedIdsFromTextarea);
+$("flashLoadCheckedCsvBtn")?.addEventListener("click",importCheckedIdsFromCsv);
+$("flashBuildFromChecksBtn")?.addEventListener("click",buildFlashcardsFromCheckedIds);
 $("flashBuildMemoBtn")?.addEventListener("click",buildFlashCheckedMemo);
 $("flashCopyIdsBtn")?.addEventListener("click",copyFlashCheckedIds);
 $("flashCopyMemoBtn")?.addEventListener("click",copyFlashCheckedMemo);
