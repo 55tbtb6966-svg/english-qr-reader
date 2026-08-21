@@ -1227,10 +1227,25 @@
 @media print{
   .qrActionAccepted{outline:none!important;box-shadow:none!important;animation:none!important;}
 }
+
+.profileSwitchBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-3px 0 14px;padding:9px 10px;border:1px solid #d9dee7;border-radius:12px;background:#fff;}
+.profileSwitchTitle{font-weight:750;color:#344054;margin-right:2px;}
+.profileBtn{width:auto;min-height:38px;padding:7px 11px;margin:0;background:#e9edf3;color:#111;border:2px solid transparent;}
+.profileBtn.active{background:#fff;color:#111;border-color:#111;box-shadow:0 0 0 1px #111 inset;}
+.profileStatus{font-size:.84rem;color:#667085;margin-left:auto;}
+.flashControlsGrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:12px;}
+.flashStageCard{display:grid;gap:12px;}
+.flashCard{min-height:260px;border:2px solid #d0d5dd;border-radius:18px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;position:relative;cursor:pointer;user-select:none;-webkit-user-select:none;}
+.flashCard:active{border-color:#111;}
+.flashMain{font-size:clamp(2rem,7vw,4.4rem);font-weight:800;line-height:1.18;overflow-wrap:anywhere;}
+.flashSmall{position:absolute;top:12px;left:14px;font-size:.8rem;color:#667085;}
+.flashSideLabel{position:absolute;right:14px;bottom:12px;font-size:.8rem;color:#667085;background:#eef1f5;border-radius:999px;padding:4px 8px;}
+@media(max-width:700px){.flashControlsGrid{grid-template-columns:1fr}.profileStatus{width:100%;margin-left:0}.flashCard{min-height:220px;padding:20px}.flashMain{font-size:clamp(1.8rem,10vw,3.6rem)}}
+@media print{.profileSwitchBar,#flashcardPanel{display:none!important;}}
 </style>
 </head>
 <body>
-<div class="appVersionBadge" id="appVersionBadge">App v3.6.4 / 更新 2026-08-20 23:25</div>
+<div class="appVersionBadge" id="appVersionBadge">App v3.7.0 / 更新 2026-08-21 07:07</div>
 <main>
 <h1>English QR Reader</h1>
 <div class="tabs">
@@ -1238,6 +1253,14 @@
 <button class="tabBtn" data-target="csvPanel">CSV</button>
 <button class="tabBtn" data-target="dataPanel">データ管理</button>
 <button class="tabBtn" data-target="qrPanel">QR作成</button>
+<button class="tabBtn" data-target="flashcardPanel">フラッシュカード</button>
+</div>
+<div class="profileSwitchBar" id="profileSwitchBar">
+  <div class="profileSwitchTitle">CSVセット</div>
+  <button type="button" class="profileBtn active" data-prefix="C">① 子供用</button>
+  <button type="button" class="profileBtn" data-prefix="A">② 大人用</button>
+  <button type="button" class="profileBtn" data-prefix="B">③ 大人用2</button>
+  <span class="profileStatus" id="profileStatus">① 子供用 / ID先頭 C</span>
 </div>
 <section class="panel active" id="readerPanel">
 <input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
@@ -1361,6 +1384,7 @@
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
+<p class="hint" id="profileCsvHint">選択中：① 子供用（IDは C で始まるCSV）。「全置換」はこのCSVセットだけを置き換え、他のセットは残します。</p>
 <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
 <div class="row">
 <button id="replaceImportBtn">全置換で読み込む</button>
@@ -1563,6 +1587,37 @@
 <div class="qrSheet" id="qrSheet"></div>
 <div class="qrSheet printOnlySheet" id="printQrSheet"></div>
 </section>
+
+<section class="panel" id="flashcardPanel">
+  <div class="card">
+    <h2>フラッシュカード</h2>
+    <p class="hint">現在選択中のCSVセットだけを使います。既存の読み取り・QR作成とは独立した機能です。</p>
+    <div class="flashControlsGrid">
+      <label><span>絞り込み</span><input id="flashSearch" type="text" placeholder="英語・日本語・Comment・ID"></label>
+      <label><span>表</span><select id="flashFrontField"><option value="english" selected>英語</option><option value="japanese">日本語</option><option value="japaneseRead">日本語読み</option></select></label>
+      <label><span>裏</span><select id="flashBackField"><option value="japanese" selected>日本語</option><option value="japaneseRead">日本語読み</option><option value="english">英語</option><option value="comment">Comment</option></select></label>
+    </div>
+    <div class="row">
+      <button type="button" id="flashReloadBtn" class="secondary">カードを読み込む</button>
+      <button type="button" id="flashShuffleBtn" class="secondary">シャッフル</button>
+    </div>
+    <p class="hint" id="flashStatus">カードを読み込んでください。</p>
+  </div>
+  <div class="card flashStageCard">
+    <div class="flashCard" id="flashCard" role="button" tabindex="0" aria-label="タップして表裏を切り替え">
+      <div class="flashSmall" id="flashId"></div>
+      <div class="flashMain" id="flashMain">フラッシュカード</div>
+      <div class="flashSideLabel" id="flashSideLabel">表</div>
+    </div>
+    <div class="row">
+      <button type="button" id="flashPrevBtn" class="secondary">← 前</button>
+      <button type="button" id="flashFlipBtn">表／裏</button>
+      <button type="button" id="flashNextBtn" class="secondary">次 →</button>
+      <button type="button" id="flashSpeakBtn" class="secondary">🔊 発音</button>
+    </div>
+  </div>
+</section>
+
 </main>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -1570,8 +1625,8 @@
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v3.6.4";
-const APP_UPDATED="2026-08-20 23:25";
+const APP_VERSION="v3.7.0";
+const APP_UPDATED="2026-08-21 07:07";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -1616,6 +1671,53 @@ let lastCameraScanAt=0;
 let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
+
+const DATA_PROFILES={
+  C:{label:"① 子供用",prefix:"C"},
+  A:{label:"② 大人用",prefix:"A"},
+  B:{label:"③ 大人用2",prefix:"B"}
+};
+const ACTIVE_PROFILE_KEY="activeCsvProfileV1";
+let activeProfilePrefix=localStorage.getItem(ACTIVE_PROFILE_KEY)||"C";
+if(!DATA_PROFILES[activeProfilePrefix])activeProfilePrefix="C";
+
+function recordProfilePrefix(recordOrId){
+  const id=typeof recordOrId==="string"?recordOrId:recordOrId?.id;
+  return String(id||"").trim().charAt(0).toUpperCase();
+}
+function isActiveProfileRecord(r){return recordProfilePrefix(r)===activeProfilePrefix;}
+function activeProfileInfo(){return DATA_PROFILES[activeProfilePrefix]||DATA_PROFILES.C;}
+async function getActiveProfileRecords(){return (await getAllRecords()).filter(isActiveProfileRecord);}
+
+async function deleteActiveProfileRecords(){
+  const all=await getAllRecords();
+  const ids=all.filter(isActiveProfileRecord).map(r=>r.id);
+  if(!ids.length)return;
+  const transaction=db.transaction(STORE,"readwrite");
+  const store=transaction.objectStore(STORE);
+  ids.forEach(id=>store.delete(id));
+  await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
+}
+
+function updateProfileUi(){
+  document.querySelectorAll(".profileBtn").forEach(btn=>btn.classList.toggle("active",btn.dataset.prefix===activeProfilePrefix));
+  const p=activeProfileInfo();
+  if($("profileStatus"))$("profileStatus").textContent=`${p.label} / ID先頭 ${p.prefix}`;
+  if($("profileCsvHint"))$("profileCsvHint").textContent=`選択中：${p.label}（IDは ${p.prefix} で始まるCSV）。「全置換」はこのCSVセットだけを置き換え、他のセットは残します。`;
+}
+
+async function switchDataProfile(prefix){
+  if(!DATA_PROFILES[prefix])return;
+  activeProfilePrefix=prefix;
+  localStorage.setItem(ACTIVE_PROFILE_KEY,prefix);
+  selectedIds.clear(); currentPage=0; qrPageSource=[]; qrPageStart=0;
+  if($("qrSheet"))$("qrSheet").innerHTML="";
+  updateProfileUi();
+  await refreshSummary();
+  await renderPage();
+  await loadFlashcards();
+}
+
 
 function setStatus(el, msg, ok=true) {
   el.textContent = msg;
@@ -1714,19 +1816,24 @@ async function importCsv(replace) {
   if(!file){setStatus($("importStatus"),"CSVを選択してください。",false);return;}
   try{
     const parsed=csvToRecords(parseCsv(await file.text()));
-    if(replace) await clearRecords();
+    const bad=parsed.records.filter(r=>recordProfilePrefix(r)!==activeProfilePrefix);
+    if(bad.length){
+      const p=activeProfileInfo();
+      throw new Error(`${p.label}では、IDが ${p.prefix} で始まるCSVを読み込んでください。（不一致 ${bad.length}件）`);
+    }
+    if(replace) await deleteActiveProfileRecords();
     const transaction=db.transaction(STORE,"readwrite");
     const store=transaction.objectStore(STORE);
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
     if(parsed.version) await putMeta("version",parsed.version);
-    setStatus($("importStatus"),parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
+    setStatus($("importStatus"),activeProfileInfo().label+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
-  const all=(await getAllRecords()).sort((a,b)=>a.id.localeCompare(b.id));
+  const all=(await getActiveProfileRecords()).sort((a,b)=>a.id.localeCompare(b.id));
   const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
@@ -1735,13 +1842,13 @@ async function exportCsv(){
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="words.csv";
+  a.download=`words_${activeProfilePrefix}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
 async function refreshSummary(){
   try{
-    $("recordCount").textContent=await countRecords();
+    $("recordCount").textContent=(await getActiveProfileRecords()).length;
   }catch{
     $("recordCount").textContent="取得エラー";
   }
@@ -2550,7 +2657,7 @@ async function editRecord(id){
 }
 async function filteredAll(searchId){
   const q=String($(searchId)?.value||"").trim().toLowerCase();
-  const all=await getAllRecords();
+  const all=(await getAllRecords()).filter(isActiveProfileRecord);
   return all
     .filter(r=>{
       if(!q)return true;
@@ -2841,11 +2948,78 @@ function renderQr(records){
   }
 }
 
+
+let flashRecords=[];
+let flashIndex=0;
+let flashBackShown=false;
+
+function flashFieldValue(r,key){
+  if(!r)return "";
+  if(key==="japanese")return r.japanese||r.japaneseRead||"";
+  if(key==="japaneseRead")return r.japaneseRead||r.japanese||"";
+  if(key==="comment")return r.comment||"";
+  return r.english||"";
+}
+function renderFlashcard(){
+  const r=flashRecords[flashIndex]||null;
+  if(!r){
+    if($("flashMain"))$("flashMain").textContent="対象カードなし";
+    if($("flashId"))$("flashId").textContent="";
+    if($("flashStatus"))$("flashStatus").textContent="0件";
+    return;
+  }
+  const key=flashBackShown?$("flashBackField").value:$("flashFrontField").value;
+  let text=flashFieldValue(r,key);
+  if(!text)text="（データなし）";
+  $("flashMain").textContent=text;
+  $("flashId").textContent=r.id;
+  $("flashSideLabel").textContent=flashBackShown?"裏":"表";
+  $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　${activeProfileInfo().label}`;
+}
+async function loadFlashcards(){
+  if(!$("flashMain"))return;
+  const q=String($("flashSearch")?.value||"").trim().toLowerCase();
+  flashRecords=(await getActiveProfileRecords()).filter(r=>{
+    if(!q)return true;
+    return [r.id,r.english,r.englishSpeak,r.japanese,r.japaneseRead,r.comment].some(v=>String(v||"").toLowerCase().includes(q));
+  }).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  flashIndex=0;flashBackShown=false;renderFlashcard();
+}
+function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
+function stepFlashcard(delta){
+  if(!flashRecords.length)return;
+  flashIndex=(flashIndex+delta+flashRecords.length)%flashRecords.length;
+  flashBackShown=false;renderFlashcard();
+}
+function shuffleFlashcards(){
+  for(let i=flashRecords.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[flashRecords[i],flashRecords[j]]=[flashRecords[j],flashRecords[i]];}
+  flashIndex=0;flashBackShown=false;renderFlashcard();
+}
+async function speakCurrentFlashcard(){
+  const r=flashRecords[flashIndex];if(!r)return;
+  await playRecordFromPreview(r);
+}
+
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll(".tabBtn").forEach(x=>x.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");$(b.dataset.target).classList.add("active");
+  if(b.dataset.target==="flashcardPanel")loadFlashcards();
 }));
+
+document.querySelectorAll(".profileBtn").forEach(btn=>btn.addEventListener("click",()=>switchDataProfile(btn.dataset.prefix)));
+$("flashReloadBtn")?.addEventListener("click",loadFlashcards);
+$("flashShuffleBtn")?.addEventListener("click",shuffleFlashcards);
+$("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
+$("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
+$("flashFlipBtn")?.addEventListener("click",flipFlashcard);
+$("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
+$("flashCard")?.addEventListener("click",flipFlashcard);
+$("flashCard")?.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}});
+$("flashFrontField")?.addEventListener("change",()=>{flashBackShown=false;renderFlashcard();});
+$("flashBackField")?.addEventListener("change",renderFlashcard);
+$("flashSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadFlashcards();});
+
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
@@ -2905,7 +3079,7 @@ function flashQrActionAccepted(btn){
 
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
   flashQrActionAccepted($("makeSelectedQrBtn"));
-  const all=await getAllRecords(),list=all.filter(r=>selectedIds.has(r.id)).sort((a,b)=>a.id.localeCompare(b.id));
+  const all=await getActiveProfileRecords(),list=all.filter(r=>selectedIds.has(r.id)).sort((a,b)=>a.id.localeCompare(b.id));
   if(!list.length){setStatus($("qrStatus"),"データ管理画面で選択してください。",false);return;}
   qrPageSource=list;
   qrPageSize=Number($("qrCount").value)||10;
@@ -4594,8 +4768,10 @@ $("masterMirror_settingQrSize")?.addEventListener("change",()=>{
 });
 
 
+updateProfileUi();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
+setTimeout(()=>{refreshSummary();renderPage();loadFlashcards();},0);
 
 (function ensureDefaultQrFieldToggles(){
   try{
