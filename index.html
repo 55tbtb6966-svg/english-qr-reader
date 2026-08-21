@@ -2662,12 +2662,6 @@ body.flashFullscreenBody{
   box-shadow:none;
 }
 
-/* Keep the accepted-action cue visible without changing the normal button color. */
-#makeSelectedQrBtn.standardActionBtn.qrActionAccepted{
-  outline:2px solid #111 !important;
-  outline-offset:2px !important;
-  box-shadow:0 0 0 2px rgba(17,17,17,.10) !important;
-}
 
 /* Desktop: always reserve vertical scrollbar width so short tabs such as CSV
    do not make the whole app jump sideways. */
@@ -2676,6 +2670,15 @@ body.flashFullscreenBody{
     overflow-y:scroll;
     scrollbar-gutter:stable;
   }
+}
+
+/* v4.0.4 unified accepted-action feedback.
+   All accepted buttons use the same timing/appearance as flashcard search creation. */
+.qrActionAccepted{
+  animation:flashAcceptedBlink .42s ease-out 1 !important;
+  outline:0 solid transparent !important;
+  box-shadow:none !important;
+  transform:none !important;
 }
 </style>
 </head>
@@ -2692,7 +2695,7 @@ body.flashFullscreenBody{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.0.3 / 更新 2026-08-21 21:19</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.0.4 / 更新 2026-08-21 21:27</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3182,8 +3185,8 @@ body.flashFullscreenBody{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.0.3";
-const APP_UPDATED="2026-08-21 21:19";
+const APP_VERSION="v4.0.4";
+const APP_UPDATED="2026-08-21 21:27";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5333,12 +5336,9 @@ $("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;rende
 $("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
 
 function flashQrActionAccepted(btn){
-  if(!btn)return;
-  btn.classList.remove("qrActionAccepted");
-  // Force a reflow so repeated taps restart the flash reliably on iPhone Safari.
-  void btn.offsetWidth;
-  btn.classList.add("qrActionAccepted");
-  setTimeout(()=>btn.classList.remove("qrActionAccepted"),380);
+  // Use exactly the same acknowledgement used by
+  // "検索結果からフラッシュカードを作る".
+  flashAccepted(btn);
 }
 
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
