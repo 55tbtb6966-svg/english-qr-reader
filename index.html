@@ -2742,7 +2742,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.2.7 / 更新 2026-08-22 06:51</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.2.8 / 更新 2026-08-22 06:58</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3226,8 +3226,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.2.7";
-const APP_UPDATED="2026-08-22 06:51";
+const APP_VERSION="v4.2.8";
+const APP_UPDATED="2026-08-22 06:58";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3263,6 +3263,9 @@ let scanner = null;
 let currentRecord = null;
 let currentPage = 0;
 let selectedIds = new Set();
+let dataSelectionRevision=0;
+let qrSelectionRevision=-1;
+let flashSelectionRevision=-1;
 let speakingToken = 0;
 let scanInputMode="none";
 let hidBuffer="";
@@ -3324,6 +3327,9 @@ async function switchDataProfile(profile){
     try{window.speechSynthesis?.cancel();}catch(e){}
     currentRecord=null;
     selectedIds.clear();
+    dataSelectionRevision++;
+    qrSelectionRevision=-1;
+    flashSelectionRevision=-1;
     currentPage=0;
     dataSearchQuery="";
     if($("searchText"))$("searchText").value="";
@@ -4618,6 +4624,20 @@ async function filteredAll(searchId){
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
 }
 
+
+function markDataSelectionChanged(){
+  dataSelectionRevision++;
+  qrSelectionRevision=-1;
+  flashSelectionRevision=-1;
+
+  // Do not keep a stale selected-source snapshot after the user changes checks.
+  if(typeof flashSourceMode!=="undefined" && flashSourceMode==="selected"){
+    flashRecords=[];
+    flashIndex=0;
+    flashBackShown=false;
+  }
+}
+
 function syncVisibleDataSelection(){
   const body=$("recordBody");
   if(!body)return;
@@ -4641,8 +4661,14 @@ async function renderPage(){
     cb.addEventListener("change",()=>{
       const id=String(cb.dataset.recordId||"");
       if(!id)return;
+
+      const wasSelected=selectedIds.has(id);
       if(cb.checked)selectedIds.add(id);
       else selectedIds.delete(id);
+
+      if(wasSelected!==cb.checked){
+        markDataSelectionChanged();
+      }
     });
     sel.appendChild(cb);tr.appendChild(sel);
     [r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",modeLabel(r.mode),r.englishRate,r.japaneseRate,r.repeat].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
@@ -5383,20 +5409,36 @@ async function buildFlashcardsFromSearch(){
 async function buildFlashcardsFromSelected(){
   syncVisibleDataSelection();
   flashSourceMode="selected";
+
+  const selectedNow=new Set([...selectedIds]);
   const all=await getActiveProfileRecords();
-  flashRecords=all
-    .filter(r=>selectedIds.has(r.id))
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
-  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  const fresh=all
+    .filter(r=>selectedNow.has(String(r.id||"")))
+    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+
+  // Always discard the previous selected flashcard result and rebuild.
+  flashRecords=[];
   flashIndex=0;
   flashBackShown=false;
+
+  if($("flashTop"))$("flashTop").textContent="フラッシュカード";
+  if($("flashBottom")){
+    $("flashBottom").textContent="";
+    $("flashBottom").hidden=true;
+  }
+  if($("flashId"))$("flashId").textContent="";
+
+  flashRecords=fresh.map(r=>({...r}));
+  flashSelectionRevision=dataSelectionRevision;
+
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
   renderFlashcard();
+
   if($("flashStatus")){
     $("flashStatus").textContent=flashRecords.length
-      ? `選択項目から ${flashRecords.length}件　CSV ${activeCsvProfile}`
+      ? `最新のチェック ${flashRecords.length}件から作り直しました　CSV ${activeCsvProfile}`
       : "データ管理で項目をチェックしてください。";
   }
-  if(flashRecords.length)flashQrActionAccepted($("flashFromSelectedBtn"));
 }
 
 async function loadFlashcards(){
@@ -5700,14 +5742,24 @@ $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
 
 $("selectAllFilteredBtn").addEventListener("click",async()=>{
   const all=await filteredAll("searchText");
-  all.forEach(r=>selectedIds.add(r.id));
+  let changed=false;
+  all.forEach(r=>{
+    if(!selectedIds.has(r.id))changed=true;
+    selectedIds.add(r.id);
+  });
+  if(changed)markDataSelectionChanged();
   await renderPage();
   setStatus($("editStatus"),`${all.length}件をチェックしました。`);
 });
 
 $("clearAllFilteredBtn").addEventListener("click",async()=>{
   const all=await filteredAll("searchText");
-  all.forEach(r=>selectedIds.delete(r.id));
+  let changed=false;
+  all.forEach(r=>{
+    if(selectedIds.has(r.id))changed=true;
+    selectedIds.delete(r.id);
+  });
+  if(changed)markDataSelectionChanged();
   await renderPage();
   setStatus($("editStatus"),`${all.length}件のチェックを解除しました。`);
 });
@@ -5721,14 +5773,33 @@ function flashQrActionAccepted(btn){
 
 $("makeSelectedQrBtn").addEventListener("click",async()=>{
   syncVisibleDataSelection();
-  const all=await getActiveProfileRecords(),list=all.filter(r=>selectedIds.has(r.id)).sort((a,b)=>a.id.localeCompare(b.id));
-  if(!list.length){setStatus($("qrStatus"),"データ管理画面で選択してください。",false);return;}
-  flashQrActionAccepted($("makeSelectedQrBtn"));
-  qrPageSource=list;
-  qrPageSize=Number($("qrCount").value)||10;
+
+  const selectedNow=new Set([...selectedIds]);
+  const all=await getActiveProfileRecords();
+  const list=all
+    .filter(r=>selectedNow.has(String(r.id||"")))
+    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+
+  if(!list.length){
+    qrPageSource=[];
+    qrPageStart=0;
+    renderQr([]);
+    setStatus($("qrStatus"),"データ管理画面で選択してください。",false);
+    return;
+  }
+
+  // Always discard the previous selected QR result and rebuild from scratch.
+  qrPageSource=[];
   qrPageStart=0;
-  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
-  setStatus($("qrStatus"),`データ管理の最新選択 ${list.length}件からQRを作成しました。`);
+  if($("qrSheet"))$("qrSheet").innerHTML="";
+  if($("printQrSheet"))$("printQrSheet").innerHTML="";
+
+  qrPageSource=list.map(r=>({...r}));
+  qrPageSize=Number($("qrCount").value)||10;
+  qrSelectionRevision=dataSelectionRevision;
+
+  renderQr(qrPageSource.slice(0,qrPageSize));
+  setStatus($("qrStatus"),`最新のチェック ${qrPageSource.length}件からQRを作り直しました。`);
 });
 
 async function buildQrFromSearch(){
