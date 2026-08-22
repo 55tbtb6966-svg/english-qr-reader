@@ -2773,7 +2773,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.3.7 / 更新 2026-08-22 13:23</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.3.8 / 更新 2026-08-22 13:29</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3265,8 +3265,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.3.7";
-const APP_UPDATED="2026-08-22 13:23";
+const APP_VERSION="v4.3.8";
+const APP_UPDATED="2026-08-22 13:29";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5156,6 +5156,50 @@ async function runSearchWithFeedback(btn,searchFn){
   }
 }
 
+async function runSelectedCreateWithFeedback(btn,createFn){
+  if(!btn || typeof createFn!=="function")return;
+
+  const originalText=btn.dataset.originalSelectedLabel || btn.textContent;
+  btn.dataset.originalSelectedLabel=originalText;
+
+  const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
+  btn.dataset.selectedFeedbackToken=token;
+  btn.disabled=true;
+  btn.textContent="作成中…";
+
+  try{
+    const result=await createFn();
+    if(btn.dataset.selectedFeedbackToken!==token)return;
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : null;
+
+    // Zero means no selection; the inline warning is shown by the create function.
+    if(count===0){
+      btn.textContent=originalText;
+      btn.disabled=false;
+      return;
+    }
+
+    btn.textContent=count===null ? "✓ 作成しました" : `選択 ${count}件`;
+
+    setTimeout(()=>{
+      if(btn.dataset.selectedFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1600);
+  }catch(err){
+    console.error(err);
+    if(btn.dataset.selectedFeedbackToken!==token)return;
+    btn.textContent="作成エラー";
+    setTimeout(()=>{
+      if(btn.dataset.selectedFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1400);
+  }
+}
+
+
 
 
 function normalizeFlashCheckedIdsFromText(text){
@@ -5570,7 +5614,7 @@ async function buildFlashcardsFromSelected(){
       setStatus($("flashSelectedStatus"),"データ管理で項目を選択してください。",false);
     }
     if($("flashStatus"))$("flashStatus").textContent="";
-    return;
+    return 0;
   }
 
   if($("flashSelectedStatus"))$("flashSelectedStatus").textContent="";
@@ -5584,6 +5628,7 @@ async function buildFlashcardsFromSelected(){
     $("flashStatus").textContent=`最新のチェック ${flashRecords.length}件から作成しました　CSV ${activeCsvProfile}`;
   }
   resetSelectionOnNextDataOpen=true;
+  return flashRecords.length;
 }
 
 async function loadFlashcards(){
@@ -5770,7 +5815,9 @@ document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async
 $("csvProfileSelect")?.addEventListener("change",async()=>{
   await switchDataProfile($("csvProfileSelect").value);
 });
-$("flashFromSelectedBtn")?.addEventListener("click",buildFlashcardsFromSelected);
+$("flashFromSelectedBtn")?.addEventListener("click",()=>{
+  runSelectedCreateWithFeedback($("flashFromSelectedBtn"),buildFlashcardsFromSelected);
+});
 $("flashFromSearchBtn")?.addEventListener("click",()=>{
   runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
 });
@@ -5931,7 +5978,7 @@ function flashQrActionAccepted(btn){
   return;
 }
 
-$("makeSelectedQrBtn").addEventListener("click",async()=>{
+async function buildQrFromSelected(){
   const selectedNow=latestDataManagementSelection();
   const all=await getActiveProfileRecords();
   const list=all
@@ -5945,7 +5992,7 @@ $("makeSelectedQrBtn").addEventListener("click",async()=>{
     if($("qrSelectedStatus")){
       setStatus($("qrSelectedStatus"),"データ管理で項目を選択してください。",false);
     }
-    return;
+    return 0;
   }
 
   if($("qrSelectedStatus"))$("qrSelectedStatus").textContent="";
@@ -5959,6 +6006,11 @@ $("makeSelectedQrBtn").addEventListener("click",async()=>{
   renderQr(qrPageSource.slice(0,qrPageSize));
   setStatus($("qrStatus"),`最新のチェック ${qrPageSource.length}件からQRを作成しました。`);
   resetSelectionOnNextDataOpen=true;
+  return qrPageSource.length;
+}
+
+$("makeSelectedQrBtn").addEventListener("click",()=>{
+  runSelectedCreateWithFeedback($("makeSelectedQrBtn"),buildQrFromSelected);
 });
 
 async function buildQrFromSearch(){
