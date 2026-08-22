@@ -2773,7 +2773,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.3.8 / 更新 2026-08-22 13:29</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.3.9 / 更新 2026-08-22 13:36</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3265,8 +3265,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.3.8";
-const APP_UPDATED="2026-08-22 13:29";
+const APP_VERSION="v4.3.9";
+const APP_UPDATED="2026-08-22 13:36";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5199,6 +5199,42 @@ async function runSelectedCreateWithFeedback(btn,createFn){
   }
 }
 
+async function runFlashSettingsApplyFeedback(btn,applyFn){
+  if(!btn || typeof applyFn!=="function")return;
+
+  const originalText=btn.dataset.originalApplyLabel || btn.textContent;
+  btn.dataset.originalApplyLabel=originalText;
+
+  const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
+  btn.dataset.applyFeedbackToken=token;
+  btn.disabled=true;
+  btn.textContent="反映中…";
+
+  try{
+    const result=await applyFn();
+    if(btn.dataset.applyFeedbackToken!==token)return;
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : 0;
+    btn.textContent=`${count}件に反映`;
+
+    setTimeout(()=>{
+      if(btn.dataset.applyFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1600);
+  }catch(err){
+    console.error(err);
+    if(btn.dataset.applyFeedbackToken!==token)return;
+    btn.textContent="反映エラー";
+    setTimeout(()=>{
+      if(btn.dataset.applyFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1400);
+  }
+}
+
+
 
 
 
@@ -5632,7 +5668,7 @@ async function buildFlashcardsFromSelected(){
 }
 
 async function loadFlashcards(){
-  if(!$("flashTop"))return;
+  if(!$("flashTop"))return 0;
   if(flashSourceMode==="selected"){
     await buildFlashcardsFromSelected();
   }else if(flashSourceMode==="checked"){
@@ -5640,6 +5676,7 @@ async function loadFlashcards(){
   }else{
     await buildFlashcardsFromSearch();
   }
+  return flashRecords.length;
 }
 function setFlashcardSide(side){
   flashBackShown=side==="back";
@@ -5821,7 +5858,9 @@ $("flashFromSelectedBtn")?.addEventListener("click",()=>{
 $("flashFromSearchBtn")?.addEventListener("click",()=>{
   runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
 });
-$("flashReloadBtn")?.addEventListener("click",loadFlashcards);
+$("flashReloadBtn")?.addEventListener("click",()=>{
+  runFlashSettingsApplyFeedback($("flashReloadBtn"),loadFlashcards);
+});
 $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
 $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
