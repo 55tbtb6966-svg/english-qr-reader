@@ -1,4 +1,4 @@
-const CACHE="english-qr-reader-v436-20260822041539";
+const CACHE="english-qr-reader-v437-20260822042346";
 self.addEventListener("install",()=>self.skipWaiting());
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener("fetch",e=>{if(e.request.mode==="navigate")e.respondWith(fetch(e.request,{cache:"no-store"}));});

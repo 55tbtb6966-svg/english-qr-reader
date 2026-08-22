@@ -2740,6 +2740,24 @@ button.flashActionAccepted{
   display:block;
   visibility:hidden;
 }
+
+.dataSearchArea{
+  display:grid;
+  gap:10px;
+}
+.dataSearchMainBtn{
+  width:100%;
+  min-height:54px;
+  font-size:1.05rem;
+  font-weight:800;
+  margin:0;
+}
+.dataSearchPageSize{
+  max-width:220px;
+}
+@media(max-width:650px){
+  .dataSearchPageSize{max-width:none;}
+}
 </style>
 </head>
 <body>
@@ -2755,7 +2773,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.3.6 / 更新 2026-08-22 13:15</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.3.7 / 更新 2026-08-22 13:23</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2910,14 +2928,16 @@ button.flashActionAccepted{
 </div></div></section>
 <section class="panel" id="dataPanel">
 <div class="card">
-<div class="grid2 dataSearchGrid" style="margin-top:14px;">
-<div class="dataSearchField">
-  <label><span>検索（スペース区切りAND検索）</span><input id="searchText" placeholder="例：apple red" type="text"/></label>
-  <button class="secondary" id="dataSearchBtn" type="button">検索</button>
-</div>
-<label><span>1ページの件数</span>
-<select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
-</label>
+<div class="dataSearchArea" style="margin-top:14px;">
+  <label><span>検索（スペース区切りAND検索）</span>
+    <input id="searchText" placeholder="例：apple red" type="text"/>
+  </label>
+  <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
+  <div class="dataSearchPageSize">
+    <label><span>1ページの件数</span>
+      <select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
+    </label>
+  </div>
 </div>
 <div class="row">
 <button class="secondary" id="prevBtn">前のページ</button>
@@ -3245,8 +3265,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.3.6";
-const APP_UPDATED="2026-08-22 13:15";
+const APP_VERSION="v4.3.7";
+const APP_UPDATED="2026-08-22 13:23";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5107,23 +5127,23 @@ async function runSearchWithFeedback(btn,searchFn){
   const originalText=btn.dataset.originalSearchLabel || btn.textContent;
   btn.dataset.originalSearchLabel=originalText;
 
-  // Prevent overlapping searches from repeatedly changing the label.
   const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
   btn.dataset.searchFeedbackToken=token;
   btn.disabled=true;
   btn.textContent="検索中…";
 
   try{
-    await searchFn();
-
+    const result=await searchFn();
     if(btn.dataset.searchFeedbackToken!==token)return;
-    btn.textContent="✓ 検索しました";
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : null;
+    btn.textContent=count===null ? "✓ 検索しました" : `検索結果 ${count}件`;
 
     setTimeout(()=>{
       if(btn.dataset.searchFeedbackToken!==token)return;
       btn.textContent=originalText;
       btn.disabled=false;
-    },900);
+    },1600);
   }catch(err){
     console.error(err);
     if(btn.dataset.searchFeedbackToken!==token)return;
@@ -5132,7 +5152,7 @@ async function runSearchWithFeedback(btn,searchFn){
       if(btn.dataset.searchFeedbackToken!==token)return;
       btn.textContent=originalText;
       btn.disabled=false;
-    },1200);
+    },1400);
   }
 }
 
@@ -5528,6 +5548,7 @@ async function buildFlashcardsFromSearch(){
     $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
+  return flashRecords.length;
 }
 
 async function buildFlashcardsFromSelected(){
@@ -5864,9 +5885,8 @@ async function executeDataSearch(){
   dataSearchQuery=String($("searchText")?.value||"");
   currentPage=0;
   await renderPage();
-
   const matched=await filteredAll("searchText");
-  setStatus($("editStatus"),`検索結果 ${matched.length}件`);
+  return matched.length;
 }
 
 $("dataSearchBtn")?.addEventListener("click",()=>{
@@ -5972,6 +5992,7 @@ async function buildQrFromSearch(){
   const scope=latestSelection.size?"チェック項目内":"全項目";
   setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件をID順で表示しています。`);
   flashQrActionAccepted($("makeSearchQrBtn"));
+  return qrPageSource.length;
 }
 
 $("makeSearchQrBtn").addEventListener("click",()=>{
