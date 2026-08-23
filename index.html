@@ -2773,7 +2773,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.3.9 / 更新 2026-08-22 13:36</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.0 / 更新 2026-08-23 18:18</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3265,8 +3265,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.3.9";
-const APP_UPDATED="2026-08-22 13:36";
+const APP_VERSION="v4.4.0";
+const APP_UPDATED="2026-08-23 18:18";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6184,7 +6184,7 @@ function getPreviewCardEditableItemsForPpt(){
     if(!cardRect.width || !cardRect.height) return;
 
     const item = {
-      record: qrPageSource[i] || null,
+      record: qrPageSource[qrPageStart+i] || null,
       cardWidthPx: cardRect.width,
       cardHeightPx: cardRect.height,
       border: null,
@@ -6235,6 +6235,14 @@ function getPreviewCardEditableItemsForPpt(){
       if(!r.width || !r.height) return;
 
       const cs = getComputedStyle(t);
+      const fontPx=parseFloat(cs.fontSize || "16");
+      const lineHeightPx=parseFloat(cs.lineHeight) || fontPx*1.18;
+      const textScrollW=Math.max(t.scrollWidth||0,t.getBoundingClientRect().width||0);
+      const textScrollH=Math.max(t.scrollHeight||0,t.getBoundingClientRect().height||0);
+      const boxClientW=Math.max(1,el.clientWidth||r.width);
+      const boxClientH=Math.max(1,el.clientHeight||r.height);
+      const lineCount=Math.max(1,Math.round(textScrollH/Math.max(1,lineHeightPx)));
+
       item.texts.push({
         key,
         text: txt,
@@ -6242,8 +6250,11 @@ function getPreviewCardEditableItemsForPpt(){
         top: ((r.top - cardRect.top) / cardRect.height) * 100,
         width: (r.width / cardRect.width) * 100,
         height: (r.height / cardRect.height) * 100,
-        fontPx: parseFloat(cs.fontSize || "16"),
-        fontRatio: (parseFloat(cs.fontSize || "16") / cardRect.width),
+        fontPx,
+        fontRatio: (fontPx / cardRect.width),
+        lineHeightPx,
+        lineCount,
+        textOverflowing:(textScrollW>boxClientW+1 || textScrollH>boxClientH+1),
         align: (cs.textAlign === "left" ? "left" : "center"),
         bold: parseInt(cs.fontWeight || "400", 10) >= 600
       });
@@ -6784,8 +6795,9 @@ function fitMasterPlainText(box,text,baseRem,enabled){
 
     // Measure the fully wrapped text after each size change.
     while(guard<60){
-      const tooWide=text.scrollWidth>availableW+1;
-      const tooTall=text.scrollHeight>availableH+1;
+      const rect=text.getBoundingClientRect();
+      const tooWide=Math.max(text.scrollWidth,rect.width)>availableW+1;
+      const tooTall=Math.max(text.scrollHeight,rect.height)>availableH+1;
       if(!tooWide&&!tooTall)break;
       if(size<=minRem+0.001)break;
 
@@ -7509,24 +7521,82 @@ function applyPrintOverrideToItem(item){
 function checkPrintItem(item){
   const issues=[],a=applyPrintOverrideToItem(item); if(!a)return issues;
   const texts=a.texts||[],b=a.border||{left:0,top:0,width:100,height:100},br=b.left+b.width,bb=b.top+b.height;
-  texts.forEach(t=>{if(t.left<b.left-.5||t.top<b.top-.5||t.left+t.width>br+.5||t.top+t.height>bb+.5)issues.push(labelForPrintKey(t.key)+"：枠外にはみ出す可能性");});
-  for(let i=0;i<texts.length;i++)for(let j=i+1;j<texts.length;j++)if(rectsOverlap(texts[i],texts[j],.35))issues.push(labelForPrintKey(texts[i].key)+" と "+labelForPrintKey(texts[j].key)+" が重なる可能性");
-  if(a.qr)texts.forEach(t=>{if(rectsOverlap(a.qr,t,.8))issues.push("QR と "+labelForPrintKey(t.key)+" が重なる可能性");});
+
+  texts.forEach(t=>{
+    if(t.left<b.left-.5||t.top<b.top-.5||t.left+t.width>br+.5||t.top+t.height>bb+.5){
+      issues.push(labelForPrintKey(t.key)+"：枠外にはみ出す可能性");
+    }
+    if(t.textOverflowing){
+      issues.push(labelForPrintKey(t.key)+"：文字が枠内に収まっていません");
+    }
+  });
+
+  for(let i=0;i<texts.length;i++){
+    for(let j=i+1;j<texts.length;j++){
+      if(rectsOverlap(texts[i],texts[j],.35)){
+        issues.push(labelForPrintKey(texts[i].key)+" と "+labelForPrintKey(texts[j].key)+" が重なる可能性");
+      }
+    }
+  }
+  if(a.qr)texts.forEach(t=>{
+    if(rectsOverlap(a.qr,t,.8))issues.push("QR と "+labelForPrintKey(t.key)+" が重なる可能性");
+  });
   return [...new Set(issues)];
 }
-function runPrintPrecheck(){
-  const panel=$("printPrecheckPanel"),summary=$("printPrecheckSummary"),list=$("printPrecheckList"); if(!panel||!summary||!list)return;
-  panel.hidden=false;$("printCardAdjustEditor").hidden=true;list.innerHTML="";
-  const items=getPreviewCardEditableItemsForPpt(); printPrecheckItemsCache=items; if(!items.length){summary.textContent="先にQRコードを表示してください。";return;}
-  let bad=0;items.forEach((item,i)=>{const issues=checkPrintItem(item);if(!issues.length)return;bad++;
-    const row=document.createElement("div");row.className="printIssueCard";
-    const top=document.createElement("div");top.className="printIssueTop";
-    const id=document.createElement("div");id.className="printIssueId";id.textContent=item.record?.id||("カード"+(i+1));
-    const btn=document.createElement("button");btn.type="button";btn.className="secondary printAdjustOpenBtn";btn.dataset.cardIndex=String(i);btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";
-    top.append(id,btn);row.appendChild(top);
-    const detail=document.createElement("div");detail.className="printIssueText";detail.textContent=issues.join(" / ");row.appendChild(detail);list.appendChild(row);
+async function runPrintPrecheck(){
+  const panel=$("printPrecheckPanel"),summary=$("printPrecheckSummary"),list=$("printPrecheckList");
+  if(!panel||!summary||!list)return;
+
+  panel.hidden=false;
+  $("printCardAdjustEditor").hidden=true;
+  list.innerHTML="";
+  summary.textContent="確認中…";
+
+  // Re-apply the master layout and wait until all requestAnimationFrame
+  // based auto-font fitting has completed before measuring.
+  applyMasterLayoutToAllRendered();
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+
+  const items=getPreviewCardEditableItemsForPpt();
+  printPrecheckItemsCache=items;
+  if(!items.length){
+    summary.textContent="先にQRコードを表示してください。";
+    return;
+  }
+
+  let bad=0;
+  items.forEach((item,i)=>{
+    const issues=checkPrintItem(item);
+    if(!issues.length)return;
+    bad++;
+
+    const row=document.createElement("div");
+    row.className="printIssueCard";
+    const top=document.createElement("div");
+    top.className="printIssueTop";
+    const id=document.createElement("div");
+    id.className="printIssueId";
+    id.textContent=item.record?.id||("カード"+(i+1));
+
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.className="secondary printAdjustOpenBtn";
+    btn.dataset.cardIndex=String(i);
+    btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";
+
+    top.append(id,btn);
+    row.appendChild(top);
+
+    const detail=document.createElement("div");
+    detail.className="printIssueText";
+    detail.textContent=issues.join(" / ");
+    row.appendChild(detail);
+    list.appendChild(row);
   });
-  summary.textContent=bad===0?("問題候補は見つかりませんでした（"+items.length+"件チェック）。"):(items.length+"件中、要確認 "+bad+"件です。");
+
+  summary.textContent=bad===0
+    ? "問題候補は見つかりませんでした（"+items.length+"件チェック）。"
+    : items.length+"件中、要確認 "+bad+"件です。";
 }
 function openPrintCardAdjustEditor(item){
   if(!item?.record?.id)return;
@@ -7610,6 +7680,80 @@ function fitIPhonePrintTextBoxes(){
     }
   });
 }
+
+function fitDirectPrintTextBoxes(){
+  document.querySelectorAll("#printQrSheet .directPrintText").forEach(box=>{
+    let size=parseFloat(box.style.fontSize)||0;
+    if(!size)return;
+
+    const minPx=5;
+    let guard=0;
+
+    // The temporary print-preflight layout makes these dimensions measurable.
+    while(
+      guard<60 &&
+      size>minPx &&
+      box.clientWidth>0 &&
+      box.clientHeight>0 &&
+      (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1)
+    ){
+      size=Math.max(minPx,size*0.94);
+      box.style.fontSize=size+"px";
+      void box.offsetHeight;
+      guard++;
+    }
+
+    box.dataset.finalPrintFontPx=String(size);
+    box.dataset.printOverflow=
+      (box.clientWidth>0 && box.clientHeight>0 &&
+       (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1))
+      ? "1" : "0";
+  });
+}
+
+async function preflightDirectPrintLayout(){
+  const sheet=$("printQrSheet");
+  if(!sheet)return;
+
+  // Temporarily lay out the print sheet at the same A4 printable width.
+  // It stays far off-screen, so the user never sees it.
+  const prev={
+    display:sheet.style.display,
+    position:sheet.style.position,
+    left:sheet.style.left,
+    top:sheet.style.top,
+    width:sheet.style.width,
+    visibility:sheet.style.visibility,
+    gridTemplateColumns:sheet.style.gridTemplateColumns,
+    gap:sheet.style.gap,
+    pointerEvents:sheet.style.pointerEvents
+  };
+
+  sheet.style.display="grid";
+  sheet.style.position="fixed";
+  sheet.style.left="-20000px";
+  sheet.style.top="0";
+  sheet.style.width="194mm";
+  sheet.style.visibility="hidden";
+  sheet.style.gridTemplateColumns="repeat(2,1fr)";
+  sheet.style.gap="3mm";
+  sheet.style.pointerEvents="none";
+
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  fitDirectPrintTextBoxes();
+  await new Promise(resolve=>requestAnimationFrame(resolve));
+
+  sheet.style.display=prev.display;
+  sheet.style.position=prev.position;
+  sheet.style.left=prev.left;
+  sheet.style.top=prev.top;
+  sheet.style.width=prev.width;
+  sheet.style.visibility=prev.visibility;
+  sheet.style.gridTemplateColumns=prev.gridTemplateColumns;
+  sheet.style.gap=prev.gap;
+  sheet.style.pointerEvents=prev.pointerEvents;
+}
+
 
 async function printMasterCards(){
   const items = getPreviewCardEditableItemsForPpt();
@@ -7727,7 +7871,12 @@ async function printMasterCards(){
   });
 
   applyDynamicPrintLayout();
-  await new Promise(resolve=>setTimeout(resolve,180));
+
+  // Fit against the real two-column A4 print width, including wrapped two-line text.
+  await preflightDirectPrintLayout();
+
+  // Keep the existing iPhone safety pass as an additional fallback.
+  await new Promise(resolve=>setTimeout(resolve,80));
   fitIPhonePrintTextBoxes();
 
   const oldTitle=document.title;
