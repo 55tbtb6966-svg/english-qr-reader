@@ -1153,6 +1153,17 @@
   overflow:hidden;
   box-sizing:border-box;
 }
+#printQrSheet .directPrintTextInner{
+  display:block;
+  width:100%;
+  height:auto;
+  margin:0;
+  box-sizing:border-box;
+  line-height:1.14;
+  white-space:normal;
+  overflow-wrap:break-word;
+}
+
 @media print{
   body *{visibility:hidden!important;}
   #printQrSheet,#printQrSheet *{visibility:visible!important;}
@@ -2773,7 +2784,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.0 / 更新 2026-08-23 18:18</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.1 / 更新 2026-08-24 17:53</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3265,8 +3276,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.0";
-const APP_UPDATED="2026-08-23 18:18";
+const APP_VERSION="v4.4.1";
+const APP_UPDATED="2026-08-24 17:53";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7501,6 +7512,7 @@ function applyDynamicPrintLayout(){
     '#printQrSheet .directPrintCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;background:#fff!important;}'+
     '#printQrSheet .directPrintQr{position:absolute!important;object-fit:contain!important;max-width:none!important;max-height:none!important;}'+
     '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
+    '#printQrSheet .directPrintTextInner{display:block!important;width:100%!important;height:auto!important;line-height:1.14!important;margin:0!important;}'+
     '}';
 }
 
@@ -7661,20 +7673,24 @@ function iPhonePrintFontScale(){
 function fitIPhonePrintTextBoxes(){
   if(!isIPhoneSafariForPrint())return;
   document.querySelectorAll('#printQrSheet .directPrintText[data-iphone-print-autofit="1"]').forEach(box=>{
-    let size=parseFloat(box.style.fontSize)||0;
+    const text=box.querySelector(".directPrintTextInner");
+    if(!text)return;
+    let size=parseFloat(text.style.fontSize)||0;
     if(!size)return;
 
-    // If the sheet is measurable, reduce only overflowing boxes.
-    // If it is hidden before print, the viewport-based scale above is retained.
     if(box.clientWidth>0 && box.clientHeight>0){
       let guard=0;
-      while(
-        guard<24 &&
-        size>5 &&
-        (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1)
-      ){
-        size*=0.94;
-        box.style.fontSize=size+"px";
+      while(guard<30 && size>5){
+        const cs=getComputedStyle(text);
+        const lineHeight=parseFloat(cs.lineHeight)||size*1.14;
+        const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+        const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+        const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
+        const safetyY=lines>=2 ? Math.max(6,lineHeight*0.25) : Math.max(2,lineHeight*0.10);
+        if(textW<=box.clientWidth-2 && textH<=box.clientHeight-safetyY)break;
+        size=Math.max(5,size*0.94);
+        text.style.fontSize=size+"px";
+        void text.offsetHeight;
         guard++;
       }
     }
@@ -7683,31 +7699,49 @@ function fitIPhonePrintTextBoxes(){
 
 function fitDirectPrintTextBoxes(){
   document.querySelectorAll("#printQrSheet .directPrintText").forEach(box=>{
-    let size=parseFloat(box.style.fontSize)||0;
+    const text=box.querySelector(".directPrintTextInner");
+    if(!text)return;
+
+    let size=parseFloat(text.style.fontSize)||parseFloat(getComputedStyle(text).fontSize)||0;
     if(!size)return;
 
     const minPx=5;
     let guard=0;
 
-    // The temporary print-preflight layout makes these dimensions measurable.
-    while(
-      guard<60 &&
-      size>minPx &&
-      box.clientWidth>0 &&
-      box.clientHeight>0 &&
-      (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1)
-    ){
+    const metrics=()=>{
+      const cs=getComputedStyle(text);
+      const lineHeight=parseFloat(cs.lineHeight)||size*1.14;
+      const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+      const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+      const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
+      const safetyY=lines>=2 ? Math.max(5,lineHeight*0.22) : Math.max(2,lineHeight*0.10);
+      return {
+        textH,textW,lines,
+        availableH:Math.max(1,box.clientHeight-safetyY),
+        availableW:Math.max(1,box.clientWidth-2)
+      };
+    };
+
+    let m=metrics();
+    while(guard<70 && size>minPx && box.clientWidth>0 && box.clientHeight>0 &&
+          (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)){
       size=Math.max(minPx,size*0.94);
-      box.style.fontSize=size+"px";
-      void box.offsetHeight;
+      text.style.fontSize=size+"px";
+      void text.offsetHeight;
+      m=metrics();
       guard++;
     }
 
+    if(m.lines>=2 && size>minPx){
+      size=Math.max(minPx,size*0.94);
+      text.style.fontSize=size+"px";
+      void text.offsetHeight;
+      m=metrics();
+    }
+
     box.dataset.finalPrintFontPx=String(size);
-    box.dataset.printOverflow=
-      (box.clientWidth>0 && box.clientHeight>0 &&
-       (box.scrollWidth>box.clientWidth+1 || box.scrollHeight>box.clientHeight+1))
-      ? "1" : "0";
+    box.dataset.printLineCount=String(m.lines);
+    box.dataset.printOverflow=(m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)?"1":"0";
   });
 }
 
@@ -7831,7 +7865,6 @@ async function printMasterCards(){
     item.texts.forEach(t=>{
       const box=document.createElement("div");
       box.className="directPrintText directPrintText-"+t.key;
-      box.textContent=t.text;
       box.style.position="absolute";
       box.style.left=t.left+"%";
       box.style.top=t.top+"%";
@@ -7844,26 +7877,36 @@ async function printMasterCards(){
       box.style.fontFamily='Arial,"Helvetica Neue",sans-serif';
       box.style.fontWeight=t.bold?"700":"400";
       box.style.color="#222";
-      box.style.lineHeight="1.18";
-      box.style.whiteSpace="normal";
-      box.style.wordBreak="normal";
-      box.style.overflowWrap="break-word";
       box.style.overflow="hidden";
       box.style.boxSizing="border-box";
-      box.style.padding="2px 4px";
+      box.style.padding="0";
 
-      // Use the font-size/card-width ratio measured from the correct preview.
-      // Do NOT measure the hidden print sheet (it reports width 0).
+      const innerText=document.createElement("div");
+      innerText.className="directPrintTextInner";
+      innerText.textContent=t.text;
+      innerText.style.display="block";
+      innerText.style.width="100%";
+      innerText.style.height="auto";
+      innerText.style.boxSizing="border-box";
+      innerText.style.padding="1px 4px";
+      innerText.style.margin="0";
+      innerText.style.lineHeight="1.14";
+      innerText.style.whiteSpace="normal";
+      innerText.style.wordBreak="normal";
+      innerText.style.overflowWrap="break-word";
+      innerText.style.hyphens="auto";
+      innerText.style.textAlign=t.align==="left"?"left":"center";
+
       const ratio=Number(t.fontRatio)||0;
       const iphoneScale=iPhonePrintFontScale();
       const px=Math.max(5,ratio*PRINT_CARD_WIDTH_PX*iphoneScale);
-      box.style.fontSize=px+"px";
+      innerText.style.fontSize=px+"px";
 
-      // Mark only iPhone print text for a final safety shrink.
       if(iphoneScale<1){
         box.dataset.iphonePrintAutofit="1";
       }
 
+      box.appendChild(innerText);
       card.appendChild(box);
     });
 
