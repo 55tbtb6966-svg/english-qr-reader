@@ -2789,10 +2789,11 @@ button.flashActionAccepted{
       <option value="A">A</option>
       <option value="B">B</option>
       <option value="C">C</option>
+      <option value="N">N（数字）</option>
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.5 / 更新 2026-08-24 18:18</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.7 / 更新 2026-08-24 20:00</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3284,8 +3285,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.5";
-const APP_UPDATED="2026-08-24 18:18";
+const APP_VERSION="v4.4.7";
+const APP_UPDATED="2026-08-24 20:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3305,14 +3306,18 @@ function updateVersionBadge(csvVersion=""){
 }
 
 const DB_NAME = "EnglishQrReaderDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const LEGACY_STORE = "records";
 const STORE_A = "records_A";
 const STORE_B = "records_B";
 const STORE_C = "records_C";
+const STORE_N = "records_N";
 const META = "meta";
 function activeStoreName(){
-  return activeCsvProfile==="B"?STORE_B:activeCsvProfile==="C"?STORE_C:STORE_A;
+  return activeCsvProfile==="B"?STORE_B:
+         activeCsvProfile==="C"?STORE_C:
+         activeCsvProfile==="N"?STORE_N:
+         STORE_A;
 }
 const $ = id => document.getElementById(id);
 
@@ -3374,7 +3379,7 @@ let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
 
-const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"}};
+const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"},N:{label:"N（数字）"}};
 const ACTIVE_PROFILE_KEY="activeCsvProfileV2";
 let activeCsvProfile=localStorage.getItem(ACTIVE_PROFILE_KEY)||"A";
 if(!CSV_PROFILES[activeCsvProfile])activeCsvProfile="A";
@@ -3401,11 +3406,48 @@ async function refreshCurrentCsvFileName(){
   try{name=String((await getMeta(csvFileNameMetaKey(profile)))||"").trim();}catch(e){}
   if(!name)name=String(localStorage.getItem(csvFileNameLocalKey(profile))||"").trim();
 
-  el.textContent=`${profile}：${name||"記録なし（CSVを一度再読込してください）"}`;
+  el.textContent=`${profile}${profile==="N"?"（数字）":""}：${name||"記録なし（CSVを一度再読込してください）"}`;
   el.title=`CSV ${profile}：${name||"記録なし"}`;
 }
 
 async function getActiveProfileRecords(){return await getAllRecords();}
+
+async function getNumberProfileRecords(){
+  await ensureDb();
+  return await reqPromise(tx(STORE_N).getAll());
+}
+
+async function getCommonSearchRecords(hasTerms=true){
+  const active=await getActiveProfileRecords();
+  if(!hasTerms || activeCsvProfile==="N")return active;
+
+  const numbers=await getNumberProfileRecords();
+  const seen=new Set(active.map(r=>String(r.id||"")));
+  return active.concat(numbers.filter(r=>!seen.has(String(r.id||""))));
+}
+
+async function getRecordsForSelectedIds(ids){
+  const wanted=ids instanceof Set?ids:new Set(ids||[]);
+  if(!wanted.size)return [];
+
+  const source=activeCsvProfile==="N"
+    ? await getActiveProfileRecords()
+    : await getCommonSearchRecords(true);
+
+  return source.filter(r=>wanted.has(String(r.id||"")));
+}
+
+async function putRecordToStore(record,storeName){
+  await ensureDb();
+  await reqPromise(tx(storeName,"readwrite").put(record));
+}
+
+async function deleteRecordFromStore(id,storeName){
+  await ensureDb();
+  await reqPromise(tx(storeName,"readwrite").delete(id));
+}
+
+
 
 function updateProfileUi(){
   const sel=$("csvProfileSelect");
@@ -3460,6 +3502,9 @@ async function switchDataProfile(profile){
   }
 
   updateProfileUi();
+  if($("editId")){
+    $("editId").placeholder=activeCsvProfile==="N"?"例：N1 / N0.1":"例：A000001";
+  }
   loadFlashCheckedIds();
   await buildFlashCheckedMemo();
   await refreshSummary();
@@ -3479,7 +3524,7 @@ function openDb() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
       const d=e.target.result;
-      for(const storeName of [STORE_A,STORE_B,STORE_C]){
+      for(const storeName of [STORE_A,STORE_B,STORE_C,STORE_N]){
         if(!d.objectStoreNames.contains(storeName)){
           const st=d.createObjectStore(storeName,{keyPath:"id"});
           st.createIndex("english","english",{unique:false});
@@ -3518,13 +3563,13 @@ async function putMeta(key,value) { await ensureDb(); await reqPromise(tx(META,"
 async function getMeta(key) { await ensureDb(); const r=await reqPromise(tx(META).get(key)); return r?.value; }
 async function countRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).count()); }
 async function getRecord(id) { await ensureDb(); return await reqPromise(tx(activeStoreName()).get(id)); }
-async function getRecordFromAnyCsv(id) {
+async function getRecordForScan(id) {
   await ensureDb();
-  const order=[activeStoreName(),STORE_A,STORE_B,STORE_C].filter((v,i,a)=>a.indexOf(v)===i);
-  for(const storeName of order){
-    const r=await reqPromise(tx(storeName).get(id));
-    if(r)return r;
+  if(isNumberId(id)){
+    return await reqPromise(tx(STORE_N).get(id));
   }
+  // Existing A/B/C isolation is preserved.
+  return await reqPromise(tx(activeStoreName()).get(id));
 }
 async function putRecord(record) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").put(record)); }
 async function deleteRecord(id) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").delete(id)); }
@@ -3591,6 +3636,18 @@ async function importCsv(replace) {
   const importStore=activeStoreName();
   try{
     const parsed=csvToRecords(parseCsv(await file.text()));
+
+    if(importProfile==="N"){
+      for(const r of parsed.records){
+        const normalized=normalizeNumberId(r.id);
+        if(!normalized){
+          throw new Error("N用CSVのIDは N＋数字 にしてください（例：N1、N0.1、N2500）。");
+        }
+        r.id=normalized;
+        r.comment="Numbers";
+      }
+    }
+
     if(importProfile!==activeCsvProfile){
       setStatus($("importStatus"),"CSV切替後にもう一度読み込んでください。",false);
       return;
@@ -4269,7 +4326,9 @@ async function playRecord(modeOverride=null){
 }
 async function lookup(id,auto=true){
   id=String(id||"").trim();if(!id)return;
-  const r=await getRecord(id);
+  id=normalizeScannedId(id);
+  if(!id)return;
+  const r=await getRecordForScan(id);
   if(!r){$("japaneseReadDisplay").textContent="";$("ipaDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
   $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
@@ -4390,24 +4449,55 @@ async function setScanInputMode(mode){
   }
 }
 
+function normalizeNumberId(raw){
+  let t=String(raw||"").trim();
+  try{t=t.normalize("NFKC");}catch{}
+  t=t.replace(/[\s\u3000]+/g,"");
+
+  const m=t.match(/^n(\d+)(?:\.(\d+))?$/i);
+  if(!m)return "";
+
+  let intPart=m[1].replace(/^0+(?=\d)/,"");
+  if(!intPart)intPart="0";
+
+  let fracPart=m[2]||"";
+  fracPart=fracPart.replace(/0+$/,"");
+
+  return "N"+intPart+(fracPart?"."+fracPart:"");
+}
+
+function isNumberId(id){
+  return /^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(String(id||""));
+}
+
+function isFixedSixId(id){
+  return /^[A-Z]\d{6}$/.test(String(id||"")) && !String(id||"").startsWith("N");
+}
+
+function isSupportedRecordId(id){
+  return isFixedSixId(id) || isNumberId(id);
+}
+
 function normalizeScannedId(raw){
   let t=String(raw||"").trim();
   if(!t)return "";
 
-  // URL型QR: ?id=E000005 のような形式にも対応
+  // URL型QRにも対応
   try{
     const u=new URL(t);
     t=u.searchParams.get("id")||t;
   }catch{}
 
-  // Unicode全角英数字を半角へ寄せる
   try{t=t.normalize("NFKC");}catch{}
-
-  // スキャナー入力に混ざる空白・改行・タブを除去
   t=t.replace(/[\s\u3000]+/g,"");
 
-  // 英字 + 6桁のIDは先頭英字を大文字へ統一。
-  // CSVスロット名(A/B/C)とID先頭文字は独立しています。
+  // N is the independent number namespace. It accepts integer/decimal values.
+  if(/^n/i.test(t)){
+    const n=normalizeNumberId(t);
+    if(n)return n;
+  }
+
+  // A/B/C and other existing teaching IDs remain one letter + 6 digits.
   const idMatch=t.match(/^([a-z])(\d{6})$/i);
   if(idMatch)t=idMatch[1].toUpperCase()+idMatch[2];
 
@@ -4430,6 +4520,7 @@ function scannerCharFromCode(e){
   if(/^Key[A-Z]$/.test(e.code))return e.code.slice(-1).toUpperCase();
   if(/^Digit[0-9]$/.test(e.code))return e.code.slice(-1);
   if(/^Numpad[0-9]$/.test(e.code))return e.code.slice(-1);
+  if(e.code==="Period" || e.code==="NumpadDecimal")return ".";
   return "";
 }
 
@@ -4523,6 +4614,17 @@ function startExternalScanner(){
   setTimeout(resumeExternalScannerFocus,700);
 }
 
+
+function scannerBufferLooksComplete(value){
+  const normalized=normalizeScannedId(value);
+  return isFixedSixId(normalized) || isNumberId(normalized);
+}
+
+function scannerAutoSubmitDelay(value){
+  const normalized=normalizeScannedId(value);
+  return isNumberId(normalized) ? 180 : 60;
+}
+
 function setupExternalScannerCapture(){
   const capture=$("hidCaptureInput");
   if(!capture)return;
@@ -4566,11 +4668,11 @@ function setupExternalScannerCapture(){
       hidBuffer+=ch;
       capture.value=hidBuffer;
 
-      // Current IDs are one letter + 6 digits (A/B/C etc.). Submit even if the scanner's Enter is
-      // swallowed by the Japanese IME.
-      if(/^[A-Z]\d{6}$/.test(hidBuffer)){
+      // Fixed A/B/C-style IDs submit quickly. N-number IDs are variable length,
+      // so they submit after a slightly longer idle debounce.
+      if(scannerBufferLooksComplete(hidBuffer)){
         if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(hidBuffer));
       }
       return;
     }
@@ -4580,10 +4682,10 @@ function setupExternalScannerCapture(){
   capture.addEventListener("input",()=>{
     if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
     const normalized=normalizeScannedId(capture.value);
-    if(/^[A-Z]\d{6}$/.test(normalized)){
+    if(scannerBufferLooksComplete(normalized)){
       hidBuffer=normalized;
       if(submitTimer)clearTimeout(submitTimer);
-      submitTimer=setTimeout(()=>{ submitCurrent(); },80);
+      submitTimer=setTimeout(()=>{ submitCurrent(); },Math.max(80,scannerAutoSubmitDelay(normalized)));
     }
   });
 
@@ -4611,9 +4713,9 @@ function setupExternalScannerCapture(){
       hidLastKeyAt=now;
       hidBuffer+=ch;
 
-      if(/^[A-Z]\d{6}$/.test(hidBuffer)){
+      if(scannerBufferLooksComplete(hidBuffer)){
         if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(hidBuffer));
       }
     }
   }, true);
@@ -4673,18 +4775,33 @@ function clearEditor(){
   $("editRepeat").value="1";$("editGap").value="0.5";
 }
 async function saveEditor(){
-  const id=$("editId").value.trim(),english=$("editEnglish").value.trim();
+  let id=$("editId").value.trim();
+  const english=$("editEnglish").value.trim();
   if(!id||!english){setStatus($("editStatus"),"IDと英文は必須です。",false);return;}
+
+  if(activeCsvProfile==="N"){
+    id=normalizeNumberId(id);
+    if(!id){
+      setStatus($("editStatus"),"NのIDは N＋数字 にしてください（例：N1、N0.1）。",false);
+      return;
+    }
+    $("editId").value=id;
+  }
+
   const r={id,english,ipa:$("editIpa").value.trim(),japanese:$("editJapanese").value.trim(),japaneseRead:$("editJapaneseRead").value.trim(),mode:$("editMode").value,
     englishRate:Number($("editEnglishRate").value)||1,japaneseRate:Number($("editJapaneseRate").value)||1,
     repeat:Math.max(1,parseInt($("editRepeat").value,10)||1),gap:Math.max(0,Number($("editGap").value)||0),
-    version:$("editVersion").value.trim(),explanation:$("editExplanation").value.trim()};
-  await putRecord(r);if(r.version)await putMeta("version_"+activeCsvProfile,r.version);
+    version:$("editVersion").value.trim(),comment:isNumberId(id)?"Numbers":"",explanation:$("editExplanation").value.trim()};
+
+  const targetStore=isNumberId(id)?STORE_N:activeStoreName();
+  await putRecordToStore(r,targetStore);
+  if(r.version)await putMeta("version_"+(isNumberId(id)?"N":activeCsvProfile),r.version);
   setStatus($("editStatus"),id+" を保存しました。");await refreshSummary();await renderPage();
 }
 async function editRecord(id){
   $("dataEditorPanel")?.classList.remove("dataEditorHidden");
-  const r=await getRecord(id);if(!r)return;
+  const r=isNumberId(id)?await getRecordForScan(id):await getRecord(id);
+  if(!r)return;
   $("editId").value=r.id;$("editEnglish").value=r.english;$("editIpa").value=r.ipa||"";$("editJapanese").value=r.japanese;$("editJapaneseRead").value=r.japaneseRead||"";
   $("editMode").value=r.mode;$("editEnglishRate").value=String(r.englishRate);
   $("editJapaneseRate").value=String(r.japaneseRate);$("editRepeat").value=String(r.repeat);
@@ -4705,7 +4822,7 @@ async function filteredAll(searchId){
     ? dataSearchQuery
     : String($(searchId)?.value||"");
   const terms=splitAndSearchTerms(sourceText);
-  const all=await getAllRecords();
+  const all=await getCommonSearchRecords(terms.length>0);
 
   return all
     .filter(r=>{
@@ -4772,7 +4889,14 @@ async function renderPage(){
     [r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",modeLabel(r.mode),r.englishRate,r.japaneseRate,r.repeat].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
     const act=document.createElement("td"),e=document.createElement("button"),d=document.createElement("button");
     e.textContent="編集";e.className="smallBtn secondary";e.addEventListener("click",()=>editRecord(r.id));
-    d.textContent="削除";d.className="smallBtn danger";d.style.marginLeft="6px";d.addEventListener("click",async()=>{if(confirm(r.id+"を削除しますか？")){await deleteRecord(r.id);selectedIds.delete(r.id);await refreshSummary();await renderPage();}});
+    d.textContent="削除";d.className="smallBtn danger";d.style.marginLeft="6px";d.addEventListener("click",async()=>{
+      if(confirm(r.id+"を削除しますか？")){
+        await deleteRecordFromStore(r.id,isNumberId(r.id)?STORE_N:activeStoreName());
+        selectedIds.delete(r.id);
+        await refreshSummary();
+        await renderPage();
+      }
+    });
     act.append(e,d);tr.appendChild(act);body.appendChild(tr);
   });
   $("pageStatus").textContent=all.length?`${start+1}～${Math.min(start+size,all.length)} / ${all.length}件`:"0件";
@@ -5275,10 +5399,8 @@ function normalizeFlashCheckedIdsFromText(text){
     if(!first)continue;
     if(/^id$/i.test(first))continue;
 
-    // Accept generic letter + 6 digits, matching the app's ID policy.
-    const m=first.match(/^([A-Za-z])(\d{6})$/);
-    if(!m)continue;
-    const id=m[1].toUpperCase()+m[2];
+    const id=normalizeScannedId(first);
+    if(!isSupportedRecordId(id))continue;
     if(!seen.has(id)){
       seen.add(id);
       out.push(id);
@@ -5627,7 +5749,7 @@ async function buildFlashcardsFromSearch(){
     .split(/\s+/)
     .filter(Boolean);
 
-  let source=await getActiveProfileRecords();
+  let source=await getCommonSearchRecords(terms.length>0);
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
@@ -5644,7 +5766,8 @@ async function buildFlashcardsFromSearch(){
 
   if($("flashStatus")){
     const scope=latestSelection.size?"チェック項目内":"全項目";
-    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+    const commonNote=(terms.length&&activeCsvProfile!=="N")?"＋N数字":"";
+    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${commonNote}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
   return flashRecords.length;
@@ -5654,7 +5777,7 @@ async function buildFlashcardsFromSelected(){
   const selectedNow=latestDataManagementSelection();
   flashSourceMode="selected";
 
-  const all=await getActiveProfileRecords();
+  const all=await getRecordsForSelectedIds(selectedNow);
   const fresh=all
     .filter(r=>selectedNow.has(String(r.id||"")))
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
@@ -6038,7 +6161,7 @@ function flashQrActionAccepted(btn){
 
 async function buildQrFromSelected(){
   const selectedNow=latestDataManagementSelection();
-  const all=await getActiveProfileRecords();
+  const all=await getRecordsForSelectedIds(selectedNow);
   const list=all
     .filter(r=>selectedNow.has(String(r.id||"")))
     .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
@@ -6079,7 +6202,7 @@ async function buildQrFromSearch(){
     .split(/\s+/)
     .filter(Boolean);
 
-  let source=await getActiveProfileRecords();
+  let source=await getCommonSearchRecords(terms.length>0);
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
@@ -6100,7 +6223,8 @@ async function buildQrFromSearch(){
   renderQr(qrPageSource.slice(0,qrPageSize));
 
   const scope=latestSelection.size?"チェック項目内":"全項目";
-  setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件をID順で表示しています。`);
+  const commonNote=(terms.length&&activeCsvProfile!=="N")?"（N数字を含む共通検索）":"";
+  setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件${commonNote}をID順で表示しています。`);
   flashQrActionAccepted($("makeSearchQrBtn"));
   return qrPageSource.length;
 }
