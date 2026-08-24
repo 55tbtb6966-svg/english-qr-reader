@@ -1163,6 +1163,14 @@
   white-space:normal;
   overflow-wrap:break-word;
 }
+#printQrSheet .directPrintTextLine{
+  display:block;
+  width:100%;
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  white-space:pre;
+}
 
 @media print{
   body *{visibility:hidden!important;}
@@ -2784,7 +2792,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.4 / 更新 2026-08-24 18:12</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.5 / 更新 2026-08-24 18:18</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3276,8 +3284,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.4";
-const APP_UPDATED="2026-08-24 18:12";
+const APP_VERSION="v4.4.5";
+const APP_UPDATED="2026-08-24 18:18";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6265,6 +6273,7 @@ function getPreviewCardEditableItemsForPpt(){
         fontRatio: (fontPx / cardRect.width),
         lineHeightPx,
         lineCount,
+        renderedLines:getRenderedTextLines(t),
         textOverflowing:(textScrollW>boxClientW+1 || textScrollH>boxClientH+1),
         align: (cs.textAlign === "left" ? "left" : "center"),
         bold: parseInt(cs.fontWeight || "400", 10) >= 600
@@ -7513,6 +7522,7 @@ function applyDynamicPrintLayout(){
     '#printQrSheet .directPrintQr{position:absolute!important;object-fit:contain!important;max-width:none!important;max-height:none!important;}'+
     '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
     '#printQrSheet .directPrintTextInner{display:block!important;width:100%!important;height:auto!important;line-height:1.12!important;margin:0!important;}'+
+    '#printQrSheet .directPrintTextLine{display:block!important;width:100%!important;white-space:pre!important;margin:0!important;padding:0!important;}'+
     '}';
 }
 
@@ -7679,16 +7689,14 @@ function fitIPhonePrintTextBoxes(){
     let size=parseFloat(text.style.fontSize)||0;
     if(!size || box.clientWidth<=0 || box.clientHeight<=0)return;
 
-    const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
-    const lines=countRenderedTextLines(text);
-
-    // Do not reduce one-line text on iPhone either.
-    if(lines<2)return;
-
     let guard=0;
-    while(guard<20 && size>5){
+    while(guard<24 && size>5){
       const h=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
-      const w=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+      const lineEls=[...text.querySelectorAll(".directPrintTextLine")];
+      const w=lineEls.length
+        ? Math.max(...lineEls.map(el=>Math.max(el.scrollWidth,el.getBoundingClientRect().width)))
+        : Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+
       if(w<=box.clientWidth-1 && h<=box.clientHeight-1)break;
 
       size=Math.max(5,size*0.995);
@@ -7698,7 +7706,6 @@ function fitIPhonePrintTextBoxes(){
     }
   });
 }
-
 
 function countRenderedTextLines(textEl){
   if(!textEl || !textEl.firstChild)return 1;
@@ -7724,6 +7731,50 @@ function countRenderedTextLines(textEl){
   }
 }
 
+function getRenderedTextLines(textEl){
+  const raw=String(textEl?.textContent||"");
+  if(!raw)return [""];
+
+  try{
+    const node=textEl.firstChild;
+    if(!node || node.nodeType!==Node.TEXT_NODE)return [raw];
+
+    const lines=[];
+    let current="";
+    let currentCenter=null;
+
+    for(let i=0;i<raw.length;i++){
+      const range=document.createRange();
+      range.setStart(node,i);
+      range.setEnd(node,i+1);
+      const r=range.getBoundingClientRect();
+
+      if(r.width<=0.1 || r.height<=0.1){
+        current+=raw[i];
+        continue;
+      }
+
+      const center=r.top+r.height/2;
+      const tolerance=Math.max(1.5,r.height*0.35);
+
+      if(currentCenter===null || Math.abs(center-currentCenter)<=tolerance){
+        current+=raw[i];
+        if(currentCenter===null)currentCenter=center;
+      }else{
+        lines.push(current.replace(/\s+$/,""));
+        current=raw[i];
+        currentCenter=center;
+      }
+    }
+
+    if(current || !lines.length)lines.push(current.replace(/\s+$/,""));
+    return lines.map((line,i)=>i===0?line:line.replace(/^\s+/,""));
+  }catch(e){
+    return raw.split(/\n/);
+  }
+}
+
+
 function fitDirectPrintTextBoxes(){
   document.querySelectorAll("#printQrSheet .directPrintText").forEach(box=>{
     const text=box.querySelector(".directPrintTextInner");
@@ -7739,8 +7790,11 @@ function fitDirectPrintTextBoxes(){
       const cs=getComputedStyle(text);
       const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
       const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
-      const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
-      const lines=countRenderedTextLines(text);
+      const lineEls=[...text.querySelectorAll(".directPrintTextLine")];
+      const textW=lineEls.length
+        ? Math.max(...lineEls.map(el=>Math.max(el.scrollWidth,el.getBoundingClientRect().width)))
+        : Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+      const lines=lineEls.length || countRenderedTextLines(text);
       return {
         textH,textW,lines,
         availableH:Math.max(1,box.clientHeight-1),
@@ -7750,31 +7804,24 @@ function fitDirectPrintTextBoxes(){
 
     let m=metrics();
 
-    // One-line text keeps the original print size exactly.
-    // Only wrapped text gets a very small adjustment.
-    if(m.lines>=2){
-      size=Math.max(minPx,originalSize*0.985);
+    // Preserve the exact preview-derived size. Only correct true print overflow.
+    text.style.fontSize=originalSize+"px";
+    size=originalSize;
+    m=metrics();
+
+    let guard=0;
+    while(
+      guard<40 &&
+      size>minPx &&
+      box.clientWidth>0 &&
+      box.clientHeight>0 &&
+      (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
+    ){
+      size=Math.max(minPx,size*0.995);
       text.style.fontSize=size+"px";
       void text.offsetHeight;
       m=metrics();
-
-      // If it still truly overflows, reduce only 1% at a time.
-      let guard=0;
-      while(
-        guard<30 &&
-        size>minPx &&
-        box.clientWidth>0 &&
-        box.clientHeight>0 &&
-        (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
-      ){
-        size=Math.max(minPx,size*0.995);
-        text.style.fontSize=size+"px";
-        void text.offsetHeight;
-        m=metrics();
-        guard++;
-      }
-    }else{
-      text.style.fontSize=originalSize+"px";
+      guard++;
     }
 
     box.dataset.finalPrintFontPx=String(size);
@@ -7921,7 +7968,24 @@ async function printMasterCards(){
 
       const innerText=document.createElement("div");
       innerText.className="directPrintTextInner";
-      innerText.textContent=t.text;
+
+      const previewLines=Array.isArray(t.renderedLines)&&t.renderedLines.length
+        ? t.renderedLines
+        : [String(t.text||"")];
+
+      previewLines.forEach(line=>{
+        const lineEl=document.createElement("div");
+        lineEl.className="directPrintTextLine";
+        lineEl.textContent=line;
+        lineEl.style.display="block";
+        lineEl.style.width="100%";
+        lineEl.style.whiteSpace="pre";
+        lineEl.style.margin="0";
+        lineEl.style.padding="0";
+        lineEl.style.boxSizing="border-box";
+        innerText.appendChild(lineEl);
+      });
+
       innerText.style.display="block";
       innerText.style.width="100%";
       innerText.style.height="auto";
@@ -7931,8 +7995,8 @@ async function printMasterCards(){
       innerText.style.lineHeight="1.12";
       innerText.style.whiteSpace="normal";
       innerText.style.wordBreak="normal";
-      innerText.style.overflowWrap="break-word";
-      innerText.style.hyphens="auto";
+      innerText.style.overflowWrap="normal";
+      innerText.style.hyphens="none";
       innerText.style.textAlign=t.align==="left"?"left":"center";
 
       const ratio=Number(t.fontRatio)||0;
