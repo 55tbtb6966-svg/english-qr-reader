@@ -1159,7 +1159,7 @@
   height:auto;
   margin:0;
   box-sizing:border-box;
-  line-height:1.14;
+  line-height:1.12;
   white-space:normal;
   overflow-wrap:break-word;
 }
@@ -2784,7 +2784,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.1 / 更新 2026-08-24 17:53</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.2 / 更新 2026-08-24 18:00</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3276,8 +3276,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.1";
-const APP_UPDATED="2026-08-24 17:53";
+const APP_VERSION="v4.4.2";
+const APP_UPDATED="2026-08-24 18:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7512,7 +7512,7 @@ function applyDynamicPrintLayout(){
     '#printQrSheet .directPrintCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;background:#fff!important;}'+
     '#printQrSheet .directPrintQr{position:absolute!important;object-fit:contain!important;max-width:none!important;max-height:none!important;}'+
     '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
-    '#printQrSheet .directPrintTextInner{display:block!important;width:100%!important;height:auto!important;line-height:1.14!important;margin:0!important;}'+
+    '#printQrSheet .directPrintTextInner{display:block!important;width:100%!important;height:auto!important;line-height:1.12!important;margin:0!important;}'+
     '}';
 }
 
@@ -7680,15 +7680,17 @@ function fitIPhonePrintTextBoxes(){
 
     if(box.clientWidth>0 && box.clientHeight>0){
       let guard=0;
-      while(guard<30 && size>5){
+      while(guard<36 && size>5){
         const cs=getComputedStyle(text);
-        const lineHeight=parseFloat(cs.lineHeight)||size*1.14;
+        const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
         const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
         const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
         const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
-        const safetyY=lines>=2 ? Math.max(6,lineHeight*0.25) : Math.max(2,lineHeight*0.10);
-        if(textW<=box.clientWidth-2 && textH<=box.clientHeight-safetyY)break;
-        size=Math.max(5,size*0.94);
+        const safetyY=lines>=2 ? Math.max(2,lineHeight*0.08) : 1;
+
+        if(textW<=box.clientWidth-1 && textH<=box.clientHeight-safetyY)break;
+
+        size=Math.max(5,size*0.97);
         text.style.fontSize=size+"px";
         void text.offsetHeight;
         guard++;
@@ -7710,33 +7712,36 @@ function fitDirectPrintTextBoxes(){
 
     const metrics=()=>{
       const cs=getComputedStyle(text);
-      const lineHeight=parseFloat(cs.lineHeight)||size*1.14;
+      const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
       const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
       const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
       const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
-      const safetyY=lines>=2 ? Math.max(5,lineHeight*0.22) : Math.max(2,lineHeight*0.10);
+
+      // Keep only a modest print safety margin.
+      // Do not shrink merely because text wraps to 2 or 3 lines.
+      const safetyY=lines>=2 ? Math.max(2,lineHeight*0.08) : 1;
       return {
         textH,textW,lines,
         availableH:Math.max(1,box.clientHeight-safetyY),
-        availableW:Math.max(1,box.clientWidth-2)
+        availableW:Math.max(1,box.clientWidth-1)
       };
     };
 
     let m=metrics();
-    while(guard<70 && size>minPx && box.clientWidth>0 && box.clientHeight>0 &&
-          (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)){
-      size=Math.max(minPx,size*0.94);
+
+    // Shrink only when the rendered text actually exceeds its printable box.
+    while(
+      guard<70 &&
+      size>minPx &&
+      box.clientWidth>0 &&
+      box.clientHeight>0 &&
+      (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
+    ){
+      size=Math.max(minPx,size*0.97);
       text.style.fontSize=size+"px";
       void text.offsetHeight;
       m=metrics();
       guard++;
-    }
-
-    if(m.lines>=2 && size>minPx){
-      size=Math.max(minPx,size*0.94);
-      text.style.fontSize=size+"px";
-      void text.offsetHeight;
-      m=metrics();
     }
 
     box.dataset.finalPrintFontPx=String(size);
@@ -7890,7 +7895,7 @@ async function printMasterCards(){
       innerText.style.boxSizing="border-box";
       innerText.style.padding="1px 4px";
       innerText.style.margin="0";
-      innerText.style.lineHeight="1.14";
+      innerText.style.lineHeight="1.12";
       innerText.style.whiteSpace="normal";
       innerText.style.wordBreak="normal";
       innerText.style.overflowWrap="break-word";
