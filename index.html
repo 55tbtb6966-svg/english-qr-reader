@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.10 / 更新 2026-08-24 20:20</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.11 / 更新 2026-08-24 20:41</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3327,8 +3327,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.10";
-const APP_UPDATED="2026-08-24 20:20";
+const APP_VERSION="v4.4.11";
+const APP_UPDATED="2026-08-24 20:41";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3771,7 +3771,7 @@ async function importNumbersCsv(replace){
 async function exportNumbersCsv(){
   const all=(await getNumberProfileRecords())
     .slice()
-    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||""),undefined,{numeric:true}));
+    .sort(compareRecordIds);
 
   const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
   all.forEach(r=>lines.push([
@@ -4599,6 +4599,32 @@ function isFixedSixId(id){
 function isSupportedRecordId(id){
   return isFixedSixId(id) || isNumberId(id);
 }
+
+function compareRecordIds(a,b){
+  const aId=String(a?.id??a??"");
+  const bId=String(b?.id??b??"");
+
+  const aNum=isNumberId(aId);
+  const bNum=isNumberId(bId);
+
+  if(aNum && bNum){
+    const av=Number(aId.slice(1));
+    const bv=Number(bId.slice(1));
+    if(Number.isFinite(av) && Number.isFinite(bv) && av!==bv){
+      return av-bv;
+    }
+    return aId.localeCompare(bId,undefined,{numeric:true});
+  }
+
+  if(aNum!==bNum){
+    // Keep the active A/B/C teaching data before common Numbers
+    // when a mixed search result is shown.
+    return aNum?1:-1;
+  }
+
+  return aId.localeCompare(bId,undefined,{numeric:true});
+}
+
 
 function normalizeScannedId(raw){
   let t=String(raw||"").trim();
@@ -5924,7 +5950,7 @@ async function buildFlashcardsFromSearch(){
 
   flashRecords=source
     .filter(r=>matchesCommonSearchQuery(r,query))
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
+    .sort(compareRecordIds);
 
   if(flashShuffleEnabled)shuffleFlashRecordOrder();
   flashIndex=0;
@@ -5947,7 +5973,7 @@ async function buildFlashcardsFromSelected(){
   const all=await getRecordsForSelectedIds(selectedNow);
   const fresh=all
     .filter(r=>selectedNow.has(String(r.id||"")))
-    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+    .sort(compareRecordIds);
 
   flashRecords=[];
   flashIndex=0;
@@ -6334,7 +6360,7 @@ async function buildQrFromSelected(){
   const all=await getRecordsForSelectedIds(selectedNow);
   const list=all
     .filter(r=>selectedNow.has(String(r.id||"")))
-    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+    .sort(compareRecordIds);
 
   if(!list.length){
     qrPageSource=[];
@@ -6380,7 +6406,7 @@ async function buildQrFromSearch(){
 
   qrPageSource=source.filter(r=>matchesCommonSearchQuery(r,query));
 
-  qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+  qrPageSource.sort(compareRecordIds);
   qrPageStart=0;
   qrPageSize=Number($("qrCount").value)||10;
   renderQr(qrPageSource.slice(0,qrPageSize));
