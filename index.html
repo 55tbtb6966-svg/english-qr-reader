@@ -2784,7 +2784,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.2 / 更新 2026-08-24 18:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.3 / 更新 2026-08-24 18:04</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3276,8 +3276,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.2";
-const APP_UPDATED="2026-08-24 18:00";
+const APP_VERSION="v4.4.3";
+const APP_UPDATED="2026-08-24 18:04";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7675,26 +7675,28 @@ function fitIPhonePrintTextBoxes(){
   document.querySelectorAll('#printQrSheet .directPrintText[data-iphone-print-autofit="1"]').forEach(box=>{
     const text=box.querySelector(".directPrintTextInner");
     if(!text)return;
+
     let size=parseFloat(text.style.fontSize)||0;
-    if(!size)return;
+    if(!size || box.clientWidth<=0 || box.clientHeight<=0)return;
 
-    if(box.clientWidth>0 && box.clientHeight>0){
-      let guard=0;
-      while(guard<36 && size>5){
-        const cs=getComputedStyle(text);
-        const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
-        const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
-        const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
-        const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
-        const safetyY=lines>=2 ? Math.max(2,lineHeight*0.08) : 1;
+    const cs=getComputedStyle(text);
+    const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
+    const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+    const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
 
-        if(textW<=box.clientWidth-1 && textH<=box.clientHeight-safetyY)break;
+    // Do not reduce one-line text on iPhone either.
+    if(lines<2)return;
 
-        size=Math.max(5,size*0.97);
-        text.style.fontSize=size+"px";
-        void text.offsetHeight;
-        guard++;
-      }
+    let guard=0;
+    while(guard<20 && size>5){
+      const h=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+      const w=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+      if(w<=box.clientWidth-1 && h<=box.clientHeight-1)break;
+
+      size=Math.max(5,size*0.99);
+      text.style.fontSize=size+"px";
+      void text.offsetHeight;
+      guard++;
     }
   });
 }
@@ -7707,8 +7709,8 @@ function fitDirectPrintTextBoxes(){
     let size=parseFloat(text.style.fontSize)||parseFloat(getComputedStyle(text).fontSize)||0;
     if(!size)return;
 
+    const originalSize=size;
     const minPx=5;
-    let guard=0;
 
     const metrics=()=>{
       const cs=getComputedStyle(text);
@@ -7716,32 +7718,40 @@ function fitDirectPrintTextBoxes(){
       const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
       const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
       const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
-
-      // Keep only a modest print safety margin.
-      // Do not shrink merely because text wraps to 2 or 3 lines.
-      const safetyY=lines>=2 ? Math.max(2,lineHeight*0.08) : 1;
       return {
         textH,textW,lines,
-        availableH:Math.max(1,box.clientHeight-safetyY),
+        availableH:Math.max(1,box.clientHeight-1),
         availableW:Math.max(1,box.clientWidth-1)
       };
     };
 
     let m=metrics();
 
-    // Shrink only when the rendered text actually exceeds its printable box.
-    while(
-      guard<70 &&
-      size>minPx &&
-      box.clientWidth>0 &&
-      box.clientHeight>0 &&
-      (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
-    ){
-      size=Math.max(minPx,size*0.97);
+    // One-line text keeps the original print size exactly.
+    // Only wrapped text gets a very small adjustment.
+    if(m.lines>=2){
+      size=Math.max(minPx,originalSize*0.98);
       text.style.fontSize=size+"px";
       void text.offsetHeight;
       m=metrics();
-      guard++;
+
+      // If it still truly overflows, reduce only 1% at a time.
+      let guard=0;
+      while(
+        guard<30 &&
+        size>minPx &&
+        box.clientWidth>0 &&
+        box.clientHeight>0 &&
+        (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
+      ){
+        size=Math.max(minPx,size*0.99);
+        text.style.fontSize=size+"px";
+        void text.offsetHeight;
+        m=metrics();
+        guard++;
+      }
+    }else{
+      text.style.fontSize=originalSize+"px";
     }
 
     box.dataset.finalPrintFontPx=String(size);
