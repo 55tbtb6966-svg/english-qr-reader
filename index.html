@@ -2777,6 +2777,20 @@ button.flashActionAccepted{
 @media(max-width:650px){
   .dataSearchPageSize{max-width:none;}
 }
+
+.numbersCsvBox{
+  margin-top:18px;
+  padding-top:16px;
+  border-top:1px solid #d9dee7;
+}
+.numbersCsvTitle{
+  font-weight:800;
+  font-size:1.05rem;
+  margin-bottom:4px;
+}
+.numbersCsvHint{
+  margin:0 0 10px;
+}
 </style>
 </head>
 <body>
@@ -2789,11 +2803,10 @@ button.flashActionAccepted{
       <option value="A">A</option>
       <option value="B">B</option>
       <option value="C">C</option>
-      <option value="N">N（数字）</option>
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.7 / 更新 2026-08-24 20:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.8 / 更新 2026-08-24 20:08</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2945,7 +2958,36 @@ button.flashActionAccepted{
 <div>登録件数：<strong id="recordCount">0</strong></div>
 <div>データ版：<strong id="dataVersion">未設定</strong></div>
 <div>保存使用量：<strong id="storageUsage">確認中</strong></div>
-</div></div></section>
+</div>
+
+<div class="numbersCsvBox">
+  <div class="numbersCsvTitle">Numbers（共通追加CSV）</div>
+  <p class="hint numbersCsvHint">
+    N＋数字のIDをA/B/C共通で管理します。例：N1、N0.1、N2500
+  </p>
+  <div class="currentCsvFileNameBox">
+    <span class="currentCsvFileNameLabel">最後に読み込んだNumbers CSV</span>
+    <strong id="numbersCsvFileName">未登録</strong>
+  </div>
+  <input accept=".csv,text/csv,text/plain" id="numbersCsvFile" type="file"/>
+  <div class="row">
+    <button class="secondary standardActionBtn" id="numbersReplaceImportBtn">Numbersを全置換で読み込む</button>
+  </div>
+  <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+    <summary>詳細設定（追加・書き出し）</summary>
+    <div class="advancedSettingsBody">
+      <div class="row">
+        <button class="secondary" id="numbersMergeImportBtn">Numbersを追加・上書き</button>
+        <button class="secondary" id="numbersExportBtn">Numbers CSVを書き出す</button>
+      </div>
+    </div>
+  </details>
+  <p class="status" id="numbersImportStatus"></p>
+  <div class="metric">
+    <div>Numbers登録件数：<strong id="numbersRecordCount">0</strong></div>
+  </div>
+</div>
+</div></section>
 <section class="panel" id="dataPanel">
 <div class="card">
 <div class="dataSearchArea" style="margin-top:14px;">
@@ -3285,8 +3327,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.7";
-const APP_UPDATED="2026-08-24 20:00";
+const APP_VERSION="v4.4.8";
+const APP_UPDATED="2026-08-24 20:08";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3379,7 +3421,7 @@ let qrPageStart = 0;
 let qrPageSource = [];
 let qrPageSize = 10;
 
-const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"},N:{label:"N（数字）"}};
+const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"}};
 const ACTIVE_PROFILE_KEY="activeCsvProfileV2";
 let activeCsvProfile=localStorage.getItem(ACTIVE_PROFILE_KEY)||"A";
 if(!CSV_PROFILES[activeCsvProfile])activeCsvProfile="A";
@@ -3406,11 +3448,34 @@ async function refreshCurrentCsvFileName(){
   try{name=String((await getMeta(csvFileNameMetaKey(profile)))||"").trim();}catch(e){}
   if(!name)name=String(localStorage.getItem(csvFileNameLocalKey(profile))||"").trim();
 
-  el.textContent=`${profile}${profile==="N"?"（数字）":""}：${name||"記録なし（CSVを一度再読込してください）"}`;
+  el.textContent=`${profile}：${name||"記録なし（CSVを一度再読込してください）"}`;
   el.title=`CSV ${profile}：${name||"記録なし"}`;
 }
 
 async function getActiveProfileRecords(){return await getAllRecords();}
+
+async function refreshNumbersCsvFileName(){
+  const el=$("numbersCsvFileName");
+  if(!el)return;
+  let name="";
+  try{name=String((await getMeta("csv_filename_N"))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem("lastCsvFileName_N")||"").trim();
+  el.textContent=name||"記録なし（Numbers CSVを一度読み込んでください）";
+  el.title=name||"記録なし";
+}
+
+async function refreshNumbersSummary(){
+  const el=$("numbersRecordCount");
+  if(!el)return;
+  try{
+    const all=await getNumberProfileRecords();
+    el.textContent=String(all.length);
+  }catch{
+    el.textContent="取得エラー";
+  }
+}
+
+
 
 async function getNumberProfileRecords(){
   await ensureDb();
@@ -3419,7 +3484,7 @@ async function getNumberProfileRecords(){
 
 async function getCommonSearchRecords(hasTerms=true){
   const active=await getActiveProfileRecords();
-  if(!hasTerms || activeCsvProfile==="N")return active;
+  if(!hasTerms)return active;
 
   const numbers=await getNumberProfileRecords();
   const seen=new Set(active.map(r=>String(r.id||"")));
@@ -3430,9 +3495,7 @@ async function getRecordsForSelectedIds(ids){
   const wanted=ids instanceof Set?ids:new Set(ids||[]);
   if(!wanted.size)return [];
 
-  const source=activeCsvProfile==="N"
-    ? await getActiveProfileRecords()
-    : await getCommonSearchRecords(true);
+  const source=await getCommonSearchRecords(true);
 
   return source.filter(r=>wanted.has(String(r.id||"")));
 }
@@ -3503,7 +3566,7 @@ async function switchDataProfile(profile){
 
   updateProfileUi();
   if($("editId")){
-    $("editId").placeholder=activeCsvProfile==="N"?"例：N1 / N0.1":"例：A000001";
+    $("editId").placeholder="例：A000001 / N1 / N0.1";
   }
   loadFlashCheckedIds();
   await buildFlashCheckedMemo();
@@ -3637,16 +3700,6 @@ async function importCsv(replace) {
   try{
     const parsed=csvToRecords(parseCsv(await file.text()));
 
-    if(importProfile==="N"){
-      for(const r of parsed.records){
-        const normalized=normalizeNumberId(r.id);
-        if(!normalized){
-          throw new Error("N用CSVのIDは N＋数字 にしてください（例：N1、N0.1、N2500）。");
-        }
-        r.id=normalized;
-        r.comment="Numbers";
-      }
-    }
 
     if(importProfile!==activeCsvProfile){
       setStatus($("importStatus"),"CSV切替後にもう一度読み込んでください。",false);
@@ -3665,6 +3718,75 @@ async function importCsv(replace) {
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
 }
+
+async function importNumbersCsv(replace){
+  const file=$("numbersCsvFile")?.files?.[0];
+  if(!file){
+    setStatus($("numbersImportStatus"),"Numbers CSVを選択してください。",false);
+    return;
+  }
+
+  try{
+    const parsed=csvToRecords(parseCsv(await file.text()));
+
+    for(const r of parsed.records){
+      const normalized=normalizeNumberId(r.id);
+      if(!normalized){
+        throw new Error("Numbers CSVのIDは N＋数字 にしてください（例：N1、N0.1、N2500）。");
+      }
+      r.id=normalized;
+      r.comment="Numbers";
+    }
+
+    await ensureDb();
+    if(replace)await reqPromise(tx(STORE_N,"readwrite").clear());
+
+    const transaction=db.transaction(STORE_N,"readwrite");
+    const store=transaction.objectStore(STORE_N);
+    parsed.records.forEach(r=>store.put(r));
+    await new Promise((resolve,reject)=>{
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error);
+    });
+
+    if(parsed.version)await putMeta("version_N",parsed.version);
+    await putMeta("csv_filename_N",file.name||"");
+    localStorage.setItem("lastCsvFileName_N",file.name||"");
+
+    setStatus(
+      $("numbersImportStatus"),
+      `Numbers：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。`
+    );
+
+    await refreshNumbersCsvFileName();
+    await refreshNumbersSummary();
+
+    // Refresh only if a common search is currently visible.
+    if(String(dataSearchQuery||"").trim())await renderPage();
+  }catch(e){
+    setStatus($("numbersImportStatus"),e.message||"Numbers CSVの読み込みに失敗しました。",false);
+  }
+}
+
+async function exportNumbersCsv(){
+  const all=(await getNumberProfileRecords())
+    .slice()
+    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||""),undefined,{numeric:true}));
+
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  all.forEach(r=>lines.push([
+    r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"","Numbers",r.explanation||""
+  ].map(csvEscape).join(",")));
+
+  const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="Numbers.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getActiveProfileRecords()).sort((a,b)=>a.id.localeCompare(b.id));
@@ -4779,7 +4901,7 @@ async function saveEditor(){
   const english=$("editEnglish").value.trim();
   if(!id||!english){setStatus($("editStatus"),"IDと英文は必須です。",false);return;}
 
-  if(activeCsvProfile==="N"){
+  if(/^n/i.test(id)){
     id=normalizeNumberId(id);
     if(!id){
       setStatus($("editStatus"),"NのIDは N＋数字 にしてください（例：N1、N0.1）。",false);
@@ -5766,7 +5888,7 @@ async function buildFlashcardsFromSearch(){
 
   if($("flashStatus")){
     const scope=latestSelection.size?"チェック項目内":"全項目";
-    const commonNote=(terms.length&&activeCsvProfile!=="N")?"＋N数字":"";
+    const commonNote=terms.length?"＋Numbers":"";
     $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${commonNote}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
@@ -6084,6 +6206,9 @@ $("flashClearChecksBtn")?.addEventListener("click",async()=>{await clearFlashChe
 $("replaceImportBtn").addEventListener("click",()=>importCsv(true));
 $("mergeImportBtn").addEventListener("click",()=>importCsv(false));
 $("exportBtn").addEventListener("click",exportCsv);
+$("numbersReplaceImportBtn")?.addEventListener("click",()=>importNumbersCsv(true));
+$("numbersMergeImportBtn")?.addEventListener("click",()=>importNumbersCsv(false));
+$("numbersExportBtn")?.addEventListener("click",exportNumbersCsv);
 $("startBtn").addEventListener("click",startScanner);
 $("cameraScanSingle").addEventListener("change",()=>{
   if($("cameraScanSingle").checked)localStorage.setItem("cameraScanMode","single");
@@ -6223,7 +6348,7 @@ async function buildQrFromSearch(){
   renderQr(qrPageSource.slice(0,qrPageSize));
 
   const scope=latestSelection.size?"チェック項目内":"全項目";
-  const commonNote=(terms.length&&activeCsvProfile!=="N")?"（N数字を含む共通検索）":"";
+  const commonNote=terms.length?"（Numbersを含む共通検索）":"";
   setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件${commonNote}をID順で表示しています。`);
   flashQrActionAccepted($("makeSearchQrBtn"));
   return qrPageSource.length;
@@ -8196,6 +8321,8 @@ loadPreviewSpeakButtonSetting();
 setTimeout(async()=>{
   await refreshSummary();
   await refreshCurrentCsvFileName();
+  await refreshNumbersCsvFileName();
+  await refreshNumbersSummary();
   updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
   await renderPage();
 
