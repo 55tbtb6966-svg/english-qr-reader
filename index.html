@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.8 / 更新 2026-08-24 20:08</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.10 / 更新 2026-08-24 20:20</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2963,7 +2963,7 @@ button.flashActionAccepted{
 <div class="numbersCsvBox">
   <div class="numbersCsvTitle">Numbers（共通追加CSV）</div>
   <p class="hint numbersCsvHint">
-    N＋数字のIDをA/B/C共通で管理します。例：N1、N0.1、N2500
+    N＋数字のIDをA/B/C共通で管理します。例：N1、N0.1、N2500。Commentは N: に統一します。
   </p>
   <div class="currentCsvFileNameBox">
     <span class="currentCsvFileNameLabel">最後に読み込んだNumbers CSV</span>
@@ -2991,8 +2991,8 @@ button.flashActionAccepted{
 <section class="panel" id="dataPanel">
 <div class="card">
 <div class="dataSearchArea" style="margin-top:14px;">
-  <label><span>検索（スペース区切りAND検索）</span>
-    <input id="searchText" placeholder="例：apple red" type="text"/>
+  <label><span>検索（スペース区切りAND検索／N: でNumbers専用）</span>
+    <input id="searchText" placeholder="例：apple red / N: / N:2500" type="text"/>
   </label>
   <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
   <div class="dataSearchPageSize">
@@ -3327,8 +3327,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.8";
-const APP_UPDATED="2026-08-24 20:08";
+const APP_VERSION="v4.4.10";
+const APP_UPDATED="2026-08-24 20:20";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3735,7 +3735,7 @@ async function importNumbersCsv(replace){
         throw new Error("Numbers CSVのIDは N＋数字 にしてください（例：N1、N0.1、N2500）。");
       }
       r.id=normalized;
-      r.comment="Numbers";
+      r.comment="N:";
     }
 
     await ensureDb();
@@ -3776,7 +3776,7 @@ async function exportNumbersCsv(){
   const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
-    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"","Numbers",r.explanation||""
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"","N:",r.explanation||""
   ].map(csvEscape).join(",")));
 
   const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
@@ -4913,7 +4913,7 @@ async function saveEditor(){
   const r={id,english,ipa:$("editIpa").value.trim(),japanese:$("editJapanese").value.trim(),japaneseRead:$("editJapaneseRead").value.trim(),mode:$("editMode").value,
     englishRate:Number($("editEnglishRate").value)||1,japaneseRate:Number($("editJapaneseRate").value)||1,
     repeat:Math.max(1,parseInt($("editRepeat").value,10)||1),gap:Math.max(0,Number($("editGap").value)||0),
-    version:$("editVersion").value.trim(),comment:isNumberId(id)?"Numbers":"",explanation:$("editExplanation").value.trim()};
+    version:$("editVersion").value.trim(),comment:isNumberId(id)?"N:":"",explanation:$("editExplanation").value.trim()};
 
   const targetStore=isNumberId(id)?STORE_N:activeStoreName();
   await putRecordToStore(r,targetStore);
@@ -4939,23 +4939,67 @@ function splitAndSearchTerms(text){
     .filter(Boolean);
 }
 
+function parseCommonSearchQuery(text){
+  const tokens=splitAndSearchTerms(text);
+  let numbersOnly=false;
+  const numberIdTerms=[];
+  const terms=[];
+
+  tokens.forEach(token=>{
+    if(/^n:/i.test(token)){
+      numbersOnly=true;
+      const value=token.slice(2).trim().toLowerCase();
+      if(value)numberIdTerms.push(value);
+    }else{
+      terms.push(token);
+    }
+  });
+
+  return {numbersOnly,numberIdTerms,terms};
+}
+
+function recordSearchText(r){
+  return [
+    r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+    r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+  ].map(v=>String(v??"").toLowerCase()).join(" ");
+}
+
+function matchesCommonSearchQuery(r,query){
+  if(query.numbersOnly && !isNumberId(r.id))return false;
+
+  if(query.numberIdTerms.length){
+    if(!isNumberId(r.id))return false;
+    const numericId=String(r.id||"").replace(/^N/i,"").toLowerCase();
+    if(!query.numberIdTerms.every(term=>numericId.includes(term)))return false;
+  }
+
+  if(query.terms.length){
+    const searchable=recordSearchText(r);
+    if(!query.terms.every(term=>searchable.includes(term)))return false;
+  }
+
+  return true;
+}
+
 async function filteredAll(searchId){
   const sourceText=searchId==="searchText"
     ? dataSearchQuery
     : String($(searchId)?.value||"");
-  const terms=splitAndSearchTerms(sourceText);
-  const all=await getCommonSearchRecords(terms.length>0);
+
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0;
+
+  let all;
+  if(query.numbersOnly){
+    all=await getNumberProfileRecords();
+  }else{
+    all=await getCommonSearchRecords(hasSearch);
+  }
 
   return all
-    .filter(r=>{
-      if(!terms.length)return true;
-      const searchable=[
-        r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
-        r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
-      ].map(v=>String(v??"").toLowerCase()).join(" ");
-      return terms.every(term=>searchable.includes(term));
-    })
-    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+    .filter(r=>matchesCommonSearchQuery(r,query))
+    .sort((a,b)=>String(a.id||"").localeCompare(String(b.id||""),undefined,{numeric:true}));
 }
 
 
@@ -5865,21 +5909,22 @@ function flashMatchesSearch(r,terms){
 async function buildFlashcardsFromSearch(){
   const latestSelection=latestDataManagementSelection();
   flashSourceMode="search";
-  const terms=String($("flashSearch")?.value||"")
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
 
-  let source=await getCommonSearchRecords(terms.length>0);
+  const sourceText=String($("flashSearch")?.value||"");
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0;
+
+  let source=query.numbersOnly
+    ? await getNumberProfileRecords()
+    : await getCommonSearchRecords(hasSearch);
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
   }
 
   flashRecords=source
-    .filter(r=>flashMatchesSearch(r,terms))
-    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    .filter(r=>matchesCommonSearchQuery(r,query))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
 
   if(flashShuffleEnabled)shuffleFlashRecordOrder();
   flashIndex=0;
@@ -5888,7 +5933,7 @@ async function buildFlashcardsFromSearch(){
 
   if($("flashStatus")){
     const scope=latestSelection.size?"チェック項目内":"全項目";
-    const commonNote=terms.length?"＋Numbers":"";
+    const commonNote=query.numbersOnly?"（Numbers専用）":hasSearch?"＋Numbers":"";
     $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${commonNote}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
@@ -6321,26 +6366,19 @@ $("makeSelectedQrBtn").addEventListener("click",()=>{
 
 async function buildQrFromSearch(){
   const latestSelection=latestDataManagementSelection();
-  const terms=String($("qrSearch")?.value||"")
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const sourceText=String($("qrSearch")?.value||"");
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0;
 
-  let source=await getCommonSearchRecords(terms.length>0);
+  let source=query.numbersOnly
+    ? await getNumberProfileRecords()
+    : await getCommonSearchRecords(hasSearch);
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
   }
 
-  qrPageSource=source.filter(r=>{
-    if(!terms.length)return true;
-    const searchable=[
-      r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
-      r.sound,r.mode,r.version,r.comment,r.explanation
-    ].map(v=>String(v??"").toLowerCase()).join(" ");
-    return terms.every(term=>searchable.includes(term));
-  });
+  qrPageSource=source.filter(r=>matchesCommonSearchQuery(r,query));
 
   qrPageSource.sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
   qrPageStart=0;
@@ -6348,7 +6386,7 @@ async function buildQrFromSearch(){
   renderQr(qrPageSource.slice(0,qrPageSize));
 
   const scope=latestSelection.size?"チェック項目内":"全項目";
-  const commonNote=terms.length?"（Numbersを含む共通検索）":"";
+  const commonNote=query.numbersOnly?"（Numbers専用）":hasSearch?"（Numbersを含む共通検索）":"";
   setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件${commonNote}をID順で表示しています。`);
   flashQrActionAccepted($("makeSearchQrBtn"));
   return qrPageSource.length;
