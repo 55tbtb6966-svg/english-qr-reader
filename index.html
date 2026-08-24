@@ -2784,7 +2784,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.3 / 更新 2026-08-24 18:04</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.4 / 更新 2026-08-24 18:12</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3276,8 +3276,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.3";
-const APP_UPDATED="2026-08-24 18:04";
+const APP_VERSION="v4.4.4";
+const APP_UPDATED="2026-08-24 18:12";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6252,7 +6252,7 @@ function getPreviewCardEditableItemsForPpt(){
       const textScrollH=Math.max(t.scrollHeight||0,t.getBoundingClientRect().height||0);
       const boxClientW=Math.max(1,el.clientWidth||r.width);
       const boxClientH=Math.max(1,el.clientHeight||r.height);
-      const lineCount=Math.max(1,Math.round(textScrollH/Math.max(1,lineHeightPx)));
+      const lineCount=countRenderedTextLines(t);
 
       item.texts.push({
         key,
@@ -7679,10 +7679,8 @@ function fitIPhonePrintTextBoxes(){
     let size=parseFloat(text.style.fontSize)||0;
     if(!size || box.clientWidth<=0 || box.clientHeight<=0)return;
 
-    const cs=getComputedStyle(text);
-    const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
     const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
-    const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
+    const lines=countRenderedTextLines(text);
 
     // Do not reduce one-line text on iPhone either.
     if(lines<2)return;
@@ -7693,12 +7691,37 @@ function fitIPhonePrintTextBoxes(){
       const w=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
       if(w<=box.clientWidth-1 && h<=box.clientHeight-1)break;
 
-      size=Math.max(5,size*0.99);
+      size=Math.max(5,size*0.995);
       text.style.fontSize=size+"px";
       void text.offsetHeight;
       guard++;
     }
   });
+}
+
+
+function countRenderedTextLines(textEl){
+  if(!textEl || !textEl.firstChild)return 1;
+  try{
+    const range=document.createRange();
+    range.selectNodeContents(textEl);
+    const rects=[...range.getClientRects()].filter(r=>r.width>0.5 && r.height>0.5);
+    if(!rects.length)return 1;
+
+    // Group rects by visual line using their vertical center.
+    const centers=[];
+    rects.forEach(r=>{
+      const cy=r.top+r.height/2;
+      const tolerance=Math.max(1.5,r.height*0.35);
+      if(!centers.some(v=>Math.abs(v-cy)<=tolerance))centers.push(cy);
+    });
+    return Math.max(1,centers.length);
+  }catch(e){
+    const cs=getComputedStyle(textEl);
+    const fs=parseFloat(cs.fontSize)||16;
+    const lh=parseFloat(cs.lineHeight)||fs*1.12;
+    return Math.max(1,Math.round((textEl.scrollHeight||lh)/Math.max(1,lh)));
+  }
 }
 
 function fitDirectPrintTextBoxes(){
@@ -7717,7 +7740,7 @@ function fitDirectPrintTextBoxes(){
       const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
       const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
       const textW=Math.max(text.scrollWidth,text.getBoundingClientRect().width);
-      const lines=Math.max(1,Math.round(textH/Math.max(1,lineHeight)));
+      const lines=countRenderedTextLines(text);
       return {
         textH,textW,lines,
         availableH:Math.max(1,box.clientHeight-1),
@@ -7730,7 +7753,7 @@ function fitDirectPrintTextBoxes(){
     // One-line text keeps the original print size exactly.
     // Only wrapped text gets a very small adjustment.
     if(m.lines>=2){
-      size=Math.max(minPx,originalSize*0.98);
+      size=Math.max(minPx,originalSize*0.985);
       text.style.fontSize=size+"px";
       void text.offsetHeight;
       m=metrics();
@@ -7744,7 +7767,7 @@ function fitDirectPrintTextBoxes(){
         box.clientHeight>0 &&
         (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
       ){
-        size=Math.max(minPx,size*0.99);
+        size=Math.max(minPx,size*0.995);
         text.style.fontSize=size+"px";
         void text.offsetHeight;
         m=metrics();
