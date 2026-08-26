@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.11 / 更新 2026-08-24 20:41</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.12 / 更新 2026-08-26 17:18</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3015,7 +3015,12 @@ button.flashActionAccepted{
 <thead><tr><th>選択</th><th>ID</th><th>英文</th><th>発音記号</th><th>日本語</th><th>日本語読み</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
 <tbody id="recordBody"></tbody>
 </table>
-</div><div class="editorBlockBottom" style="margin-top:16px;"><button class="secondary dataEditorToggleBtn" id="toggleDataEditorBtn" type="button">データ追加・書き換え</button><div class="dataEditorBody dataEditorHidden" id="dataEditorPanel">
+</div>
+<div class="row dataBottomPager" style="margin-top:10px;">
+  <button class="secondary" id="prevBtnBottom">前のページ</button>
+  <button class="secondary" id="nextBtnBottom">次のページ</button>
+</div>
+<div class="editorBlockBottom" style="margin-top:16px;"><button class="secondary dataEditorToggleBtn" id="toggleDataEditorBtn" type="button">データ追加・書き換え</button><div class="dataEditorBody dataEditorHidden" id="dataEditorPanel">
 <div class="grid2">
 <label><span>ID</span><input id="editId" placeholder="E000001" type="text"/></label>
 <label><span>日本語</span><input id="editJapanese" type="text"/></label>
@@ -3327,8 +3332,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.11";
-const APP_UPDATED="2026-08-24 20:41";
+const APP_VERSION="v4.4.12";
+const APP_UPDATED="2026-08-26 17:18";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5092,7 +5097,12 @@ async function renderPage(){
     act.append(e,d);tr.appendChild(act);body.appendChild(tr);
   });
   $("pageStatus").textContent=all.length?`${start+1}～${Math.min(start+size,all.length)} / ${all.length}件`:"0件";
-  $("prevBtn").disabled=currentPage===0;$("nextBtn").disabled=start+size>=all.length;
+  const prevDisabled=currentPage===0;
+  const nextDisabled=start+size>=all.length;
+  $("prevBtn").disabled=prevDisabled;
+  $("nextBtn").disabled=nextDisabled;
+  if($("prevBtnBottom"))$("prevBtnBottom").disabled=prevDisabled;
+  if($("nextBtnBottom"))$("nextBtnBottom").disabled=nextDisabled;
 }
 
 
@@ -6350,6 +6360,8 @@ $("clearAllFilteredBtn").addEventListener("click",async()=>{
 
 $("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;renderPage();}});
 $("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
+$("prevBtnBottom")?.addEventListener("click",()=>{if(currentPage>0){currentPage--;renderPage();}});
+$("nextBtnBottom")?.addEventListener("click",()=>{currentPage++;renderPage();});
 
 function flashQrActionAccepted(btn){
   return;
