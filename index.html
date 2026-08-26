@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.12 / 更新 2026-08-26 17:18</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.13 / 更新 2026-08-26 23:29</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3332,8 +3332,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.12";
-const APP_UPDATED="2026-08-26 17:18";
+const APP_VERSION="v4.4.13";
+const APP_UPDATED="2026-08-26 23:29";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4770,12 +4770,27 @@ function startExternalScanner(){
 
 function scannerBufferLooksComplete(value){
   const normalized=normalizeScannedId(value);
-  return isFixedSixId(normalized) || isNumberId(normalized);
+
+  // A/B/C-style teaching IDs are fixed length and should behave exactly
+  // like the original scanner flow: one letter + six digits = complete.
+  if(/^[A-Z]\d{6}$/.test(normalized) && !normalized.startsWith("N")){
+    return true;
+  }
+
+  // N IDs are the only variable-length namespace.
+  return isNumberId(normalized);
 }
 
 function scannerAutoSubmitDelay(value){
   const normalized=normalizeScannedId(value);
-  return isNumberId(normalized) ? 180 : 60;
+
+  // Fixed A/B/C IDs submit immediately after the 6th digit.
+  if(/^[A-Z]\d{6}$/.test(normalized) && !normalized.startsWith("N")){
+    return 60;
+  }
+
+  // N1 / N0.1 / N2500 need a short idle period because their length varies.
+  return isNumberId(normalized) ? 220 : 60;
 }
 
 function setupExternalScannerCapture(){
@@ -4816,16 +4831,20 @@ function setupExternalScannerCapture(){
       e.stopPropagation();
 
       const now=Date.now();
-      if(now-hidLastKeyAt>250)hidBuffer="";
+      if(now-hidLastKeyAt>800)hidBuffer="";
       hidLastKeyAt=now;
       hidBuffer+=ch;
       capture.value=hidBuffer;
 
       // Fixed A/B/C-style IDs submit quickly. N-number IDs are variable length,
       // so they submit after a slightly longer idle debounce.
-      if(scannerBufferLooksComplete(hidBuffer)){
+      const normalizedBuffer=normalizeScannedId(hidBuffer);
+      if(/^[A-Z]\d{6}$/.test(normalizedBuffer) && !normalizedBuffer.startsWith("N")){
         if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(hidBuffer));
+        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+      }else if(isNumberId(normalizedBuffer)){
+        if(submitTimer)clearTimeout(submitTimer);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(normalizedBuffer));
       }
       return;
     }
@@ -4835,10 +4854,14 @@ function setupExternalScannerCapture(){
   capture.addEventListener("input",()=>{
     if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
     const normalized=normalizeScannedId(capture.value);
-    if(scannerBufferLooksComplete(normalized)){
+    if(/^[A-Z]\d{6}$/.test(normalized) && !normalized.startsWith("N")){
       hidBuffer=normalized;
       if(submitTimer)clearTimeout(submitTimer);
-      submitTimer=setTimeout(()=>{ submitCurrent(); },Math.max(80,scannerAutoSubmitDelay(normalized)));
+      submitTimer=setTimeout(()=>{ submitCurrent(); },80);
+    }else if(isNumberId(normalized)){
+      hidBuffer=normalized;
+      if(submitTimer)clearTimeout(submitTimer);
+      submitTimer=setTimeout(()=>{ submitCurrent(); },Math.max(120,scannerAutoSubmitDelay(normalized)));
     }
   });
 
@@ -4862,13 +4885,17 @@ function setupExternalScannerCapture(){
     if(ch){
       e.preventDefault();
       const now=Date.now();
-      if(now-hidLastKeyAt>250)hidBuffer="";
+      if(now-hidLastKeyAt>800)hidBuffer="";
       hidLastKeyAt=now;
       hidBuffer+=ch;
 
-      if(scannerBufferLooksComplete(hidBuffer)){
+      const normalizedBuffer=normalizeScannedId(hidBuffer);
+      if(/^[A-Z]\d{6}$/.test(normalizedBuffer) && !normalizedBuffer.startsWith("N")){
         if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(hidBuffer));
+        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
+      }else if(isNumberId(normalizedBuffer)){
+        if(submitTimer)clearTimeout(submitTimer);
+        submitTimer=setTimeout(()=>{ submitCurrent(); },scannerAutoSubmitDelay(normalizedBuffer));
       }
     }
   }, true);
