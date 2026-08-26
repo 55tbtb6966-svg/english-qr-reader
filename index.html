@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.17 / 更新 2026-08-27 00:01</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.18 / 更新 2026-08-27 06:16</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3332,8 +3332,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.17";
-const APP_UPDATED="2026-08-27 00:01";
+const APP_VERSION="v4.4.18";
+const APP_UPDATED="2026-08-27 06:16";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4666,7 +4666,7 @@ function normalizeScannedId(raw){
 }
 
 async function handleExternalScannerSubmit(raw){
-  const id=normalizeScannedId(raw);
+  const id=extractExternalScannerId(raw) || normalizeScannedId(raw);
   if(!id)return;
   $("manualId").value=id;
   await lookup(id,true);
@@ -4775,35 +4775,98 @@ function startExternalScanner(){
   setTimeout(resumeExternalScannerFocus,700);
 }
 
+
+function extractExternalScannerId(raw){
+  let t=String(raw??"");
+  try{t=t.normalize("NFKC");}catch(e){}
+  t=t.replace(/[\u0000-\u001F\u007F\uFEFF]/g,"").trim();
+
+  const fixed=t.match(/([ABCabc]\d{6})/);
+  if(fixed){
+    return fixed[1][0].toUpperCase()+fixed[1].slice(1);
+  }
+
+  const n=t.match(/N(?:0|[1-9]\d*)(?:\.\d+)?/i);
+  if(n){
+    return normalizeNumberId(n[0]);
+  }
+
+  return "";
+}
+
+function showExternalScannerReceived(raw){
+  const st=$("externalReadyStatus");
+  if(!st)return;
+  const visible=String(raw??"")
+    .replace(/[\r\n\t]/g," ")
+    .replace(/[\u0000-\u001F\u007F]/g,"")
+    .trim();
+  st.textContent=visible
+    ? `スキャン受信：${visible}`
+    : "スキャン待機中です。TeraでQRコードを読み取ってください。";
+}
+
 function setupExternalScannerCapture(){
   const capture=$("hidCaptureInput");
   if(!capture)return;
 
   let submitTimer=null;
+  let rawBuffer="";
 
-  const resetCapture=()=>{
-    capture.value="";
+  const clearTimer=()=>{
+    if(submitTimer){
+      clearTimeout(submitTimer);
+      submitTimer=null;
+    }
+  };
+
+  const resetAll=()=>{
+    clearTimer();
     hidBuffer="";
-    if(submitTimer){clearTimeout(submitTimer);submitTimer=null;}
+    rawBuffer="";
+    capture.value="";
   };
 
-  const submitCurrent=async()=>{
-    const value=hidBuffer || capture.value;
-    resetCapture();
-    if(!value)return;
-    await handleExternalScannerSubmit(value);
-    setTimeout(()=>capture.focus({preventScroll:true}),50);
+  const submitRaw=async raw=>{
+    const id=extractExternalScannerId(raw) || normalizeScannedId(raw);
+    if(!id)return false;
+
+    showExternalScannerReceived(id);
+    resetAll();
+
+    $("manualId").value=id;
+    await lookup(id,true);
+    setTimeout(resumeExternalScannerFocus,140);
+    return true;
   };
 
-  // Hidden input gets first priority. We build letter + 6 digits from physical HID
-  // key codes, so the Japanese IME never gets a chance to turn E into 「え」.
+  const maybeSubmit=raw=>{
+    const id=extractExternalScannerId(raw);
+    if(!id)return false;
+
+    clearTimer();
+
+    if(/^[ABC]\d{6}$/.test(id)){
+      submitTimer=setTimeout(()=>submitRaw(id),40);
+      return true;
+    }
+
+    if(isNumberId(id)){
+      submitTimer=setTimeout(()=>submitRaw(id),260);
+      return true;
+    }
+    return false;
+  };
+
   capture.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
 
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       e.preventDefault();
       e.stopPropagation();
-      await submitCurrent();
+      const raw=rawBuffer || hidBuffer || capture.value;
+      showExternalScannerReceived(raw);
+      if(raw)await submitRaw(raw);
       return;
     }
 
@@ -4813,72 +4876,85 @@ function setupExternalScannerCapture(){
       e.stopPropagation();
 
       const now=Date.now();
-      if(now-hidLastKeyAt>250)hidBuffer="";
-      hidLastKeyAt=now;
-      hidBuffer+=ch;
-      capture.value=hidBuffer;
-
-      // Current IDs are one letter + 6 digits (A/B/C etc.). Submit even if the scanner's Enter is
-      // swallowed by the Japanese IME.
-      if(/^[ABC]\d{6}$/.test(hidBuffer)){
-        if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
-      }else if(/^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(hidBuffer)){
-        if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },240);
+      if(now-hidLastKeyAt>1500){
+        hidBuffer="";
+        rawBuffer="";
+        clearTimer();
       }
-      return;
-    }
-  }, true);
+      hidLastKeyAt=now;
 
-  // Fallback for scanners/browsers that do not expose useful .code values.
-  capture.addEventListener("input",()=>{
-    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
-    const normalized=normalizeScannedId(capture.value);
-    if(/^[ABC]\d{6}$/.test(normalized)){
-      hidBuffer=normalized;
-      if(submitTimer)clearTimeout(submitTimer);
-      submitTimer=setTimeout(()=>{ submitCurrent(); },80);
-    }else if(/^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(normalized)){
-      hidBuffer=normalized;
-      if(submitTimer)clearTimeout(submitTimer);
-      submitTimer=setTimeout(()=>{ submitCurrent(); },240);
+      hidBuffer+=ch;
+      rawBuffer+=ch;
+      capture.value=hidBuffer;
+      showExternalScannerReceived(rawBuffer);
+      maybeSubmit(rawBuffer);
     }
+  },true);
+
+  capture.addEventListener("input",()=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+
+    const val=String(capture.value||"");
+    rawBuffer=val;
+    hidBuffer=val;
+    showExternalScannerReceived(val);
+    maybeSubmit(val);
   });
 
-  // Global fallback when focus has moved away from our capture field.
+  capture.addEventListener("beforeinput",e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    const data=String(e.data||"");
+    if(!data)return;
+
+    rawBuffer+=data;
+    hidBuffer=rawBuffer;
+    showExternalScannerReceived(rawBuffer);
+    maybeSubmit(rawBuffer);
+  });
+
+  capture.addEventListener("paste",e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    const txt=e.clipboardData?.getData("text")||"";
+    if(!txt)return;
+    rawBuffer=txt;
+    hidBuffer=txt;
+    showExternalScannerReceived(txt);
+    maybeSubmit(txt);
+  });
+
   window.addEventListener("keydown",async e=>{
-    if(scanInputMode!=="external"||!externalScannerArmed||scannerTextEditing)return;
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
     if(document.activeElement===capture)return;
 
-    const tag=(document.activeElement?.tagName||"").toLowerCase();
-    const editable=["input","textarea","select"].includes(tag);
-    if(editable)return;
+    const active=document.activeElement;
+    const tag=(active?.tagName||"").toLowerCase();
+    if(["input","textarea","select"].includes(tag) || active?.isContentEditable)return;
 
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
-      if(!hidBuffer)return;
+      if(!rawBuffer && !hidBuffer)return;
       e.preventDefault();
-      await submitCurrent();
+      await submitRaw(rawBuffer||hidBuffer);
       return;
     }
 
     const ch=scannerCharFromCode(e);
     if(ch){
       e.preventDefault();
-      const now=Date.now();
-      if(now-hidLastKeyAt>250)hidBuffer="";
-      hidLastKeyAt=now;
-      hidBuffer+=ch;
 
-      if(/^[ABC]\d{6}$/.test(hidBuffer)){
-        if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },60);
-      }else if(/^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(hidBuffer)){
-        if(submitTimer)clearTimeout(submitTimer);
-        submitTimer=setTimeout(()=>{ submitCurrent(); },240);
+      const now=Date.now();
+      if(now-hidLastKeyAt>1500){
+        hidBuffer="";
+        rawBuffer="";
+        clearTimer();
       }
+      hidLastKeyAt=now;
+
+      hidBuffer+=ch;
+      rawBuffer+=ch;
+      showExternalScannerReceived(rawBuffer);
+      maybeSubmit(rawBuffer);
     }
-  }, true);
+  },true);
 
   document.addEventListener("click",e=>{
     if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
@@ -4895,7 +4971,6 @@ function setupExternalScannerCapture(){
     setTimeout(resumeExternalScannerFocus,80);
   });
 }
-
 async function startScanner(){
   if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部スキャナーモードです。",false);return;}
   qrScanLocked=false;
