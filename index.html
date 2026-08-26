@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.15 / 更新 2026-08-26 23:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.16 / 更新 2026-08-26 23:53</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3332,8 +3332,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.15";
-const APP_UPDATED="2026-08-26 23:46";
+const APP_VERSION="v4.4.16";
+const APP_UPDATED="2026-08-26 23:53";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3638,19 +3638,10 @@ async function getRecordForScan(id) {
     return await reqPromise(tx(STORE_N).get(id));
   }
 
-  const fixed=String(id||"").match(/^([ABC])(\d{6})$/);
-  if(fixed){
-    const prefix=fixed[1];
-
-    // Preserve A/B/C isolation: a teaching QR is valid only in the
-    // currently selected A/B/C profile.
-    if(prefix!==activeCsvProfile)return undefined;
-
-    const storeName=
-      prefix==="A"?STORE_A:
-      prefix==="B"?STORE_B:
-      STORE_C;
-
+  const m=String(id||"").match(/^([ABC])\d{6}$/);
+  if(m){
+    if(m[1]!==activeCsvProfile)return undefined;
+    const storeName=m[1]==="A"?STORE_A:m[1]==="B"?STORE_B:STORE_C;
     return await reqPromise(tx(storeName).get(id));
   }
 
@@ -4472,21 +4463,8 @@ async function lookup(id,auto=true){
   id=String(id||"").trim();if(!id)return;
   id=normalizeScannedId(id);
   if(!id)return;
-  const fixedMatch=id.match(/^([ABC])\d{6}$/);
-  if(fixedMatch && fixedMatch[1]!==activeCsvProfile){
-    $("japaneseReadDisplay").textContent="";
-    $("ipaDisplay").textContent="";
-    setStatus($("scanStatus"),`${id} はCSV ${fixedMatch[1]} のIDです。上部を ${fixedMatch[1]} に切り替えてください。`,false);
-    return;
-  }
-
   const r=await getRecordForScan(id);
-  if(!r){
-    $("japaneseReadDisplay").textContent="";
-    $("ipaDisplay").textContent="";
-    setStatus($("scanStatus"),id+" が現在のCSVに見つかりません。",false);
-    return;
-  }
+  if(!r){$("japaneseReadDisplay").textContent="";$("ipaDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
   currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
   $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
   $("manualEnglishRate").value=String(r.englishRate);
@@ -4662,14 +4640,10 @@ function compareRecordIds(a,b){
 
 
 function normalizeScannedId(raw){
-  let t=String(raw??"");
+  let t=String(raw||"").trim();
   if(!t)return "";
 
-  // Remove common scanner/clipboard control characters and wrapping quotes.
-  t=t.replace(/[\u0000-\u001F\u007F\uFEFF]/g,"").trim();
-  t=t.replace(/^["']+|["']+$/g,"");
-
-  // URL-type QR payloads are also accepted.
+  // URL型QRにも対応
   try{
     const u=new URL(t);
     t=u.searchParams.get("id")||t;
@@ -4678,23 +4652,15 @@ function normalizeScannedId(raw){
   try{t=t.normalize("NFKC");}catch{}
   t=t.replace(/[\s\u3000]+/g,"");
 
-  // Fixed teaching IDs are resolved first and independently from Numbers.
-  const fixed=t.match(/^([ABCabc])(\d{6})$/);
-  if(fixed){
-    return fixed[1].toUpperCase()+fixed[2];
-  }
-
-  // N is the independent variable-length number namespace.
+  // N is the independent number namespace. It accepts integer/decimal values.
   if(/^n/i.test(t)){
     const n=normalizeNumberId(t);
     if(n)return n;
   }
 
-  // Preserve generic legacy fixed IDs if present.
-  const generic=t.match(/^([A-Za-z])(\d{6})$/);
-  if(generic){
-    return generic[1].toUpperCase()+generic[2];
-  }
+  // A/B/C and other existing teaching IDs remain one letter + 6 digits.
+  const idMatch=t.match(/^([a-z])(\d{6})$/i);
+  if(idMatch)t=idMatch[1].toUpperCase()+idMatch[2];
 
   return t;
 }
@@ -4710,22 +4676,19 @@ async function handleExternalScannerSubmit(raw){
 
 
 function scannerCharFromCode(e){
-  // Prefer physical key codes because they are independent of the Japanese IME.
+  // Keep the original physical-HID path for A/B/C IDs.
   if(/^Key[A-Z]$/.test(e.code||""))return e.code.slice(-1).toUpperCase();
   if(/^Digit[0-9]$/.test(e.code||""))return e.code.slice(-1);
   if(/^Numpad[0-9]$/.test(e.code||""))return e.code.slice(-1);
   if(e.code==="Period" || e.code==="NumpadDecimal")return ".";
 
-  // Some Bluetooth/HID scanners expose only KeyboardEvent.key.
+  // Secondary fallback only when code is unavailable.
   const k=String(e.key||"");
   if(/^[A-Za-z]$/.test(k))return k.toUpperCase();
   if(/^[0-9]$/.test(k))return k;
-  if(k==="." || k==="Decimal")return ".";
-
+  if(k===".")return ".";
   return "";
 }
-
-
 
 function unlockSpeechForExternalScanner(){
   if(speechUnlockedByScannerStart)return;
@@ -4818,52 +4781,21 @@ function startExternalScanner(){
 
 function scannerBufferLooksComplete(value){
   const normalized=normalizeScannedId(value);
-
-  // A/B/C-style teaching IDs are fixed length and should behave exactly
-  // like the original scanner flow: one letter + six digits = complete.
-  if(/^[A-Z]\d{6}$/.test(normalized) && !normalized.startsWith("N")){
-    return true;
-  }
-
-  // N IDs are the only variable-length namespace.
-  return isNumberId(normalized);
+  return isFixedSixId(normalized) || isNumberId(normalized);
 }
 
 function scannerAutoSubmitDelay(value){
   const normalized=normalizeScannedId(value);
-
-  // Fixed A/B/C IDs submit immediately after the 6th digit.
-  if(/^[A-Z]\d{6}$/.test(normalized) && !normalized.startsWith("N")){
-    return 60;
-  }
-
-  // N1 / N0.1 / N2500 need a short idle period because their length varies.
-  return isNumberId(normalized) ? 220 : 60;
+  return isNumberId(normalized) ? 180 : 60;
 }
-
-function fixedTeachingIdFromScannerBuffer(value){
-  const raw=String(value||"");
-  try{
-    const compact=raw.normalize("NFKC").replace(/[\u0000-\u001F\u007F\uFEFF\s\u3000]+/g,"");
-    const m=compact.match(/([ABCabc]\d{6})$/);
-    return m ? m[1][0].toUpperCase()+m[1].slice(1) : "";
-  }catch(e){
-    const m=raw.match(/([ABCabc]\d{6})$/);
-    return m ? m[1][0].toUpperCase()+m[1].slice(1) : "";
-  }
-}
-
-
 
 function setupExternalScannerCapture(){
   const capture=$("hidCaptureInput");
   if(!capture)return;
 
   let submitTimer=null;
-  let lastSubmitted="";
-  let lastSubmittedAt=0;
 
-  const clearTimer=()=>{
+  const clearSubmitTimer=()=>{
     if(submitTimer){
       clearTimeout(submitTimer);
       submitTimer=null;
@@ -4871,41 +4803,38 @@ function setupExternalScannerCapture(){
   };
 
   const resetCapture=()=>{
-    clearTimer();
-    capture.value="";
+    clearSubmitTimer();
     hidBuffer="";
+    capture.value="";
   };
 
-  const submitValue=async raw=>{
-    let id=fixedTeachingIdFromScannerBuffer(raw);
-    if(!id)id=normalizeScannedId(raw);
+  const submitCurrent=async valueOverride=>{
+    const raw=String(valueOverride ?? hidBuffer ?? capture.value ?? "");
+    const id=normalizeScannedId(raw);
+    resetCapture();
     if(!id)return;
 
-    const now=Date.now();
-    if(id===lastSubmitted && now-lastSubmittedAt<350)return;
-    lastSubmitted=id;
-    lastSubmittedAt=now;
-
-    resetCapture();
-    await handleExternalScannerSubmit(id);
-    setTimeout(resumeExternalScannerFocus,80);
+    $("manualId").value=id;
+    await lookup(id,true);
+    setTimeout(resumeExternalScannerFocus,120);
   };
 
-  const scheduleFromBuffer=()=>{
-    const fixed=fixedTeachingIdFromScannerBuffer(hidBuffer||capture.value);
-    if(fixed){
-      clearTimer();
-      submitTimer=setTimeout(()=>submitValue(fixed),35);
-      return true;
+  const checkBufferForSubmit=()=>{
+    // IMPORTANT: this is the old fixed-ID path.
+    // A/B/C + six digits is complete immediately and does not use N logic.
+    if(/^[ABC]\d{6}$/.test(hidBuffer)){
+      clearSubmitTimer();
+      const fixedId=hidBuffer;
+      submitTimer=setTimeout(()=>submitCurrent(fixedId),60);
+      return;
     }
 
-    const normalized=normalizeScannedId(hidBuffer||capture.value);
-    if(isNumberId(normalized)){
-      clearTimer();
-      submitTimer=setTimeout(()=>submitValue(normalized),240);
-      return true;
+    // N is separate and variable length.
+    if(/^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(hidBuffer)){
+      clearSubmitTimer();
+      const numberId=hidBuffer;
+      submitTimer=setTimeout(()=>submitCurrent(numberId),260);
     }
-    return false;
   };
 
   capture.addEventListener("keydown",async e=>{
@@ -4914,8 +4843,9 @@ function setupExternalScannerCapture(){
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       e.preventDefault();
       e.stopPropagation();
-      const raw=hidBuffer||capture.value;
-      if(raw)await submitValue(raw);
+      if(hidBuffer || capture.value){
+        await submitCurrent(hidBuffer || capture.value);
+      }
       return;
     }
 
@@ -4926,57 +4856,51 @@ function setupExternalScannerCapture(){
     e.stopPropagation();
 
     const now=Date.now();
-    if(now-hidLastKeyAt>1200)hidBuffer="";
+    if(now-hidLastKeyAt>1000){
+      hidBuffer="";
+      clearSubmitTimer();
+    }
     hidLastKeyAt=now;
 
-    hidBuffer+=ch;
+    // New letter always starts a fresh scanner ID.
+    if(/^[A-Z]$/.test(ch)){
+      hidBuffer=ch;
+    }else{
+      hidBuffer+=ch;
+    }
     capture.value=hidBuffer;
-    scheduleFromBuffer();
+
+    checkBufferForSubmit();
   },true);
 
-  // Fallback for scanners that write a whole string (or IME-composed text)
-  // into the hidden input instead of exposing useful key codes.
+  // Fallback for HID scanners that populate the input as text.
   capture.addEventListener("input",()=>{
     if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
 
-    const raw=String(capture.value||"");
-    const fixed=fixedTeachingIdFromScannerBuffer(raw);
+    let raw=String(capture.value||"");
+    try{raw=raw.normalize("NFKC");}catch(e){}
+    raw=raw.replace(/[\u0000-\u001F\u007F\uFEFF\s\u3000]+/g,"");
+
+    // Extract a fixed teaching ID without involving Numbers.
+    const fixed=raw.match(/([ABCabc]\d{6})$/);
     if(fixed){
-      hidBuffer=fixed;
-      clearTimer();
-      submitTimer=setTimeout(()=>submitValue(fixed),50);
+      hidBuffer=fixed[1][0].toUpperCase()+fixed[1].slice(1);
+      capture.value=hidBuffer;
+      clearSubmitTimer();
+      const id=hidBuffer;
+      submitTimer=setTimeout(()=>submitCurrent(id),80);
       return;
     }
 
-    const normalized=normalizeScannedId(raw);
-    if(normalized){
-      hidBuffer=normalized;
-      if(isNumberId(normalized)){
-        clearTimer();
-        submitTimer=setTimeout(()=>submitValue(normalized),240);
-      }
+    const n=normalizeNumberId(raw);
+    if(n){
+      hidBuffer=n;
+      clearSubmitTimer();
+      submitTimer=setTimeout(()=>submitCurrent(n),260);
     }
   });
 
-  // beforeinput catches some iOS/Safari/Bluetooth HID paths where keydown.code
-  // is Unidentified but text is still inserted.
-  capture.addEventListener("beforeinput",e=>{
-    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
-    const data=String(e.data||"");
-    if(!data)return;
-
-    const compact=data.replace(/\s+/g,"");
-    if(!compact)return;
-
-    // Do not prevent default here; the input listener is our fallback.
-    // But also maintain our own buffer so fixed IDs can be recognized immediately.
-    for(const c of compact){
-      if(/[A-Za-z0-9.]/.test(c))hidBuffer+=c;
-    }
-    scheduleFromBuffer();
-  });
-
-  // Global fallback if the hidden field temporarily loses focus.
+  // Global fallback if focus briefly leaves the hidden capture field.
   window.addEventListener("keydown",async e=>{
     if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
     if(document.activeElement===capture)return;
@@ -4988,7 +4912,7 @@ function setupExternalScannerCapture(){
     if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
       if(!hidBuffer)return;
       e.preventDefault();
-      await submitValue(hidBuffer);
+      await submitCurrent(hidBuffer);
       return;
     }
 
@@ -4998,11 +4922,19 @@ function setupExternalScannerCapture(){
     e.preventDefault();
 
     const now=Date.now();
-    if(now-hidLastKeyAt>1200)hidBuffer="";
+    if(now-hidLastKeyAt>1000){
+      hidBuffer="";
+      clearSubmitTimer();
+    }
     hidLastKeyAt=now;
 
-    hidBuffer+=ch;
-    scheduleFromBuffer();
+    if(/^[A-Z]$/.test(ch)){
+      hidBuffer=ch;
+    }else{
+      hidBuffer+=ch;
+    }
+
+    checkBufferForSubmit();
   },true);
 
   document.addEventListener("click",e=>{
@@ -5020,7 +4952,6 @@ function setupExternalScannerCapture(){
     setTimeout(resumeExternalScannerFocus,80);
   });
 }
-
 async function startScanner(){
   if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部スキャナーモードです。",false);return;}
   qrScanLocked=false;
@@ -5029,26 +4960,23 @@ async function startScanner(){
   try{
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
       async text=>{
-        const decodedId=normalizeScannedId(text);
-        if(!decodedId)return;
-
         const continuous=$("cameraScanContinuous")?.checked===true;
         const now=Date.now();
 
         // In continuous mode, ignore repeated detections of the same QR for a short time.
-        if(continuous && decodedId===lastCameraScanText && now-lastCameraScanAt<1800)return;
+        if(continuous && text===lastCameraScanText && now-lastCameraScanAt<1800)return;
         if(qrScanLocked)return;
 
         qrScanLocked=true;
-        lastCameraScanText=decodedId;
+        lastCameraScanText=text;
         lastCameraScanAt=now;
 
         try{
           if(continuous){
-            await lookup(decodedId,true);
+            await lookup(text,true);
           }else{
             await stopScanner();
-            await lookup(decodedId,true);
+            await lookup(text,true);
           }
         }finally{
           setTimeout(()=>{qrScanLocked=false;},continuous?500:700);
