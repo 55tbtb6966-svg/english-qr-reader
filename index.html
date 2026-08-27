@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.33 / 更新 2026-08-27 21:04</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.34 / 更新 2026-08-27 21:10</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.33";
-const APP_UPDATED="2026-08-27 21:04";
+const APP_VERSION="v4.4.34";
+const APP_UPDATED="2026-08-27 21:10";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5597,56 +5597,44 @@ async function filteredAll(searchId){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0 || query.namespaceFilters.length>0;
 
-  // Empty search: active A/B/C profile + all common N/W/P/S.
+  // Data Management is always scoped to the active A/B/C profile + common N/W/P/S.
+  const active=await getActiveProfileRecords();
+  const common=await getAllCommonRecords();
+  const all=[...active,...common];
+
+  // Empty search: show active profile + all common records.
   if(!hasSearch){
-    const active=await getActiveProfileRecords();
-    const common=await getAllCommonRecords();
-    return [...active,...common].sort(compareRecordIds);
+    return all.sort(compareRecordIds);
   }
 
-  const requestedMainPrefixes=[...new Set(
-    query.namespaceFilters
-      .map(f=>f.prefix)
-      .filter(p=>["A","B","C"].includes(p))
-  )];
-  const requestedCommonPrefixes=[...new Set(
-    query.namespaceFilters
-      .map(f=>f.prefix)
-      .filter(p=>["N","W","P","S"].includes(p))
-  )];
+  // A:/B:/C: is valid only for the currently selected profile.
+  // Example: CSV=A -> A: works, B:/C: return no matches.
+  const hasOtherMainPrefix=query.namespaceFilters.some(
+    f=>["A","B","C"].includes(f.prefix) && f.prefix!==activeCsvProfile
+  );
+  const hasActiveMainPrefix=query.namespaceFilters.some(
+    f=>f.prefix===activeCsvProfile
+  );
 
-  let all=[];
-
-  // Explicit A:/B:/C: searches may reach those stores even when another CSV profile is active.
-  if(requestedMainPrefixes.length){
-    await ensureDb();
-    for(const p of requestedMainPrefixes){
-      const storeName=p==="A"?STORE_A:p==="B"?STORE_B:STORE_C;
-      const rows=await reqPromise(tx(storeName).getAll());
-      all.push(...rows);
-    }
-  }else{
-    all.push(...await getActiveProfileRecords());
+  // If the query asks only for another A/B/C profile, return nothing.
+  const hasCommonPrefix=query.namespaceFilters.some(
+    f=>["N","W","P","S"].includes(f.prefix)
+  );
+  if(hasOtherMainPrefix && !hasActiveMainPrefix && !hasCommonPrefix){
+    return [];
   }
 
-  // Explicit common namespace filters fetch only those groups.
-  // Otherwise include all common data so ordinary text search still spans active + common.
-  if(requestedCommonPrefixes.length){
-    for(const p of requestedCommonPrefixes){
-      all.push(...await getCommonProfileRecords(p));
-    }
-  }else{
-    all.push(...await getAllCommonRecords());
-  }
-
-  // If A/B/C namespace filters were requested, remove namespace handling from the generic
-  // common matcher for those and apply all filters here.
   return all
     .filter(r=>{
-      const prefix=commonPrefixForId(r.id) || String(r.id||"").match(/^([ABC])\d{6}$/)?.[1] || "";
+      const prefix=commonPrefixForId(r.id) ||
+        String(r.id||"").match(/^([ABC])\d{6}$/)?.[1] || "";
 
       if(query.namespaceFilters.length){
         const matched=query.namespaceFilters.some(f=>{
+          // Ignore non-active A/B/C namespaces completely.
+          if(["A","B","C"].includes(f.prefix) && f.prefix!==activeCsvProfile){
+            return false;
+          }
           if(prefix!==f.prefix)return false;
           if(!f.value)return true;
           const idTail=String(r.id||"").slice(1).toLowerCase();
