@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.28 / 更新 2026-08-27 20:33</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.29 / 更新 2026-08-27 20:37</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.28";
-const APP_UPDATED="2026-08-27 20:33";
+const APP_VERSION="v4.4.29";
+const APP_UPDATED="2026-08-27 20:37";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3723,7 +3723,14 @@ function openDb() {
         }catch(err){}
       }
     };
-    req.onsuccess=()=>{db=req.result;resolve(db);};
+    req.onsuccess=()=>{
+      db=req.result;
+      db.onversionchange=()=>{
+        try{db.close();}catch(e){}
+        db=null;
+      };
+      resolve(db);
+    };
     req.onerror=()=>reject(req.error);
   });
 }
@@ -3757,6 +3764,12 @@ async function verifyImportedIds(storeName,records){
   }
   return true;
 }
+
+async function verifyImportedIdsAfterCommit(storeName,records){
+  await new Promise(resolve=>setTimeout(resolve,0));
+  return await verifyImportedIds(storeName,records);
+}
+
 
 
 function tx(store, mode="readonly") { if(!db)throw new Error("IndexedDB is not initialized"); return db.transaction(store,mode).objectStore(store); }
@@ -3877,7 +3890,6 @@ async function importCsv(replace) {
       return;
     }
     await ensureDb();
-    await requestPersistentStorage();
     if(replace) await clearRecords();
     const transaction=db.transaction(importStore,"readwrite");
     const store=transaction.objectStore(importStore);
@@ -3888,7 +3900,7 @@ async function importCsv(replace) {
       transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
     });
 
-    const verified=await verifyImportedIds(importStore,parsed.records);
+    const verified=await verifyImportedIdsAfterCommit(importStore,parsed.records);
     const savedCount=await verifyStoreCount(importStore);
     if(!verified)throw new Error("CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
 
@@ -3922,7 +3934,6 @@ async function importNumbersCsv(replace){
     }
 
     await ensureDb();
-    await requestPersistentStorage();
     if(replace)await reqPromise(tx(STORE_N,"readwrite").clear());
 
     const transaction=db.transaction(STORE_N,"readwrite");
@@ -3934,7 +3945,7 @@ async function importNumbersCsv(replace){
       transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
     });
 
-    const verified=await verifyImportedIds(STORE_N,parsed.records);
+    const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
     if(!verified)throw new Error("Numbers CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
 
     if(parsed.version)await putMeta("version_N",parsed.version);
@@ -4008,7 +4019,6 @@ async function importExtraCommonCsv(prefix,replace){
       await clearCommonPrefixRecords(prefix);
     }
 
-    await requestPersistentStorage();
     const transaction=db.transaction(STORE_N,"readwrite");
     const store=transaction.objectStore(STORE_N);
     parsed.records.forEach(r=>store.put(r));
@@ -4018,7 +4028,7 @@ async function importExtraCommonCsv(prefix,replace){
       transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
     });
 
-    const verified=await verifyImportedIds(STORE_N,parsed.records);
+    const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
     if(!verified)throw new Error(`${cfg.label} CSVは読み込めましたが、iPhone内への保存確認に失敗しました。`);
 
     if(parsed.version)await putMeta("version_"+prefix,parsed.version);
@@ -4780,6 +4790,7 @@ function updateScanInputModeUi(){
 
 
 function speakScanModeName(text){
+  if(!isScannerTabActive())return;
   if(!("speechSynthesis" in window))return;
   try{
     const u=new SpeechSynthesisUtterance(text);
@@ -4802,6 +4813,7 @@ function speakScanModeName(text){
 }
 
 function speakScanReadyOnce(){
+  if(!isScannerTabActive())return;
   if(scanReadySpoken)return;
   if(!("speechSynthesis" in window))return;
 
@@ -4985,6 +4997,7 @@ function scannerCharFromCode(e){
 
 
 function unlockSpeechForExternalScanner(){
+  if(!isScannerTabActive())return;
   if(speechUnlockedByScannerStart)return;
   if(!("speechSynthesis" in window))return;
 
@@ -5022,7 +5035,17 @@ function unlockSpeechForExternalScanner(){
   }
 }
 
+
+function isScannerTabActive(){
+  const readerPanel=$("readerPanel");
+  if(!readerPanel)return true;
+  return !readerPanel.classList.contains("hidden") &&
+         !readerPanel.classList.contains("hiddenPanel") &&
+         readerPanel.offsetParent!==null;
+}
+
 function resumeExternalScannerFocus(){
+  if(!isScannerTabActive())return;
   if(scanInputMode!=="external" || !externalScannerStartedOnce || scannerTextEditing)return;
 
   const active=document.activeElement;
@@ -6905,6 +6928,23 @@ $("useCameraModeBtn").addEventListener("click",()=>{
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
 
 
+
+
+document.addEventListener("click",e=>{
+  const tab=e.target?.closest?.('[role="tab"],[data-tab],.tabBtn,.tabButton');
+  if(!tab)return;
+  setTimeout(()=>{
+    if(!isScannerTabActive()){
+      externalScannerArmed=false;
+      scannerTextEditing=true;
+      try{$("hidCaptureInput")?.blur();}catch(err){}
+      try{window.speechSynthesis?.cancel();}catch(err){}
+    }else if(scanInputMode==="external" && externalScannerStartedOnce){
+      scannerTextEditing=false;
+      setTimeout(resumeExternalScannerFocus,120);
+    }
+  },30);
+},true);
 
 document.addEventListener("focusin",e=>{
   if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
