@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.27 / 更新 2026-08-27 20:28</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.28 / 更新 2026-08-27 20:33</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.27";
-const APP_UPDATED="2026-08-27 20:28";
+const APP_VERSION="v4.4.28";
+const APP_UPDATED="2026-08-27 20:33";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3732,6 +3732,33 @@ async function ensureDb(){
   return await openDb();
 }
 
+async function requestPersistentStorage(){
+  try{
+    if(navigator.storage?.persist){
+      const already=await navigator.storage.persisted?.();
+      if(already)return true;
+      return await navigator.storage.persist();
+    }
+  }catch(e){}
+  return false;
+}
+
+async function verifyStoreCount(storeName){
+  await ensureDb();
+  return await reqPromise(tx(storeName).count());
+}
+
+async function verifyImportedIds(storeName,records){
+  await ensureDb();
+  const check=records.slice(0,Math.min(records.length,5));
+  for(const r of check){
+    const saved=await reqPromise(tx(storeName).get(r.id));
+    if(!saved)return false;
+  }
+  return true;
+}
+
+
 function tx(store, mode="readonly") { if(!db)throw new Error("IndexedDB is not initialized"); return db.transaction(store,mode).objectStore(store); }
 function reqPromise(req) { return new Promise((resolve,reject)=>{ req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
 async function putMeta(key,value) { await ensureDb(); await reqPromise(tx(META,"readwrite").put({key,value})); }
@@ -3849,15 +3876,26 @@ async function importCsv(replace) {
       setStatus($("importStatus"),"CSV切替後にもう一度読み込んでください。",false);
       return;
     }
+    await ensureDb();
+    await requestPersistentStorage();
     if(replace) await clearRecords();
     const transaction=db.transaction(importStore,"readwrite");
     const store=transaction.objectStore(importStore);
     parsed.records.forEach(r=>store.put(r));
-    await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});
+    await new Promise((resolve,reject)=>{
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
+    });
+
+    const verified=await verifyImportedIds(importStore,parsed.records);
+    const savedCount=await verifyStoreCount(importStore);
+    if(!verified)throw new Error("CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
+
     if(parsed.version) await putMeta("version_"+importProfile,parsed.version);
     await saveCurrentCsvFileName(file.name||"",importProfile);
     await refreshCurrentCsvFileName();
-    setStatus($("importStatus"),"CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。");
+    setStatus($("importStatus"),"CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。保存確認："+savedCount+"件");
     if(replace)flashQrActionAccepted($("replaceImportBtn"));
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
@@ -3884,6 +3922,7 @@ async function importNumbersCsv(replace){
     }
 
     await ensureDb();
+    await requestPersistentStorage();
     if(replace)await reqPromise(tx(STORE_N,"readwrite").clear());
 
     const transaction=db.transaction(STORE_N,"readwrite");
@@ -3892,7 +3931,11 @@ async function importNumbersCsv(replace){
     await new Promise((resolve,reject)=>{
       transaction.oncomplete=resolve;
       transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
     });
+
+    const verified=await verifyImportedIds(STORE_N,parsed.records);
+    if(!verified)throw new Error("Numbers CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
 
     if(parsed.version)await putMeta("version_N",parsed.version);
     await putMeta("csv_filename_N",file.name||"");
@@ -3965,13 +4008,18 @@ async function importExtraCommonCsv(prefix,replace){
       await clearCommonPrefixRecords(prefix);
     }
 
+    await requestPersistentStorage();
     const transaction=db.transaction(STORE_N,"readwrite");
     const store=transaction.objectStore(STORE_N);
     parsed.records.forEach(r=>store.put(r));
     await new Promise((resolve,reject)=>{
       transaction.oncomplete=resolve;
       transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
     });
+
+    const verified=await verifyImportedIds(STORE_N,parsed.records);
+    if(!verified)throw new Error(`${cfg.label} CSVは読み込めましたが、iPhone内への保存確認に失敗しました。`);
 
     if(parsed.version)await putMeta("version_"+prefix,parsed.version);
     await putMeta("csv_filename_"+prefix,file.name||"");
@@ -8800,6 +8848,7 @@ loadFlashCheckedIds();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
 setTimeout(async()=>{
+  try{await ensureDb();await requestPersistentStorage();}catch(e){}
   await refreshSummary();
   await refreshCurrentCsvFileName();
   await refreshNumbersCsvFileName();
@@ -8808,6 +8857,22 @@ setTimeout(async()=>{
     await refreshExtraCommonCsvFileName(prefix);
     await refreshExtraCommonSummary(prefix);
   }
+  try{
+    const activeCount=(await getActiveProfileRecords()).length;
+    const commonCount=(await getAllCommonRecords()).length;
+    const persisted=await navigator.storage?.persisted?.();
+    if(activeCount===0 && commonCount===0){
+      const el=$("importStatus");
+      if(el){
+        setStatus(
+          el,
+          `再読み込み後の保存確認：CSV ${activeCsvProfile} 0件 / 共通 0件${persisted===false?"（Safariの永続保存は未許可）":""}`,
+          false
+        );
+      }
+    }
+  }catch(e){}
+
   updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
   await renderPage();
 
