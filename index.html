@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.31 / 更新 2026-08-27 20:47</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.32 / 更新 2026-08-27 20:58</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.31";
-const APP_UPDATED="2026-08-27 20:47";
+const APP_VERSION="v4.4.32";
+const APP_UPDATED="2026-08-27 20:58";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6900,8 +6900,26 @@ $("toggleDataEditorBtn").addEventListener("click",()=>{
 async function executeDataSearch(){
   dataSearchQuery=String($("searchText")?.value||"");
   currentPage=0;
-  await renderPage();
+
   const matched=await filteredAll("searchText");
+
+  // A newly executed Data Management search starts with all matching records checked.
+  // Existing selections outside the current result set are left untouched.
+  let changed=false;
+  matched.forEach(r=>{
+    const id=String(r.id||"");
+    if(!id)return;
+    if(!selectedIds.has(id)){
+      selectedIds.add(id);
+      changed=true;
+    }
+  });
+  if(changed)markDataSelectionChanged();
+
+  await renderPage();
+  if($("editStatus")){
+    setStatus($("editStatus"),`${matched.length}件の検索結果をすべてチェックしました。`);
+  }
   return matched.length;
 }
 
