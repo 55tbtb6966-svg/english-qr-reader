@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.34 / 更新 2026-08-27 21:10</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.37 / 更新 2026-08-28 00:44</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3292,6 +3292,23 @@ button.flashActionAccepted{
         <span>自動フォント調整</span>
       </label>
     </div>
+    <label style="margin-bottom:10px;">
+      <span>タッチ移動時の英語発音</span>
+      <select id="flashTouchSpeak">
+        <option value="current">移動時に読む</option>
+        <option value="destination" selected>移動先を読む</option>
+      </select>
+    </label>
+    <label style="margin-bottom:12px;">
+      <span>発音ありのタッチ位置</span>
+      <select id="flashTouchSpeakSide">
+        <option value="top" selected>上半分</option>
+        <option value="bottom">下半分</option>
+      </select>
+    </label>
+    <p class="hint" id="flashTouchSpeakHint" style="margin:-4px 0 12px;">
+      右25%：上＝発音して次へ／下＝発音なしで次へ。中央50%＝表裏。左25%：上＝発音して戻る／下＝発音なしで戻る。
+    </p>
     <p class="hint" style="margin:0 0 10px;">
       長い文章は折り返し、枠に収まらない場合だけ自動で文字を小さくします。
     </p>
@@ -3317,7 +3334,7 @@ button.flashActionAccepted{
     <p class="hint" id="flashStatus">作成ボタンを押すとフラッシュカードを作成します。</p>
   </div>
   <div class="card flashStageCard">
-    <div class="flashCard" id="flashCard" role="button" tabindex="0" aria-label="左で前、中央で表裏、右で次">
+    <div class="flashCard" id="flashCard" role="button" tabindex="0" aria-label="左25パーセントで前、中央50パーセントで表裏、右25パーセントで次。発音位置と発音タイミングは詳細設定で変更可能">
       <div class="flashSmall" id="flashId"></div>
       <div class="flashMain" id="flashMain">
         <div class="flashPane flashPaneTop" id="flashTop">フラッシュカード</div>
@@ -3399,8 +3416,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.34";
-const APP_UPDATED="2026-08-27 21:10";
+const APP_VERSION="v4.4.37";
+const APP_UPDATED="2026-08-28 00:44";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6795,6 +6812,63 @@ async function speakCurrentFlashcard(){
   await playRecordFromPreview(r);
 }
 
+async function speakCurrentFlashcardEnglish(){
+  const r=flashRecords[flashIndex];
+  if(!r)return;
+  const previous=currentRecord;
+  currentRecord=r;
+  try{
+    await playRecord("english");
+  }finally{
+    if(currentRecord===r)currentRecord=previous;
+  }
+}
+
+function flashTouchSpeakMode(){
+  const v=$("flashTouchSpeak")?.value || localStorage.getItem("flashTouchSpeakMode") || "destination";
+  return v==="current" ? "current" : "destination";
+}
+
+function flashTouchSpeakPosition(){
+  return ($("flashTouchSpeakSide")?.value || localStorage.getItem("flashTouchSpeakSide") || "top")==="bottom"
+    ? "bottom"
+    : "top";
+}
+
+function updateFlashTouchSpeakHint(){
+  const hint=$("flashTouchSpeakHint");
+  if(!hint)return;
+  const pos=flashTouchSpeakPosition();
+  const mode=flashTouchSpeakMode();
+  const spoken=mode==="current" ? "現在のカードを発音してから移動" : "移動先のカードを発音";
+  if(pos==="bottom"){
+    hint.textContent=`左右25%：上＝発音なしで移動／下＝${spoken}。中央50%＝表裏。`;
+  }else{
+    hint.textContent=`左右25%：上＝${spoken}／下＝発音なしで移動。中央50%＝表裏。`;
+  }
+}
+
+function loadFlashTouchSpeakSetting(){
+  const speakSel=$("flashTouchSpeak");
+  const sideSel=$("flashTouchSpeakSide");
+  if(speakSel){
+    const saved=localStorage.getItem("flashTouchSpeakMode");
+    speakSel.value=saved==="current" ? "current" : "destination";
+    speakSel.addEventListener("change",()=>{
+      localStorage.setItem("flashTouchSpeakMode",speakSel.value==="current" ? "current" : "destination");
+      updateFlashTouchSpeakHint();
+    });
+  }
+  if(sideSel){
+    sideSel.value=localStorage.getItem("flashTouchSpeakSide")||"top";
+    sideSel.addEventListener("change",()=>{
+      localStorage.setItem("flashTouchSpeakSide",sideSel.value==="bottom"?"bottom":"top");
+      updateFlashTouchSpeakHint();
+    });
+  }
+  updateFlashTouchSpeakHint();
+}
+
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async()=>{
   // Preserve the latest visible checkbox state before leaving any tab.
   syncVisibleDataSelection();
@@ -6840,19 +6914,39 @@ $("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggle
   $(id)?.addEventListener("click",e=>e.stopPropagation());
 });
 $("flashCard")?.addEventListener("click",e=>{
-  // Left 1/4 = previous, center 1/2 = flip, right 1/4 = next.
-  // iPhone fullscreen is no longer rotated, so the X axis is always used.
+  // Center 50% always flips front/back.
+  // Outer 25% zones navigate:
+  // upper half = navigate + English pronunciation when enabled;
+  // lower half = navigate without pronunciation.
   const card=e.currentTarget;
   const rect=card.getBoundingClientRect();
-  if(!rect.width)return;
-  let ratio=(e.clientX-rect.left)/rect.width;
-  ratio=Math.max(0,Math.min(1,ratio));
-  if(ratio<0.25){
-    stepFlashcard(-1);
-  }else if(ratio>0.75){
-    stepFlashcard(1);
-  }else{
+  if(!rect.width || !rect.height)return;
+
+  let x=(e.clientX-rect.left)/rect.width;
+  let y=(e.clientY-rect.top)/rect.height;
+  x=Math.max(0,Math.min(1,x));
+  y=Math.max(0,Math.min(1,y));
+
+  if(x>=0.25 && x<=0.75){
     flipFlashcard();
+    return;
+  }
+
+  const delta=x<0.25 ? -1 : 1;
+  const touchedHalf=y<0.5 ? "top" : "bottom";
+  const shouldSpeak=touchedHalf===flashTouchSpeakPosition();
+  const speakMode=flashTouchSpeakMode();
+
+  if(shouldSpeak && speakMode==="current"){
+    speakCurrentFlashcardEnglish();
+    stepFlashcard(delta);
+    return;
+  }
+
+  stepFlashcard(delta);
+
+  if(shouldSpeak && speakMode==="destination"){
+    setTimeout(()=>{speakCurrentFlashcardEnglish();},20);
   }
 });
 $("flashCard")?.addEventListener("keydown",e=>{
@@ -6860,6 +6954,7 @@ $("flashCard")?.addEventListener("keydown",e=>{
   else if(e.key==="ArrowLeft"){e.preventDefault();stepFlashcard(-1);}
   else if(e.key==="ArrowRight"){e.preventDefault();stepFlashcard(1);}
 });
+loadFlashTouchSpeakSetting();
 $("flashSearch")?.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
     e.preventDefault();
