@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.29 / 更新 2026-08-27 20:37</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.30 / 更新 2026-08-27 20:42</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.29";
-const APP_UPDATED="2026-08-27 20:37";
+const APP_VERSION="v4.4.30";
+const APP_UPDATED="2026-08-27 20:42";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3739,6 +3739,88 @@ async function ensureDb(){
   return await openDb();
 }
 
+const RECORD_BACKUP_PREFIX="englishQrRecordBackupV1_";
+
+function backupKey(namespace){
+  return RECORD_BACKUP_PREFIX+namespace;
+}
+
+function saveRecordBackup(namespace,records){
+  try{
+    localStorage.setItem(
+      backupKey(namespace),
+      JSON.stringify(Array.isArray(records)?records:[])
+    );
+    return true;
+  }catch(e){
+    console.warn("localStorage backup failed",namespace,e);
+    return false;
+  }
+}
+
+function loadRecordBackup(namespace){
+  try{
+    const raw=localStorage.getItem(backupKey(namespace));
+    if(!raw)return [];
+    const parsed=JSON.parse(raw);
+    return Array.isArray(parsed)?parsed:[];
+  }catch(e){
+    console.warn("localStorage backup read failed",namespace,e);
+    return [];
+  }
+}
+
+async function snapshotNamespaceToBackup(namespace){
+  await ensureDb();
+  let records=[];
+  if(["A","B","C"].includes(namespace)){
+    const storeName=namespace==="A"?STORE_A:namespace==="B"?STORE_B:STORE_C;
+    records=await reqPromise(tx(storeName).getAll());
+  }else{
+    const all=await reqPromise(tx(STORE_N).getAll());
+    records=all.filter(r=>commonPrefixForId(r.id)===namespace);
+  }
+  return saveRecordBackup(namespace,records);
+}
+
+async function restoreNamespaceFromBackupIfEmpty(namespace){
+  await ensureDb();
+  const backup=loadRecordBackup(namespace);
+  if(!backup.length)return 0;
+
+  let storeName=STORE_N;
+  let existing=[];
+  if(["A","B","C"].includes(namespace)){
+    storeName=namespace==="A"?STORE_A:namespace==="B"?STORE_B:STORE_C;
+    existing=await reqPromise(tx(storeName).getAll());
+  }else{
+    const all=await reqPromise(tx(STORE_N).getAll());
+    existing=all.filter(r=>commonPrefixForId(r.id)===namespace);
+  }
+  if(existing.length)return 0;
+
+  const transaction=db.transaction(storeName,"readwrite");
+  const store=transaction.objectStore(storeName);
+  backup.forEach(r=>store.put(r));
+  await new Promise((resolve,reject)=>{
+    transaction.oncomplete=resolve;
+    transaction.onerror=()=>reject(transaction.error);
+    transaction.onabort=()=>reject(transaction.error||new Error("バックアップ復元が中断されました。"));
+  });
+  return backup.length;
+}
+
+async function restoreAllBackupsIfNeeded(){
+  let restored=0;
+  for(const ns of ["A","B","C","N","W","P","S"]){
+    try{restored+=await restoreNamespaceFromBackupIfEmpty(ns);}catch(e){
+      console.warn("backup restore failed",ns,e);
+    }
+  }
+  return restored;
+}
+
+
 async function requestPersistentStorage(){
   try{
     if(navigator.storage?.persist){
@@ -3794,8 +3876,16 @@ async function getRecordForScan(id) {
 
   return await reqPromise(tx(activeStoreName()).get(id));
 }
-async function putRecord(record) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").put(record)); }
-async function deleteRecord(id) { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").delete(id)); }
+async function putRecord(record) {
+  await ensureDb();
+  await reqPromise(tx(activeStoreName(),"readwrite").put(record));
+  await snapshotNamespaceToBackup(activeCsvProfile);
+}
+async function deleteRecord(id) {
+  await ensureDb();
+  await reqPromise(tx(activeStoreName(),"readwrite").delete(id));
+  await snapshotNamespaceToBackup(activeCsvProfile);
+}
 async function clearRecords() { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").clear()); }
 async function getAllRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).getAll()); }
 
@@ -3904,10 +3994,15 @@ async function importCsv(replace) {
     const savedCount=await verifyStoreCount(importStore);
     if(!verified)throw new Error("CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
 
+    const backupOk=await snapshotNamespaceToBackup(importProfile);
     if(parsed.version) await putMeta("version_"+importProfile,parsed.version);
     await saveCurrentCsvFileName(file.name||"",importProfile);
     await refreshCurrentCsvFileName();
-    setStatus($("importStatus"),"CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+"しました。保存確認："+savedCount+"件");
+    setStatus(
+      $("importStatus"),
+      "CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+
+      "しました。保存確認："+savedCount+"件"+(backupOk?" / iPhoneバックアップ済み":" / バックアップ容量不足の可能性")
+    );
     if(replace)flashQrActionAccepted($("replaceImportBtn"));
     currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
   }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
@@ -3948,13 +4043,14 @@ async function importNumbersCsv(replace){
     const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
     if(!verified)throw new Error("Numbers CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
 
+    const backupOk=await snapshotNamespaceToBackup("N");
     if(parsed.version)await putMeta("version_N",parsed.version);
     await putMeta("csv_filename_N",file.name||"");
     localStorage.setItem("lastCsvFileName_N",file.name||"");
 
     setStatus(
       $("numbersImportStatus"),
-      `Numbers：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。`
+      `Numbers：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。${backupOk?" iPhoneバックアップ済み":" バックアップ容量不足の可能性"}`
     );
 
     await refreshNumbersCsvFileName();
@@ -4031,11 +4127,12 @@ async function importExtraCommonCsv(prefix,replace){
     const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
     if(!verified)throw new Error(`${cfg.label} CSVは読み込めましたが、iPhone内への保存確認に失敗しました。`);
 
+    const backupOk=await snapshotNamespaceToBackup(prefix);
     if(parsed.version)await putMeta("version_"+prefix,parsed.version);
     await putMeta("csv_filename_"+prefix,file.name||"");
     localStorage.setItem("lastCsvFileName_"+prefix,file.name||"");
 
-    setStatus($(ui.status),`${cfg.label}：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。`);
+    setStatus($(ui.status),`${cfg.label}：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。${backupOk?" iPhoneバックアップ済み":" バックアップ容量不足の可能性"}`);
     await refreshExtraCommonCsvFileName(prefix);
     await refreshExtraCommonSummary(prefix);
     if(String(dataSearchQuery||"").trim())await renderPage();
@@ -8888,7 +8985,12 @@ loadFlashCheckedIds();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
 setTimeout(async()=>{
-  try{await ensureDb();await requestPersistentStorage();}catch(e){}
+  let restoredFromBackup=0;
+  try{
+    await ensureDb();
+    restoredFromBackup=await restoreAllBackupsIfNeeded();
+    await requestPersistentStorage();
+  }catch(e){}
   await refreshSummary();
   await refreshCurrentCsvFileName();
   await refreshNumbersCsvFileName();
@@ -8896,6 +8998,10 @@ setTimeout(async()=>{
   for(const prefix of ["W","P","S"]){
     await refreshExtraCommonCsvFileName(prefix);
     await refreshExtraCommonSummary(prefix);
+  }
+  if(restoredFromBackup>0){
+    const el=$("importStatus");
+    if(el)setStatus(el,`iPhone保存バックアップから ${restoredFromBackup}件を復元しました。`);
   }
   try{
     const activeCount=(await getActiveProfileRecords()).length;
