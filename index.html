@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.30 / 更新 2026-08-27 20:42</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.31 / 更新 2026-08-27 20:47</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.30";
-const APP_UPDATED="2026-08-27 20:42";
+const APP_VERSION="v4.4.31";
+const APP_UPDATED="2026-08-27 20:47";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3821,15 +3821,27 @@ async function restoreAllBackupsIfNeeded(){
 }
 
 
+
+function withTimeout(promise,ms,fallback){
+  return Promise.race([
+    Promise.resolve(promise).catch(()=>fallback),
+    new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))
+  ]);
+}
+
 async function requestPersistentStorage(){
   try{
-    if(navigator.storage?.persist){
-      const already=await navigator.storage.persisted?.();
-      if(already)return true;
-      return await navigator.storage.persist();
-    }
-  }catch(e){}
-  return false;
+    if(!navigator.storage?.persist)return false;
+    const already=await withTimeout(
+      navigator.storage.persisted ? navigator.storage.persisted() : false,
+      1200,
+      false
+    );
+    if(already)return true;
+    return await withTimeout(navigator.storage.persist(),1200,false);
+  }catch(e){
+    return false;
+  }
 }
 
 async function verifyStoreCount(storeName){
@@ -8984,13 +8996,25 @@ updateFlashShuffleUi();
 loadFlashCheckedIds();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
+
+setTimeout(()=>{
+  try{
+    document.querySelectorAll("*").forEach(el=>{
+      if(el.children.length===0 && /保存使用量/.test(el.textContent||"") && /確認中/.test(el.textContent||"")){
+        el.textContent="保存使用量：取得できません（保存機能は使用できます）";
+      }
+    });
+  }catch(e){}
+},2200);
+
 setTimeout(async()=>{
   let restoredFromBackup=0;
   try{
     await ensureDb();
     restoredFromBackup=await restoreAllBackupsIfNeeded();
-    await requestPersistentStorage();
   }catch(e){}
+  // Storage persistence check is optional on iPhone; never block app startup.
+  requestPersistentStorage().catch(()=>{});
   await refreshSummary();
   await refreshCurrentCsvFileName();
   await refreshNumbersCsvFileName();
