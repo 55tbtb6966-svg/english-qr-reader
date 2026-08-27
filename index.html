@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.32 / 更新 2026-08-27 20:58</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.33 / 更新 2026-08-27 21:04</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3058,7 +3058,7 @@ button.flashActionAccepted{
 <section class="panel" id="dataPanel">
 <div class="card">
 <div class="dataSearchArea" style="margin-top:14px;">
-  <label><span>検索（スペース区切りAND検索／N: W: P: S: で共通IDを指定・全角：も可）</span>
+  <label><span>検索（スペース区切りAND検索／A: B: C: N: W: P: S: で共通IDを指定・全角：も可）</span>
     <input id="searchText" placeholder="例：apple red / N:2500 / W: / P: / S:" type="text"/>
   </label>
   <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.32";
-const APP_UPDATED="2026-08-27 20:58";
+const APP_VERSION="v4.4.33";
+const APP_UPDATED="2026-08-27 21:04";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5542,13 +5542,13 @@ function splitAndSearchTerms(text){
 
 function parseCommonSearchQuery(text){
   const normalized=normalizeSearchText(text)
-    .replace(/\b([NWPSnwps])\s*:\s*/g,(m,p)=>p.toLowerCase()+":");
+    .replace(/\b([ABCNWPSabcnwps])\s*:\s*/g,(m,p)=>p.toLowerCase()+":");
   const tokens=splitAndSearchTerms(normalized);
   const namespaceFilters=[];
   const terms=[];
 
   tokens.forEach(token=>{
-    const m=token.match(/^([nwps]):(.*)$/i);
+    const m=token.match(/^([abcnwps]):(.*)$/i);
     if(m){
       namespaceFilters.push({
         prefix:m[1].toUpperCase(),
@@ -5597,10 +5597,70 @@ async function filteredAll(searchId){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0 || query.namespaceFilters.length>0;
 
-  const all=await getCommonSearchRecords(hasSearch);
+  // Empty search: active A/B/C profile + all common N/W/P/S.
+  if(!hasSearch){
+    const active=await getActiveProfileRecords();
+    const common=await getAllCommonRecords();
+    return [...active,...common].sort(compareRecordIds);
+  }
 
+  const requestedMainPrefixes=[...new Set(
+    query.namespaceFilters
+      .map(f=>f.prefix)
+      .filter(p=>["A","B","C"].includes(p))
+  )];
+  const requestedCommonPrefixes=[...new Set(
+    query.namespaceFilters
+      .map(f=>f.prefix)
+      .filter(p=>["N","W","P","S"].includes(p))
+  )];
+
+  let all=[];
+
+  // Explicit A:/B:/C: searches may reach those stores even when another CSV profile is active.
+  if(requestedMainPrefixes.length){
+    await ensureDb();
+    for(const p of requestedMainPrefixes){
+      const storeName=p==="A"?STORE_A:p==="B"?STORE_B:STORE_C;
+      const rows=await reqPromise(tx(storeName).getAll());
+      all.push(...rows);
+    }
+  }else{
+    all.push(...await getActiveProfileRecords());
+  }
+
+  // Explicit common namespace filters fetch only those groups.
+  // Otherwise include all common data so ordinary text search still spans active + common.
+  if(requestedCommonPrefixes.length){
+    for(const p of requestedCommonPrefixes){
+      all.push(...await getCommonProfileRecords(p));
+    }
+  }else{
+    all.push(...await getAllCommonRecords());
+  }
+
+  // If A/B/C namespace filters were requested, remove namespace handling from the generic
+  // common matcher for those and apply all filters here.
   return all
-    .filter(r=>matchesCommonSearchQuery(r,query))
+    .filter(r=>{
+      const prefix=commonPrefixForId(r.id) || String(r.id||"").match(/^([ABC])\d{6}$/)?.[1] || "";
+
+      if(query.namespaceFilters.length){
+        const matched=query.namespaceFilters.some(f=>{
+          if(prefix!==f.prefix)return false;
+          if(!f.value)return true;
+          const idTail=String(r.id||"").slice(1).toLowerCase();
+          return idTail.includes(f.value) || recordSearchText(r).includes(f.value);
+        });
+        if(!matched)return false;
+      }
+
+      if(query.terms.length){
+        const searchable=recordSearchText(r);
+        if(!query.terms.every(term=>searchable.includes(term)))return false;
+      }
+      return true;
+    })
     .sort(compareRecordIds);
 }
 
