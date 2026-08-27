@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.22 / 更新 2026-08-27 19:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.23 / 更新 2026-08-27 20:01</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3058,7 +3058,7 @@ button.flashActionAccepted{
 <section class="panel" id="dataPanel">
 <div class="card">
 <div class="dataSearchArea" style="margin-top:14px;">
-  <label><span>検索（スペース区切りAND検索／N: W: P: S: で共通IDを指定）</span>
+  <label><span>検索（スペース区切りAND検索／N: W: P: S: で共通IDを指定・全角：も可）</span>
     <input id="searchText" placeholder="例：apple red / N:2500 / W: / P: / S:" type="text"/>
   </label>
   <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.22";
-const APP_UPDATED="2026-08-27 19:54";
+const APP_VERSION="v4.4.23";
+const APP_UPDATED="2026-08-27 20:01";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5318,8 +5318,16 @@ async function editRecord(id){
 }
 let dataSearchQuery="";
 
+function normalizeSearchText(text){
+  let t=String(text||"");
+  try{t=t.normalize("NFKC");}catch(e){}
+  // Treat common Japanese full-width punctuation as ordinary search punctuation.
+  t=t.replace(/：/g,":").replace(/　/g," ");
+  return t;
+}
+
 function splitAndSearchTerms(text){
-  return String(text||"")
+  return normalizeSearchText(text)
     .trim()
     .toLowerCase()
     .split(/\s+/)
@@ -5327,7 +5335,9 @@ function splitAndSearchTerms(text){
 }
 
 function parseCommonSearchQuery(text){
-  const tokens=splitAndSearchTerms(text);
+  const normalized=normalizeSearchText(text)
+    .replace(/\b([NWPSnwps])\s*:\s*/g,(m,p)=>p.toLowerCase()+":");
+  const tokens=splitAndSearchTerms(normalized);
   const namespaceFilters=[];
   const terms=[];
 
@@ -5379,7 +5389,7 @@ async function filteredAll(searchId){
     : String($(searchId)?.value||"");
 
   const query=parseCommonSearchQuery(sourceText);
-  const hasSearch=splitAndSearchTerms(sourceText).length>0;
+  const hasSearch=splitAndSearchTerms(sourceText).length>0 || query.namespaceFilters.length>0;
 
   const all=await getCommonSearchRecords(hasSearch);
 
@@ -6305,9 +6315,9 @@ async function buildFlashcardsFromSearch(){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0;
 
-  let source=query.numbersOnly
-    ? await getNumberProfileRecords()
-    : await getCommonSearchRecords(hasSearch);
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
@@ -6324,8 +6334,10 @@ async function buildFlashcardsFromSearch(){
 
   if($("flashStatus")){
     const scope=latestSelection.size?"チェック項目内":"全項目";
-    const commonNote=query.numbersOnly?"（Numbers専用）":hasSearch?"＋Numbers":"";
-    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${commonNote}`;
+    const filterNote=query.namespaceFilters.length
+      ? `（${query.namespaceFilters.map(f=>f.prefix+":").join(" / ")}）`
+      : hasSearch?"＋共通ID":"";
+    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${filterNote}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
   return flashRecords.length;
@@ -6772,9 +6784,9 @@ async function buildQrFromSearch(){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0;
 
-  let source=query.numbersOnly
-    ? await getNumberProfileRecords()
-    : await getCommonSearchRecords(hasSearch);
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
@@ -6788,7 +6800,9 @@ async function buildQrFromSearch(){
   renderQr(qrPageSource.slice(0,qrPageSize));
 
   const scope=latestSelection.size?"チェック項目内":"全項目";
-  const commonNote=query.numbersOnly?"（Numbers専用）":hasSearch?"（Numbersを含む共通検索）":"";
+  const commonNote=query.namespaceFilters.length
+    ? `（${query.namespaceFilters.map(f=>f.prefix+":").join(" / ")}）`
+    : hasSearch?"（N/W/P/Sを含む共通検索）":"";
   setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件${commonNote}をID順で表示しています。`);
   flashQrActionAccepted($("makeSearchQrBtn"));
   return qrPageSource.length;
