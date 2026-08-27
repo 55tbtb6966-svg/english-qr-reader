@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.24 / 更新 2026-08-27 20:06</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.25 / 更新 2026-08-27 20:13</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.24";
-const APP_UPDATED="2026-08-27 20:06";
+const APP_VERSION="v4.4.25";
+const APP_UPDATED="2026-08-27 20:13";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3587,45 +3587,7 @@ async function getAllCommonRecords(){
 async function getCommonProfileRecords(prefix){
   const p=String(prefix||"").toUpperCase();
   const all=await getAllCommonRecords();
-  const shared=all.filter(r=>commonPrefixForId(r.id)===p);
-
-  // v4.4.20 briefly used separate IndexedDB stores records_W/P/S.
-  // If such a store already exists on this iPhone, read it too.
-  let legacy=[];
-  if(p!=="N"){
-    try{
-      await ensureDb();
-      const legacyStoreName="records_"+p;
-      if(db.objectStoreNames.contains(legacyStoreName)){
-        legacy=await reqPromise(tx(legacyStoreName).getAll());
-      }
-    }catch(e){}
-  }
-
-  const map=new Map();
-  [...shared,...legacy].forEach(r=>{
-    const id=String(r?.id||"");
-    if(commonPrefixForId(id)===p)map.set(id,r);
-  });
-
-  const merged=[...map.values()];
-
-  // Opportunistically migrate separate-store records to the shared common store.
-  if(legacy.length){
-    try{
-      const transaction=db.transaction(STORE_N,"readwrite");
-      const store=transaction.objectStore(STORE_N);
-      legacy.forEach(r=>{
-        if(commonPrefixForId(r?.id)===p)store.put(r);
-      });
-      await new Promise((resolve,reject)=>{
-        transaction.oncomplete=resolve;
-        transaction.onerror=()=>reject(transaction.error);
-      });
-    }catch(e){}
-  }
-
-  return merged;
+  return all.filter(r=>commonPrefixForId(r.id)===p);
 }
 
 async function getNumberProfileRecords(){
@@ -3636,19 +3598,9 @@ async function getCommonSearchRecords(hasTerms=true){
   const active=await getActiveProfileRecords();
   if(!hasTerms)return active;
 
-  const groups=await Promise.all(["N","W","P","S"].map(getCommonProfileRecords));
+  const common=await getAllCommonRecords();
   const seen=new Set(active.map(r=>String(r.id||"")));
-  const out=active.slice();
-
-  groups.flat().forEach(r=>{
-    const id=String(r?.id||"");
-    if(id && !seen.has(id)){
-      seen.add(id);
-      out.push(r);
-    }
-  });
-
-  return out;
+  return active.concat(common.filter(r=>!seen.has(String(r.id||""))));
 }
 
 async function getRecordsForSelectedIds(ids){
@@ -3999,11 +3951,7 @@ async function importExtraCommonCsv(prefix,replace){
     await putMeta("csv_filename_"+prefix,file.name||"");
     localStorage.setItem("lastCsvFileName_"+prefix,file.name||"");
 
-    const verifyCount=(await getCommonProfileRecords(prefix)).length;
-    setStatus(
-      $(ui.status),
-      `${cfg.label}：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。現在 ${verifyCount}件`
-    );
+    setStatus($(ui.status),`${cfg.label}：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。`);
     await refreshExtraCommonCsvFileName(prefix);
     await refreshExtraCommonSummary(prefix);
     if(String(dataSearchQuery||"").trim())await renderPage();
@@ -5443,15 +5391,7 @@ async function filteredAll(searchId){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0 || query.namespaceFilters.length>0;
 
-  let all;
-
-  if(query.namespaceFilters.length){
-    const requested=[...new Set(query.namespaceFilters.map(f=>f.prefix))];
-    const groups=await Promise.all(requested.map(getCommonProfileRecords));
-    all=groups.flat();
-  }else{
-    all=await getCommonSearchRecords(hasSearch);
-  }
+  const all=await getCommonSearchRecords(hasSearch);
 
   return all
     .filter(r=>matchesCommonSearchQuery(r,query))
@@ -6375,13 +6315,9 @@ async function buildFlashcardsFromSearch(){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0;
 
-  let source;
-  if(query.namespaceFilters.length){
-    const requested=[...new Set(query.namespaceFilters.map(f=>f.prefix))];
-    source=(await Promise.all(requested.map(getCommonProfileRecords))).flat();
-  }else{
-    source=await getCommonSearchRecords(hasSearch);
-  }
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
@@ -6848,13 +6784,9 @@ async function buildQrFromSearch(){
   const query=parseCommonSearchQuery(sourceText);
   const hasSearch=splitAndSearchTerms(sourceText).length>0;
 
-  let source;
-  if(query.namespaceFilters.length){
-    const requested=[...new Set(query.namespaceFilters.map(f=>f.prefix))];
-    source=(await Promise.all(requested.map(getCommonProfileRecords))).flat();
-  }else{
-    source=await getCommonSearchRecords(hasSearch);
-  }
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
 
   if(latestSelection.size){
     source=source.filter(r=>latestSelection.has(String(r.id||"")));
