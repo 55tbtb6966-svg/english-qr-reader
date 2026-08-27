@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.25 / 更新 2026-08-27 20:13</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.26 / 更新 2026-08-27 20:22</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3399,8 +3399,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.25";
-const APP_UPDATED="2026-08-27 20:13";
+const APP_VERSION="v4.4.26";
+const APP_UPDATED="2026-08-27 20:22";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -3759,6 +3759,29 @@ async function deleteRecord(id) { await ensureDb(); await reqPromise(tx(activeSt
 async function clearRecords() { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").clear()); }
 async function getAllRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).getAll()); }
 
+
+function readCsvFileText(file){
+  if(!file)return Promise.reject(new Error("CSVファイルが選択されていません。"));
+
+  // FileReader is more reliable than Blob.text() on some iPhone/Safari/PWA paths.
+  return new Promise((resolve,reject)=>{
+    try{
+      const reader=new FileReader();
+      reader.onload=()=>{
+        let text=String(reader.result??"");
+        // Remove UTF-8 BOM if present; parseCsv/csvToRecords also tolerates it.
+        text=text.replace(/^\uFEFF/,"");
+        resolve(text);
+      };
+      reader.onerror=()=>reject(reader.error||new Error("CSVファイルを読み込めませんでした。"));
+      reader.onabort=()=>reject(new Error("CSVファイルの読み込みが中断されました。"));
+      reader.readAsText(file,"UTF-8");
+    }catch(e){
+      reject(e);
+    }
+  });
+}
+
 function parseCsv(text) {
   const rows=[]; let row=[],cell="",quoted=false;
   for(let i=0;i<text.length;i++){
@@ -3818,7 +3841,8 @@ async function importCsv(replace) {
   const importProfile=activeCsvProfile;
   const importStore=activeStoreName();
   try{
-    const parsed=csvToRecords(parseCsv(await file.text()));
+    setStatus($("importStatus"),`CSV ${importProfile}：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
 
 
     if(importProfile!==activeCsvProfile){
@@ -3847,7 +3871,8 @@ async function importNumbersCsv(replace){
   }
 
   try{
-    const parsed=csvToRecords(parseCsv(await file.text()));
+    setStatus($("numbersImportStatus"),`Numbers：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
 
     for(const r of parsed.records){
       const normalized=normalizeNumberId(r.id);
@@ -3921,7 +3946,8 @@ async function importExtraCommonCsv(prefix,replace){
   }
 
   try{
-    const parsed=csvToRecords(parseCsv(await file.text()));
+    setStatus($(ui.status),`${cfg.label}：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
     if(!parsed.records.length)throw new Error("CSVに読み込めるデータ行がありません。");
 
     for(const r of parsed.records){
@@ -6013,7 +6039,7 @@ async function importCheckedIdsFromCsv(){
   }
   let text="";
   try{
-    text=await file.text();
+    text=await readCsvFileText(file);
   }catch(e){
     if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVを読み込めませんでした。";
     return;
@@ -6830,6 +6856,35 @@ $("useCameraModeBtn").addEventListener("click",()=>{
 });
 $("startExternalScannerBtn").addEventListener("click",startExternalScanner);
 
+
+
+function suspendExternalScannerForFilePicker(){
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  scannerTextEditing=true;
+  externalScannerArmed=false;
+  try{$("hidCaptureInput")?.blur();}catch(e){}
+}
+
+function resumeExternalScannerAfterFilePicker(){
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  scannerTextEditing=false;
+  setTimeout(resumeExternalScannerFocus,300);
+}
+
+document.addEventListener("pointerdown",e=>{
+  const input=e.target?.closest?.('input[type="file"]');
+  if(input)suspendExternalScannerForFilePicker();
+},true);
+
+document.addEventListener("click",e=>{
+  const input=e.target?.closest?.('input[type="file"]');
+  if(input)suspendExternalScannerForFilePicker();
+},true);
+
+document.addEventListener("change",e=>{
+  const input=e.target?.closest?.('input[type="file"]');
+  if(input)resumeExternalScannerAfterFilePicker();
+},true);
 
 document.addEventListener("focusin",e=>{
   if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
