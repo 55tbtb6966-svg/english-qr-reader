@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.39 / 更新 2026-08-29 10:09</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.40 / 更新 2026-08-29 10:15</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3416,8 +3416,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.39";
-const APP_UPDATED="2026-08-29 10:09";
+const APP_VERSION="v4.4.40";
+const APP_UPDATED="2026-08-29 10:15";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5171,6 +5171,7 @@ function isScannerTabActive(){
 }
 
 function resumeExternalScannerFocus(){
+  if(scannerCaptureSuspended())return;
   if(!isScannerTabActive())return;
   if(scanInputMode!=="external" || !externalScannerStartedOnce || scannerTextEditing)return;
 
@@ -7003,6 +7004,7 @@ document.addEventListener("webkitfullscreenchange",()=>{
   }
 });
 document.addEventListener("keydown",e=>{
+  if(scannerCaptureSuspended())return;
   if(e.key==="Escape" && flashFullscreenActive)exitFlashFullscreen();
 });
 window.addEventListener("resize",()=>{
@@ -7104,6 +7106,23 @@ $("searchText")?.addEventListener("keydown",e=>{
   }
 });
 $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
+
+["searchText","qrSearch","flashSearch"].forEach(id=>{
+  const el=$(id);
+  if(!el)return;
+  const forceKeyboard=()=>{
+    suspendExternalScannerForTextEntry();
+    try{el.readOnly=false;}catch(e){}
+    setTimeout(()=>{
+      try{el.focus({preventScroll:true});}catch(e){
+        try{el.focus();}catch(_){}
+      }
+    },0);
+  };
+  el.addEventListener("click",forceKeyboard);
+  el.addEventListener("touchend",forceKeyboard,{passive:true});
+});
+
 
 $("selectAllFilteredBtn").addEventListener("click",async()=>{
   const all=await filteredAll("searchText");
@@ -7253,6 +7272,13 @@ document.addEventListener("click",e=>{
 },true);
 
 
+
+function scannerCaptureSuspended(){
+  if(scannerTextEditing)return true;
+  const a=document.activeElement;
+  return isUserTextEditingElement(a);
+}
+
 function isUserTextEditingElement(el){
   if(!el || el.id==="hidCaptureInput")return false;
   const tag=(el.tagName||"").toLowerCase();
@@ -7290,14 +7316,27 @@ function restoreExternalScannerAfterTextEntry(){
 // Run before the browser's normal focus processing so the iPhone keyboard
 // can open even immediately after a QR scan.
 document.addEventListener("pointerdown",e=>{
-  if(isUserTextEditingElement(e.target)){
+  const target=e.target;
+  if(isUserTextEditingElement(target)){
     suspendExternalScannerForTextEntry();
+    // Keep the actual field as the focus target during the same user gesture.
+    setTimeout(()=>{
+      try{target.focus({preventScroll:true});}catch(err){
+        try{target.focus();}catch(_){}
+      }
+    },0);
   }
 },true);
 
 document.addEventListener("touchstart",e=>{
-  if(isUserTextEditingElement(e.target)){
+  const target=e.target;
+  if(isUserTextEditingElement(target)){
     suspendExternalScannerForTextEntry();
+    setTimeout(()=>{
+      try{target.focus({preventScroll:true});}catch(err){
+        try{target.focus();}catch(_){}
+      }
+    },0);
   }
 },{capture:true,passive:true});
 
