@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.38 / 更新 2026-08-29 10:00</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.39 / 更新 2026-08-29 10:09</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3416,8 +3416,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.38";
-const APP_UPDATED="2026-08-29 10:00";
+const APP_VERSION="v4.4.39";
+const APP_UPDATED="2026-08-29 10:09";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5959,6 +5959,21 @@ function updateQrPagerButtons(){
   });
 }
 
+
+function scrollToQrPreviewTop(){
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const sheet=$("qrSheet");
+      if(!sheet)return;
+      const firstCard=sheet.querySelector(".qrCard");
+      const target=firstCard || sheet;
+      const rect=target.getBoundingClientRect();
+      const top=window.scrollY + rect.top - 16;
+      window.scrollTo({top:Math.max(0,top),behavior:"smooth"});
+    });
+  });
+}
+
 function goPrevQrPage(){
   qrPageStart=Math.max(0,qrPageStart-qrPageSize);
   renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
@@ -7200,8 +7215,14 @@ $("qrSearch")?.addEventListener("keydown",e=>{
 
 $("prevQrPageBtn").addEventListener("click",goPrevQrPage);
 $("nextQrPageBtn").addEventListener("click",goNextQrPage);
-$("prevQrPageBtnBottom").addEventListener("click",goPrevQrPage);
-$("nextQrPageBtnBottom").addEventListener("click",goNextQrPage);
+$("prevQrPageBtnBottom").addEventListener("click",()=>{
+  goPrevQrPage();
+  scrollToQrPreviewTop();
+});
+$("nextQrPageBtnBottom").addEventListener("click",()=>{
+  goNextQrPage();
+  scrollToQrPreviewTop();
+});
 $("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
 $("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
 $("useCameraModeBtn").addEventListener("click",()=>{
@@ -7223,38 +7244,84 @@ document.addEventListener("click",e=>{
       try{$("hidCaptureInput")?.blur();}catch(err){}
       try{window.speechSynthesis?.cancel();}catch(err){}
     }else if(scanInputMode==="external" && externalScannerStartedOnce){
+      const hid=$("hidCaptureInput");
+      if(hid)hid.disabled=false;
       scannerTextEditing=false;
       setTimeout(resumeExternalScannerFocus,120);
     }
   },30);
 },true);
 
+
+function isUserTextEditingElement(el){
+  if(!el || el.id==="hidCaptureInput")return false;
+  const tag=(el.tagName||"").toLowerCase();
+  if(tag==="textarea" || tag==="select" || el.isContentEditable)return true;
+  if(tag!=="input")return false;
+  const type=String(el.type||"text").toLowerCase();
+  return !["button","checkbox","radio","file","submit","reset","range","color","hidden"].includes(type);
+}
+
+function suspendExternalScannerForTextEntry(){
+  scannerTextEditing=true;
+  externalScannerArmed=false;
+  const hid=$("hidCaptureInput");
+  if(hid){
+    try{hid.blur();}catch(e){}
+    // iPhone Safari can immediately steal focus back to the HID capture field.
+    // Temporarily disabling it lets the software keyboard attach to the tapped field.
+    try{hid.disabled=true;}catch(e){}
+  }
+}
+
+function restoreExternalScannerAfterTextEntry(){
+  const hid=$("hidCaptureInput");
+  if(hid){
+    try{hid.disabled=false;}catch(e){}
+  }
+  scannerTextEditing=false;
+
+  // Only resume HID focus on the Reader tab.
+  if(scanInputMode==="external" && externalScannerStartedOnce && isScannerTabActive()){
+    setTimeout(resumeExternalScannerFocus,180);
+  }
+}
+
+// Run before the browser's normal focus processing so the iPhone keyboard
+// can open even immediately after a QR scan.
+document.addEventListener("pointerdown",e=>{
+  if(isUserTextEditingElement(e.target)){
+    suspendExternalScannerForTextEntry();
+  }
+},true);
+
+document.addEventListener("touchstart",e=>{
+  if(isUserTextEditingElement(e.target)){
+    suspendExternalScannerForTextEntry();
+  }
+},{capture:true,passive:true});
+
 document.addEventListener("focusin",e=>{
   if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
   const el=e.target;
-  if(!el || el.id==="hidCaptureInput")return;
-  const tag=(el.tagName||"").toLowerCase();
-  if(tag==="input" || tag==="textarea" || tag==="select" || el.isContentEditable){
-    scannerTextEditing=true;
-    externalScannerArmed=false;
+  if(isUserTextEditingElement(el)){
+    suspendExternalScannerForTextEntry();
   }
 });
 
 document.addEventListener("focusout",e=>{
   if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
-  const el=e.target;
-  if(!el || el.id==="hidCaptureInput")return;
-  const tag=(el.tagName||"").toLowerCase();
-  if(tag==="input" || tag==="textarea" || tag==="select" || el.isContentEditable){
-    setTimeout(()=>{
-      const a=document.activeElement;
-      const atag=(a?.tagName||"").toLowerCase();
-      const stillEditing=a && a.id!=="hidCaptureInput" &&
-        (atag==="input" || atag==="textarea" || atag==="select" || a.isContentEditable);
-      scannerTextEditing=!!stillEditing;
-      if(!scannerTextEditing)resumeExternalScannerFocus();
-    },150);
-  }
+  if(!isUserTextEditingElement(e.target))return;
+
+  setTimeout(()=>{
+    const a=document.activeElement;
+    if(isUserTextEditingElement(a)){
+      // User moved directly to another text/search field.
+      suspendExternalScannerForTextEntry();
+      return;
+    }
+    restoreExternalScannerAfterTextEntry();
+  },220);
 });
 
 document.addEventListener("visibilitychange",()=>{
