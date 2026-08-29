@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.38 / 更新 2026-08-29 07:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.38 / 更新 2026-08-29 10:00</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3417,7 +3417,7 @@ button.flashActionAccepted{
 <script src="./ppt-print-layout.js"></script>
 <script>
 const APP_VERSION="v4.4.38";
-const APP_UPDATED="2026-08-29 07:46";
+const APP_UPDATED="2026-08-29 10:00";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5257,28 +5257,10 @@ function decodeScannerAsciiDigitStream(raw){
   return "";
 }
 
-function normalizeExternalScannerImeId(raw){
-  let t=String(raw??"");
-  try{t=t.normalize("NFKC");}catch(e){}
-  t=t.replace(/[\u0000-\u001F\u007F\uFEFF\s\u3000]/g,"");
-
-  // On iPhone with Japanese IME, Tera's physical A key may arrive as Japanese "あ".
-  // Preserve the following six digits exactly; do not run this through ASCII-stream decoding.
-  const aIme=t.match(/^[あア]([0-9]{6})$/);
-  if(aIme)return "A"+aIme[1];
-
-  return "";
-}
-
 function extractExternalScannerId(raw){
   let t=String(raw??"");
   try{t=t.normalize("NFKC");}catch(e){}
   t=t.replace(/[\u0000-\u001F\u007F\uFEFF]/g,"").trim();
-
-  const imeFixed=normalizeExternalScannerImeId(t);
-  if(imeFixed){
-    return imeFixed;
-  }
 
   const fixed=t.match(/([ABCWPSabcwps]\d{6})/);
   if(fixed){
@@ -5306,9 +5288,7 @@ function showExternalScannerReceived(raw){
     .replace(/[\u0000-\u001F\u007F]/g,"")
     .trim();
 
-  const decoded=visible
-    ? (normalizeExternalScannerImeId(visible) || decodeScannerAsciiDigitStream(visible))
-    : "";
+  const decoded=visible ? decodeScannerAsciiDigitStream(visible) : "";
 
   st.textContent=visible
     ? `スキャン受信：${visible}${decoded?` → ${decoded}`:""}`
@@ -5321,6 +5301,8 @@ function setupExternalScannerCapture(){
 
   let submitTimer=null;
   let rawBuffer="";
+  let physicalCodeStream=false;
+  let physicalCodeLastAt=0;
 
   const clearTimer=()=>{
     if(submitTimer){
@@ -5333,6 +5315,8 @@ function setupExternalScannerCapture(){
     clearTimer();
     hidBuffer="";
     rawBuffer="";
+    physicalCodeStream=false;
+    physicalCodeLastAt=0;
     capture.value="";
   };
 
@@ -5356,7 +5340,7 @@ function setupExternalScannerCapture(){
     clearTimer();
 
     if(/^[ABCWPS]\d{6}$/.test(id)){
-      submitTimer=setTimeout(()=>submitRaw(id),40);
+      submitTimer=setTimeout(()=>submitRaw(id),90);
       return true;
     }
 
@@ -5385,6 +5369,8 @@ function setupExternalScannerCapture(){
       e.stopPropagation();
 
       const now=Date.now();
+      physicalCodeStream=true;
+      physicalCodeLastAt=now;
       if(now-hidLastKeyAt>1500){
         hidBuffer="";
         rawBuffer="";
@@ -5402,6 +5388,7 @@ function setupExternalScannerCapture(){
 
   capture.addEventListener("input",()=>{
     if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    if(physicalCodeStream && Date.now()-physicalCodeLastAt<1200)return;
 
     const val=String(capture.value||"");
     rawBuffer=val;
@@ -5412,6 +5399,10 @@ function setupExternalScannerCapture(){
 
   capture.addEventListener("beforeinput",e=>{
     if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    if(physicalCodeStream && Date.now()-physicalCodeLastAt<1200){
+      e.preventDefault();
+      return;
+    }
     const data=String(e.data||"");
     if(!data)return;
 
@@ -5451,6 +5442,8 @@ function setupExternalScannerCapture(){
       e.preventDefault();
 
       const now=Date.now();
+      physicalCodeStream=true;
+      physicalCodeLastAt=now;
       if(now-hidLastKeyAt>1500){
         hidBuffer="";
         rawBuffer="";
