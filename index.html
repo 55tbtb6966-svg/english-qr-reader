@@ -2806,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.37 / 更新 2026-08-28 00:44</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.38 / 更新 2026-08-29 07:46</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3416,8 +3416,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.37";
-const APP_UPDATED="2026-08-28 00:44";
+const APP_VERSION="v4.4.38";
+const APP_UPDATED="2026-08-29 07:46";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -5257,10 +5257,28 @@ function decodeScannerAsciiDigitStream(raw){
   return "";
 }
 
+function normalizeExternalScannerImeId(raw){
+  let t=String(raw??"");
+  try{t=t.normalize("NFKC");}catch(e){}
+  t=t.replace(/[\u0000-\u001F\u007F\uFEFF\s\u3000]/g,"");
+
+  // On iPhone with Japanese IME, Tera's physical A key may arrive as Japanese "あ".
+  // Preserve the following six digits exactly; do not run this through ASCII-stream decoding.
+  const aIme=t.match(/^[あア]([0-9]{6})$/);
+  if(aIme)return "A"+aIme[1];
+
+  return "";
+}
+
 function extractExternalScannerId(raw){
   let t=String(raw??"");
   try{t=t.normalize("NFKC");}catch(e){}
   t=t.replace(/[\u0000-\u001F\u007F\uFEFF]/g,"").trim();
+
+  const imeFixed=normalizeExternalScannerImeId(t);
+  if(imeFixed){
+    return imeFixed;
+  }
 
   const fixed=t.match(/([ABCWPSabcwps]\d{6})/);
   if(fixed){
@@ -5288,7 +5306,9 @@ function showExternalScannerReceived(raw){
     .replace(/[\u0000-\u001F\u007F]/g,"")
     .trim();
 
-  const decoded=visible ? decodeScannerAsciiDigitStream(visible) : "";
+  const decoded=visible
+    ? (normalizeExternalScannerImeId(visible) || decodeScannerAsciiDigitStream(visible))
+    : "";
 
   st.textContent=visible
     ? `スキャン受信：${visible}${decoded?` → ${decoded}`:""}`
