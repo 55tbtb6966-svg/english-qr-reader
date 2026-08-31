@@ -1621,18 +1621,40 @@
 }
 .flashTouchGuide{
   position:absolute;
-  left:0;
-  right:0;
-  bottom:4px;
-  display:grid;
-  grid-template-columns:1fr 2fr 1fr;
+  inset:0;
   pointer-events:none;
-  opacity:.34;
+  opacity:.36;
   font-size:.68rem;
   color:#667085;
-  text-align:center;
 }
-.flashTouchGuide span{
+.flashTouchEdge{
+  position:absolute;
+  top:8px;
+  bottom:8px;
+  width:25%;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+.flashTouchEdgeLeft{
+  left:0;
+  align-items:flex-start;
+}
+.flashTouchEdgeRight{
+  right:0;
+  align-items:flex-end;
+}
+.flashTouchEdgeLabel{
+  padding:3px 7px;
+  line-height:1;
+  white-space:nowrap;
+}
+.flashTouchCenterLabel{
+  position:absolute;
+  left:25%;
+  right:25%;
+  bottom:6px;
+  text-align:center;
   padding:2px 4px;
 }
 .flashFullscreenControl{
@@ -2894,7 +2916,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.51 / 更新 2026-08-31 19:33</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.52 / 更新 2026-08-31 19:45</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3437,7 +3459,15 @@ button.flashActionAccepted{
         <div class="flashPane flashPaneBottom" id="flashBottom" hidden></div>
       </div>
       <div class="flashTouchGuide" aria-hidden="true">
-        <span>前</span><span>表 / 裏</span><span>次</span>
+        <div class="flashTouchEdge flashTouchEdgeLeft">
+          <span class="flashTouchEdgeLabel" id="flashTouchPrevTop">前♪</span>
+          <span class="flashTouchEdgeLabel" id="flashTouchPrevBottom">前</span>
+        </div>
+        <div class="flashTouchCenterLabel">表 / 裏</div>
+        <div class="flashTouchEdge flashTouchEdgeRight">
+          <span class="flashTouchEdgeLabel" id="flashTouchNextTop">次♪</span>
+          <span class="flashTouchEdgeLabel" id="flashTouchNextBottom">次</span>
+        </div>
       </div>
     </div>
     <div class="flashControlBar">
@@ -3512,8 +3542,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.51";
-const APP_UPDATED="2026-08-31 19:33";
+const APP_VERSION="v4.4.52";
+const APP_UPDATED="2026-08-31 19:45";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6968,17 +6998,31 @@ function flashTouchSpeakPosition(){
     : "top";
 }
 
+function updateFlashTouchGuideLabels(){
+  const speakTop=flashTouchSpeakPosition()==="top";
+  const prevTop=$("flashTouchPrevTop");
+  const prevBottom=$("flashTouchPrevBottom");
+  const nextTop=$("flashTouchNextTop");
+  const nextBottom=$("flashTouchNextBottom");
+  if(prevTop)prevTop.textContent=speakTop ? "前♪" : "前";
+  if(prevBottom)prevBottom.textContent=speakTop ? "前" : "前♪";
+  if(nextTop)nextTop.textContent=speakTop ? "次♪" : "次";
+  if(nextBottom)nextBottom.textContent=speakTop ? "次" : "次♪";
+}
+
 function updateFlashTouchSpeakHint(){
   const hint=$("flashTouchSpeakHint");
-  if(!hint)return;
   const pos=flashTouchSpeakPosition();
   const mode=flashTouchSpeakMode();
   const spoken=mode==="current" ? "現在のカードを発音してから移動" : "移動先のカードを発音";
-  if(pos==="bottom"){
-    hint.textContent=`左右25%：上＝発音なしで移動／下＝${spoken}。中央50%＝表裏。`;
-  }else{
-    hint.textContent=`左右25%：上＝${spoken}／下＝発音なしで移動。中央50%＝表裏。`;
+  if(hint){
+    if(pos==="bottom"){
+      hint.textContent=`左右25%：上＝発音なしで移動／下＝${spoken}。中央50%＝表裏。`;
+    }else{
+      hint.textContent=`左右25%：上＝${spoken}／下＝発音なしで移動。中央50%＝表裏。`;
+    }
   }
+  updateFlashTouchGuideLabels();
 }
 
 function loadFlashTouchSpeakSetting(){
