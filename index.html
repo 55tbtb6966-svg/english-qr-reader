@@ -2791,69 +2791,6 @@ button.flashActionAccepted{
 .numbersCsvHint{
   margin:0 0 10px;
 }
-
-/* v4.4.42: manually shown search keyboard. Hidden unless the user explicitly opens it. */
-.simpleSearchKeyboardWrap{
-  display:none;
-  margin-top:10px;
-}
-.simpleSearchKeyboardWrap.open{
-  display:block;
-}
-.simpleSearchKeyboard{
-  padding:10px;
-  border:1px solid #d9dee7;
-  border-radius:14px;
-  background:#f4f6f9;
-  box-sizing:border-box;
-}
-.simpleKbRow,.simpleKbModeRow{
-  display:flex;
-  gap:5px;
-  margin-bottom:5px;
-  align-items:center;
-}
-.simpleKbKey{
-  flex:1 1 0;
-  min-width:0;
-  min-height:42px;
-  padding:6px 3px;
-  border:1px solid #cfd5df;
-  border-radius:9px;
-  background:#fff;
-  font-weight:700;
-  font-size:.95rem;
-  line-height:1;
-  touch-action:manipulation;
-}
-.simpleKbPrefix{background:#eef3fb}
-.simpleKbWide{flex:2.1 1 0}
-.simpleKbWider{flex:3 1 0}
-.simpleKbPrimary{background:#111;color:#fff;border-color:#111}
-.simpleKbDanger{background:#fff6f6}
-.simpleKbModeBtn{
-  min-height:38px;
-  padding:6px 12px;
-  border-radius:9px;
-}
-.simpleKbModeBtn.active{
-  background:#111;
-  color:#fff;
-}
-.simpleKbHint{
-  margin:5px 0 0;
-  font-size:.78rem;
-  color:#667085;
-}
-@media(max-width:700px){
-  .simpleSearchKeyboard{
-    padding:8px;
-  }
-  .simpleKbKey{
-    min-height:40px;
-    font-size:.88rem;
-  }
-}
 </style>
 </head>
 <body>
@@ -2869,7 +2806,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.42 / 更新 2026-08-31 12:42</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.43 / 更新 2026-08-31 12:50</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3123,14 +3060,11 @@ button.flashActionAccepted{
 <div class="dataSearchArea" style="margin-top:14px;">
   <label><span>検索（スペース区切りAND検索／A: B: C: N: W: P: S: で共通IDを指定・全角：も可）</span>
     <input id="searchText" placeholder="例：apple red / N:2500 / W: / P: / S:" type="text"/>
+<div class="row" style="margin-top:6px;">
+  <button type="button" id="showIosKeyboardDataBtn" class="secondary">iPhoneキーボード</button>
+</div>
   </label>
   <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
-<div class="row" style="margin-top:8px;">
-  <button type="button" id="simpleKeyboardToggleBtn" class="secondary">簡易キーボードを表示</button>
-</div>
-<div id="simpleSearchKeyboardWrap" class="simpleSearchKeyboardWrap">
-  <div id="simpleSearchKeyboard" class="simpleSearchKeyboard"></div>
-</div>
   <div class="dataSearchPageSize">
     <label><span>1ページの件数</span>
       <select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
@@ -3221,7 +3155,10 @@ button.flashActionAccepted{
 <h3>検索結果から作る</h3>
 <p>ID・英語・日本語・日本語読み・Commentなどをスペース区切りAND検索できます。N: / W: / P: / S: で共通IDだけに絞れます。</p>
 <p class="hint">データ管理でチェックした項目がある場合は、その項目の中から検索します。チェックがない場合は、全項目から検索します。</p>
-<label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/></label>
+<label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/>
+<div class="row" style="margin-top:6px;">
+  <button type="button" id="showIosKeyboardQrBtn" class="secondary">iPhoneキーボード</button>
+</div></label>
 <div class="row" style="margin-top:10px;"><button class="secondary" id="makeSearchQrBtn">検索結果から作る</button></div>
 </div>
 <div class="grid2" style="margin-top:10px;">
@@ -3346,6 +3283,9 @@ button.flashActionAccepted{
   <label>
     <span>検索（検索結果から作る用）</span>
     <input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など">
+<div class="row" style="margin-top:6px;">
+  <button type="button" id="showIosKeyboardFlashBtn" class="secondary">iPhoneキーボード</button>
+</div>
   </label>
   <div class="row" style="margin-top:10px;">
     <button type="button" id="flashFromSearchBtn" class="secondary">検索結果から作る</button>
@@ -3485,8 +3425,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.42";
-const APP_UPDATED="2026-08-31 12:42";
+const APP_VERSION="v4.4.43";
+const APP_UPDATED="2026-08-31 12:50";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7053,7 +6993,7 @@ $("flashCard")?.addEventListener("keydown",e=>{
   else if(e.key==="ArrowRight"){e.preventDefault();stepFlashcard(1);}
 });
 loadFlashTouchSpeakSetting();
-initManualSimpleKeyboard();
+initIosKeyboardButtons();
 $("flashSearch")?.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
     e.preventDefault();
@@ -7344,217 +7284,51 @@ document.addEventListener("click",e=>{
 
 
 
-let simpleKeyboardVisible=false;
-let simpleKeyboardMode="abc";
-let simpleKeyboardTarget=null;
-
-function activeSimpleKeyboardTarget(){
-  // Prefer a currently focused supported search field.
-  const a=document.activeElement;
-  if(a && ["searchText","qrSearch","flashSearch"].includes(a.id))return a;
-
-  // Otherwise use the search field on the visible panel.
-  for(const id of ["searchText","qrSearch","flashSearch"]){
-    const el=$(id);
-    if(el && el.offsetParent!==null)return el;
-  }
-  return $("searchText");
-}
-
-function simpleKeyboardRows(){
-  if(simpleKeyboardMode==="kana"){
-    return [
-      ["あ","い","う","え","お","か","き","く","け","こ"],
-      ["さ","し","す","せ","そ","た","ち","つ","て","と"],
-      ["な","に","ぬ","ね","の","は","ひ","ふ","へ","ほ"],
-      ["ま","み","む","め","も","や","ゆ","よ","ら","り"],
-      ["る","れ","ろ","わ","を","ん","ー","゛","゜"]
-    ];
-  }
-  if(simpleKeyboardMode==="123"){
-    return [
-      ["1","2","3","4","5","6","7","8","9","0"],
-      [".",":","-","_","/","(",")","+","×","÷"]
-    ];
-  }
-  return [
-    ["Q","W","E","R","T","Y","U","I","O","P"],
-    ["A","S","D","F","G","H","J","K","L"],
-    ["Z","X","C","V","B","N","M"]
-  ];
-}
-
-function simpleKeyboardInsert(text){
-  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
-  if(!el)return;
-  simpleKeyboardTarget=el;
-
-  const value=String(el.value||"");
-  const start=Number.isFinite(el.selectionStart)?el.selectionStart:value.length;
-  const end=Number.isFinite(el.selectionEnd)?el.selectionEnd:value.length;
-
-  el.value=value.slice(0,start)+text+value.slice(end);
-  const pos=start+text.length;
-  try{el.setSelectionRange(pos,pos);}catch(e){}
-  el.dispatchEvent(new Event("input",{bubbles:true}));
-}
-
-function simpleKeyboardBackspace(){
-  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
-  if(!el)return;
-  simpleKeyboardTarget=el;
-
-  const value=String(el.value||"");
-  let start=Number.isFinite(el.selectionStart)?el.selectionStart:value.length;
-  let end=Number.isFinite(el.selectionEnd)?el.selectionEnd:value.length;
-  if(start===end && start>0)start--;
-
-  el.value=value.slice(0,start)+value.slice(end);
-  try{el.setSelectionRange(start,start);}catch(e){}
-  el.dispatchEvent(new Event("input",{bubbles:true}));
-}
-
-function simpleKeyboardPrefix(prefix){
-  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
-  if(!el)return;
-  simpleKeyboardTarget=el;
-
-  let value=String(el.value||"");
-  value=value.replace(/^\s*[ABCNWPSabcnwps]\s*:\s*/,"");
-  el.value=prefix+":"+value;
-  try{el.setSelectionRange(el.value.length,el.value.length);}catch(e){}
-  el.dispatchEvent(new Event("input",{bubbles:true}));
-}
-
-function simpleKeyboardRunSearch(){
-  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+function requestIosSoftwareKeyboardFor(el){
   if(!el)return;
 
-  if(el.id==="searchText"){
-    runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
-  }else if(el.id==="qrSearch"){
-    runSearchWithFeedback($("makeSearchQrBtn"),buildQrFromSearch);
-  }else if(el.id==="flashSearch"){
-    runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
+  // Stop the external HID capture only for this explicit user action.
+  suspendExternalScannerForTextEntry();
+
+  try{el.readOnly=false;}catch(e){}
+  try{el.disabled=false;}catch(e){}
+
+  // Focus immediately in the button's tap/click gesture, then once more
+  // on the next task because iOS may briefly keep the hardware-keyboard bar.
+  try{el.focus({preventScroll:true});}catch(e){
+    try{el.focus();}catch(_){}
   }
+
+  try{
+    const len=String(el.value||"").length;
+    el.setSelectionRange(len,len);
+  }catch(e){}
+
+  setTimeout(()=>{
+    try{el.focus({preventScroll:true});}catch(e){
+      try{el.focus();}catch(_){}
+    }
+  },30);
 }
 
-function renderSimpleKeyboard(){
-  const host=$("simpleSearchKeyboard");
-  if(!host)return;
-  host.innerHTML="";
+function initIosKeyboardButtons(){
+  [
+    ["showIosKeyboardDataBtn","searchText"],
+    ["showIosKeyboardQrBtn","qrSearch"],
+    ["showIosKeyboardFlashBtn","flashSearch"]
+  ].forEach(([btnId,inputId])=>{
+    const btn=$(btnId), el=$(inputId);
+    if(!btn || !el)return;
 
-  const prefix=document.createElement("div");
-  prefix.className="simpleKbRow";
-  ["A","B","C","N","W","P","S"].forEach(p=>{
-    const b=document.createElement("button");
-    b.type="button";
-    b.className="simpleKbKey simpleKbPrefix";
-    b.textContent=p+":";
-    b.addEventListener("click",()=>simpleKeyboardPrefix(p));
-    prefix.appendChild(b);
-  });
-  host.appendChild(prefix);
-
-  const modes=document.createElement("div");
-  modes.className="simpleKbModeRow";
-  [["abc","ABC"],["kana","かな"],["123","123"]].forEach(([mode,label])=>{
-    const b=document.createElement("button");
-    b.type="button";
-    b.className="secondary simpleKbModeBtn"+(simpleKeyboardMode===mode?" active":"");
-    b.textContent=label;
-    b.addEventListener("click",()=>{
-      simpleKeyboardMode=mode;
-      renderSimpleKeyboard();
+    btn.addEventListener("click",e=>{
+      e.preventDefault();
+      requestIosSoftwareKeyboardFor(el);
     });
-    modes.appendChild(b);
-  });
-  host.appendChild(modes);
 
-  simpleKeyboardRows().forEach(keys=>{
-    const row=document.createElement("div");
-    row.className="simpleKbRow";
-    keys.forEach(key=>{
-      const b=document.createElement("button");
-      b.type="button";
-      b.className="simpleKbKey";
-      b.textContent=key;
-      b.addEventListener("click",()=>simpleKeyboardInsert(key));
-      row.appendChild(b);
-    });
-    host.appendChild(row);
-  });
-
-  const actions=document.createElement("div");
-  actions.className="simpleKbRow";
-
-  const clear=document.createElement("button");
-  clear.type="button"; clear.className="simpleKbKey simpleKbDanger"; clear.textContent="クリア";
-  clear.addEventListener("click",()=>{
-    const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
-    if(!el)return;
-    simpleKeyboardTarget=el;
-    el.value="";
-    el.dispatchEvent(new Event("input",{bubbles:true}));
-  });
-
-  const space=document.createElement("button");
-  space.type="button"; space.className="simpleKbKey simpleKbWide"; space.textContent="空白";
-  space.addEventListener("click",()=>simpleKeyboardInsert(" "));
-
-  const back=document.createElement("button");
-  back.type="button"; back.className="simpleKbKey simpleKbWide"; back.textContent="⌫";
-  back.addEventListener("click",simpleKeyboardBackspace);
-
-  const search=document.createElement("button");
-  search.type="button"; search.className="simpleKbKey simpleKbWider simpleKbPrimary"; search.textContent="検索";
-  search.addEventListener("click",simpleKeyboardRunSearch);
-
-  actions.append(clear,space,back,search);
-  host.appendChild(actions);
-
-  const hint=document.createElement("div");
-  hint.className="simpleKbHint";
-  hint.textContent="必要な時だけ表示します。消している間は従来の入力動作です。";
-  host.appendChild(hint);
-}
-
-function setSimpleKeyboardVisible(show){
-  simpleKeyboardVisible=!!show;
-  const wrap=$("simpleSearchKeyboardWrap");
-  const btn=$("simpleKeyboardToggleBtn");
-  if(wrap)wrap.classList.toggle("open",simpleKeyboardVisible);
-  if(btn)btn.textContent=simpleKeyboardVisible?"簡易キーボードを消す":"簡易キーボードを表示";
-
-  if(simpleKeyboardVisible){
-    simpleKeyboardTarget=activeSimpleKeyboardTarget();
-    // Stop the HID capture only while the manual keyboard is open.
-    suspendExternalScannerForTextEntry();
-    renderSimpleKeyboard();
-  }else{
-    simpleKeyboardTarget=null;
-    // Return to the pre-keyboard v4.4.40 behavior.
-    restoreExternalScannerAfterTextEntry();
-  }
-}
-
-function initManualSimpleKeyboard(){
-  const btn=$("simpleKeyboardToggleBtn");
-  if(!btn)return;
-  setSimpleKeyboardVisible(false);
-  btn.addEventListener("click",()=>{
-    setSimpleKeyboardVisible(!simpleKeyboardVisible);
-  });
-
-  ["searchText","qrSearch","flashSearch"].forEach(id=>{
-    const el=$(id);
-    if(!el)return;
-    el.addEventListener("focus",()=>{
-      if(simpleKeyboardVisible)simpleKeyboardTarget=el;
-    });
-    el.addEventListener("click",()=>{
-      if(simpleKeyboardVisible)simpleKeyboardTarget=el;
-    });
+    btn.addEventListener("touchend",e=>{
+      e.preventDefault();
+      requestIosSoftwareKeyboardFor(el);
+    },{passive:false});
   });
 }
 
