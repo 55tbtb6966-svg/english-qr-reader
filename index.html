@@ -2792,14 +2792,68 @@ button.flashActionAccepted{
   margin:0 0 10px;
 }
 
-.simpleSearchKeyboard{display:none;margin-top:10px;padding:10px;border:1px solid #d9dee7;border-radius:14px;background:#f4f6f9;box-sizing:border-box}
-.simpleSearchKeyboard.open{display:block}
-.simpleKbTopbar,.simpleKbModeRow,.simpleKbRow{display:flex;gap:5px;align-items:center;margin-bottom:5px}
-.simpleKbTopbar{justify-content:space-between;margin-bottom:8px}
-.simpleKbKey{flex:1 1 0;min-width:0;min-height:42px;padding:6px 3px;border:1px solid #cfd5df;border-radius:9px;background:#fff;font-weight:700;font-size:.95rem;line-height:1;touch-action:manipulation}
-.simpleKbPrefix{background:#eef3fb}.simpleKbWide{flex:2.2 1 0}.simpleKbWider{flex:3.2 1 0}.simpleKbDanger{background:#fff6f6}.simpleKbPrimary{background:#111;color:#fff;border-color:#111}
-.simpleKbModeBtn{min-height:38px;padding:6px 12px;border-radius:9px}.simpleKbModeBtn.active{background:#111;color:#fff}.simpleKbHint{margin:4px 0 0;font-size:.78rem;color:#667085}
-@media(max-width:700px){.simpleSearchKeyboard{position:sticky;bottom:6px;z-index:40;box-shadow:0 8px 28px rgba(0,0,0,.12)}.simpleKbKey{min-height:40px;font-size:.9rem}}
+/* v4.4.42: manually shown search keyboard. Hidden unless the user explicitly opens it. */
+.simpleSearchKeyboardWrap{
+  display:none;
+  margin-top:10px;
+}
+.simpleSearchKeyboardWrap.open{
+  display:block;
+}
+.simpleSearchKeyboard{
+  padding:10px;
+  border:1px solid #d9dee7;
+  border-radius:14px;
+  background:#f4f6f9;
+  box-sizing:border-box;
+}
+.simpleKbRow,.simpleKbModeRow{
+  display:flex;
+  gap:5px;
+  margin-bottom:5px;
+  align-items:center;
+}
+.simpleKbKey{
+  flex:1 1 0;
+  min-width:0;
+  min-height:42px;
+  padding:6px 3px;
+  border:1px solid #cfd5df;
+  border-radius:9px;
+  background:#fff;
+  font-weight:700;
+  font-size:.95rem;
+  line-height:1;
+  touch-action:manipulation;
+}
+.simpleKbPrefix{background:#eef3fb}
+.simpleKbWide{flex:2.1 1 0}
+.simpleKbWider{flex:3 1 0}
+.simpleKbPrimary{background:#111;color:#fff;border-color:#111}
+.simpleKbDanger{background:#fff6f6}
+.simpleKbModeBtn{
+  min-height:38px;
+  padding:6px 12px;
+  border-radius:9px;
+}
+.simpleKbModeBtn.active{
+  background:#111;
+  color:#fff;
+}
+.simpleKbHint{
+  margin:5px 0 0;
+  font-size:.78rem;
+  color:#667085;
+}
+@media(max-width:700px){
+  .simpleSearchKeyboard{
+    padding:8px;
+  }
+  .simpleKbKey{
+    min-height:40px;
+    font-size:.88rem;
+  }
+}
 </style>
 </head>
 <body>
@@ -2815,7 +2869,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.41 / 更新 2026-08-31 12:35</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.42 / 更新 2026-08-31 12:42</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3071,13 +3125,12 @@ button.flashActionAccepted{
     <input id="searchText" placeholder="例：apple red / N:2500 / W: / P: / S:" type="text"/>
   </label>
   <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
-<div class="row" style="margin-top:8px;align-items:center;">
-  <label class="qrCheckLabel" style="margin:0;">
-    <input id="simpleSearchKeyboardEnabled" type="checkbox" checked>
-    <span>検索用簡易キーボード ON</span>
-  </label>
+<div class="row" style="margin-top:8px;">
+  <button type="button" id="simpleKeyboardToggleBtn" class="secondary">簡易キーボードを表示</button>
 </div>
-<div id="simpleSearchKeyboardHost"></div>
+<div id="simpleSearchKeyboardWrap" class="simpleSearchKeyboardWrap">
+  <div id="simpleSearchKeyboard" class="simpleSearchKeyboard"></div>
+</div>
   <div class="dataSearchPageSize">
     <label><span>1ページの件数</span>
       <select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
@@ -3432,8 +3485,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.41";
-const APP_UPDATED="2026-08-31 12:35";
+const APP_VERSION="v4.4.42";
+const APP_UPDATED="2026-08-31 12:42";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7000,7 +7053,7 @@ $("flashCard")?.addEventListener("keydown",e=>{
   else if(e.key==="ArrowRight"){e.preventDefault();stepFlashcard(1);}
 });
 loadFlashTouchSpeakSetting();
-initSimpleSearchKeyboard();
+initManualSimpleKeyboard();
 $("flashSearch")?.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
     e.preventDefault();
@@ -7128,7 +7181,6 @@ $("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
   const el=$(id);
   if(!el)return;
   const forceKeyboard=()=>{
-    if(simpleKeyboardEnabled())return;
     suspendExternalScannerForTextEntry();
     try{el.readOnly=false;}catch(e){}
     setTimeout(()=>{
@@ -7292,79 +7344,220 @@ document.addEventListener("click",e=>{
 
 
 
-const SIMPLE_KB_STORAGE_KEY="simpleSearchKeyboardEnabledV1";
-let simpleKbTarget=null;
-let simpleKbMode="abc";
+let simpleKeyboardVisible=false;
+let simpleKeyboardMode="abc";
+let simpleKeyboardTarget=null;
 
-function simpleKeyboardEnabled(){
-  const el=$("simpleSearchKeyboardEnabled");
-  return el ? !!el.checked : localStorage.getItem(SIMPLE_KB_STORAGE_KEY)!=="off";
+function activeSimpleKeyboardTarget(){
+  // Prefer a currently focused supported search field.
+  const a=document.activeElement;
+  if(a && ["searchText","qrSearch","flashSearch"].includes(a.id))return a;
+
+  // Otherwise use the search field on the visible panel.
+  for(const id of ["searchText","qrSearch","flashSearch"]){
+    const el=$(id);
+    if(el && el.offsetParent!==null)return el;
+  }
+  return $("searchText");
 }
-function setSimpleKeyboardEnabled(on){
-  localStorage.setItem(SIMPLE_KB_STORAGE_KEY,on?"on":"off");
-  const cb=$("simpleSearchKeyboardEnabled"); if(cb)cb.checked=!!on;
-  ["searchText","qrSearch","flashSearch"].forEach(id=>{const el=$(id);if(el)el.readOnly=!!on;});
-  if(!on)closeSimpleSearchKeyboard();
+
+function simpleKeyboardRows(){
+  if(simpleKeyboardMode==="kana"){
+    return [
+      ["あ","い","う","え","お","か","き","く","け","こ"],
+      ["さ","し","す","せ","そ","た","ち","つ","て","と"],
+      ["な","に","ぬ","ね","の","は","ひ","ふ","へ","ほ"],
+      ["ま","み","む","め","も","や","ゆ","よ","ら","り"],
+      ["る","れ","ろ","わ","を","ん","ー","゛","゜"]
+    ];
+  }
+  if(simpleKeyboardMode==="123"){
+    return [
+      ["1","2","3","4","5","6","7","8","9","0"],
+      [".",":","-","_","/","(",")","+","×","÷"]
+    ];
+  }
+  return [
+    ["Q","W","E","R","T","Y","U","I","O","P"],
+    ["A","S","D","F","G","H","J","K","L"],
+    ["Z","X","C","V","B","N","M"]
+  ];
 }
-function insertIntoSimpleKbTarget(text){
-  const el=simpleKbTarget;if(!el)return;
-  const v=String(el.value||""); const s=Number.isFinite(el.selectionStart)?el.selectionStart:v.length; const e=Number.isFinite(el.selectionEnd)?el.selectionEnd:v.length;
-  el.value=v.slice(0,s)+text+v.slice(e); const pos=s+text.length; try{el.setSelectionRange(pos,pos)}catch{}
+
+function simpleKeyboardInsert(text){
+  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+  if(!el)return;
+  simpleKeyboardTarget=el;
+
+  const value=String(el.value||"");
+  const start=Number.isFinite(el.selectionStart)?el.selectionStart:value.length;
+  const end=Number.isFinite(el.selectionEnd)?el.selectionEnd:value.length;
+
+  el.value=value.slice(0,start)+text+value.slice(end);
+  const pos=start+text.length;
+  try{el.setSelectionRange(pos,pos);}catch(e){}
   el.dispatchEvent(new Event("input",{bubbles:true}));
 }
-function backspaceSimpleKb(){
-  const el=simpleKbTarget;if(!el)return;
-  const v=String(el.value||"");let s=Number.isFinite(el.selectionStart)?el.selectionStart:v.length;let e=Number.isFinite(el.selectionEnd)?el.selectionEnd:v.length;
-  if(s===e&&s>0)s--; el.value=v.slice(0,s)+v.slice(e);try{el.setSelectionRange(s,s)}catch{};el.dispatchEvent(new Event("input",{bubbles:true}));
+
+function simpleKeyboardBackspace(){
+  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+  if(!el)return;
+  simpleKeyboardTarget=el;
+
+  const value=String(el.value||"");
+  let start=Number.isFinite(el.selectionStart)?el.selectionStart:value.length;
+  let end=Number.isFinite(el.selectionEnd)?el.selectionEnd:value.length;
+  if(start===end && start>0)start--;
+
+  el.value=value.slice(0,start)+value.slice(end);
+  try{el.setSelectionRange(start,start);}catch(e){}
+  el.dispatchEvent(new Event("input",{bubbles:true}));
 }
-function replacePrefix(prefix){
-  const el=simpleKbTarget;if(!el)return;
-  let v=String(el.value||"").replace(/^\s*[ABCNWPSabcnwps]\s*:\s*/,"");
-  el.value=prefix+":"+v;try{el.setSelectionRange(el.value.length,el.value.length)}catch{};el.dispatchEvent(new Event("input",{bubbles:true}));
+
+function simpleKeyboardPrefix(prefix){
+  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+  if(!el)return;
+  simpleKeyboardTarget=el;
+
+  let value=String(el.value||"");
+  value=value.replace(/^\s*[ABCNWPSabcnwps]\s*:\s*/,"");
+  el.value=prefix+":"+value;
+  try{el.setSelectionRange(el.value.length,el.value.length);}catch(e){}
+  el.dispatchEvent(new Event("input",{bubbles:true}));
 }
-function runSimpleKbSearch(){
-  if(!simpleKbTarget)return;
-  if(simpleKbTarget.id==="searchText")runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
-  else if(simpleKbTarget.id==="qrSearch")runSearchWithFeedback($("makeSearchQrBtn"),buildQrFromSearch);
-  else if(simpleKbTarget.id==="flashSearch")runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
-}
-function simpleKbRows(){
-  if(simpleKbMode==="kana")return [["あ","い","う","え","お","か","き","く","け","こ"],["さ","し","す","せ","そ","た","ち","つ","て","と"],["な","に","ぬ","ね","の","は","ひ","ふ","へ","ほ"],["ま","み","む","め","も","や","ゆ","よ","ら","り"],["る","れ","ろ","わ","を","ん","ー","゛","゜"," "]];
-  if(simpleKbMode==="123")return [["1","2","3","4","5","6","7","8","9","0"],[".",":","-","_","/","(",")","+","×","÷"]];
-  return [["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L"],["Z","X","C","V","B","N","M"]];
-}
-function renderSimpleSearchKeyboard(){
-  const host=$("simpleSearchKeyboardHost");if(!host)return;
-  if(!simpleKeyboardEnabled()||!simpleKbTarget){host.innerHTML="";return;}
-  const box=document.createElement("div");box.className="simpleSearchKeyboard open";
-  const top=document.createElement("div");top.className="simpleKbTopbar";top.innerHTML='<div style="font-weight:800;">検索用キーボード</div><button type="button" class="secondary simpleKbModeBtn" data-action="close">閉じる</button>';box.appendChild(top);
-  const pr=document.createElement("div");pr.className="simpleKbRow";["A","B","C","N","W","P","S"].forEach(x=>{const b=document.createElement("button");b.type="button";b.className="simpleKbKey simpleKbPrefix";b.textContent=x+":";b.dataset.prefix=x;pr.appendChild(b)});box.appendChild(pr);
-  const modes=document.createElement("div");modes.className="simpleKbModeRow";[["abc","ABC"],["kana","かな"],["123","123"]].forEach(([v,l])=>{const b=document.createElement("button");b.type="button";b.className="secondary simpleKbModeBtn"+(simpleKbMode===v?" active":"");b.textContent=l;b.dataset.mode=v;modes.appendChild(b)});box.appendChild(modes);
-  simpleKbRows().forEach(row=>{const rr=document.createElement("div");rr.className="simpleKbRow";row.forEach(k=>{const b=document.createElement("button");b.type="button";b.className="simpleKbKey";b.textContent=k===" "?"空白":k;b.dataset.key=k;rr.appendChild(b)});box.appendChild(rr)});
-  const ar=document.createElement("div");ar.className="simpleKbRow";ar.innerHTML='<button type="button" class="simpleKbKey simpleKbDanger" data-action="clear">クリア</button><button type="button" class="simpleKbKey simpleKbWide" data-action="space">空白</button><button type="button" class="simpleKbKey simpleKbWide" data-action="backspace">⌫</button><button type="button" class="simpleKbKey simpleKbWider simpleKbPrimary" data-action="search">検索</button>';box.appendChild(ar);
-  const h=document.createElement("div");h.className="simpleKbHint";h.textContent="Bluetoothスキャナー接続中でも、このキーボードで検索できます。";box.appendChild(h);
-  box.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;e.preventDefault();
-    if(b.dataset.prefix){replacePrefix(b.dataset.prefix);return}
-    if(b.dataset.mode){simpleKbMode=b.dataset.mode;renderSimpleSearchKeyboard();return}
-    if(b.dataset.key!==undefined){insertIntoSimpleKbTarget(b.dataset.key);return}
-    const a=b.dataset.action;if(a==="clear"){simpleKbTarget.value="";simpleKbTarget.dispatchEvent(new Event("input",{bubbles:true}))}else if(a==="space")insertIntoSimpleKbTarget(" ");else if(a==="backspace")backspaceSimpleKb();else if(a==="search")runSimpleKbSearch();else if(a==="close")closeSimpleSearchKeyboard();
-  });
-  host.innerHTML="";host.appendChild(box);
-}
-function openSimpleSearchKeyboard(el){
-  if(!simpleKeyboardEnabled())return;
-  simpleKbTarget=el;suspendExternalScannerForTextEntry();renderSimpleSearchKeyboard();
-  setTimeout(()=>$("simpleSearchKeyboardHost")?.scrollIntoView({block:"nearest",behavior:"smooth"}),20);
-}
-function closeSimpleSearchKeyboard(){simpleKbTarget=null;const host=$("simpleSearchKeyboardHost");if(host)host.innerHTML=""}
-function initSimpleSearchKeyboard(){
-  const cb=$("simpleSearchKeyboardEnabled");const saved=localStorage.getItem(SIMPLE_KB_STORAGE_KEY)!=="off";
-  if(cb){cb.checked=saved;const sp=cb.closest("label")?.querySelector("span");if(sp)sp.textContent=`検索用簡易キーボード ${saved?"ON":"OFF"}`;
-    cb.addEventListener("change",()=>{const on=cb.checked;setSimpleKeyboardEnabled(on);const s=cb.closest("label")?.querySelector("span");if(s)s.textContent=`検索用簡易キーボード ${on?"ON":"OFF"}`});
+
+function simpleKeyboardRunSearch(){
+  const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+  if(!el)return;
+
+  if(el.id==="searchText"){
+    runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
+  }else if(el.id==="qrSearch"){
+    runSearchWithFeedback($("makeSearchQrBtn"),buildQrFromSearch);
+  }else if(el.id==="flashSearch"){
+    runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
   }
-  setSimpleKeyboardEnabled(saved);
-  ["searchText","qrSearch","flashSearch"].forEach(id=>{const el=$(id);if(!el)return;const h=e=>{if(!simpleKeyboardEnabled())return;e.preventDefault();openSimpleSearchKeyboard(el)};el.addEventListener("click",h);el.addEventListener("touchend",h,{passive:false})});
 }
+
+function renderSimpleKeyboard(){
+  const host=$("simpleSearchKeyboard");
+  if(!host)return;
+  host.innerHTML="";
+
+  const prefix=document.createElement("div");
+  prefix.className="simpleKbRow";
+  ["A","B","C","N","W","P","S"].forEach(p=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="simpleKbKey simpleKbPrefix";
+    b.textContent=p+":";
+    b.addEventListener("click",()=>simpleKeyboardPrefix(p));
+    prefix.appendChild(b);
+  });
+  host.appendChild(prefix);
+
+  const modes=document.createElement("div");
+  modes.className="simpleKbModeRow";
+  [["abc","ABC"],["kana","かな"],["123","123"]].forEach(([mode,label])=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="secondary simpleKbModeBtn"+(simpleKeyboardMode===mode?" active":"");
+    b.textContent=label;
+    b.addEventListener("click",()=>{
+      simpleKeyboardMode=mode;
+      renderSimpleKeyboard();
+    });
+    modes.appendChild(b);
+  });
+  host.appendChild(modes);
+
+  simpleKeyboardRows().forEach(keys=>{
+    const row=document.createElement("div");
+    row.className="simpleKbRow";
+    keys.forEach(key=>{
+      const b=document.createElement("button");
+      b.type="button";
+      b.className="simpleKbKey";
+      b.textContent=key;
+      b.addEventListener("click",()=>simpleKeyboardInsert(key));
+      row.appendChild(b);
+    });
+    host.appendChild(row);
+  });
+
+  const actions=document.createElement("div");
+  actions.className="simpleKbRow";
+
+  const clear=document.createElement("button");
+  clear.type="button"; clear.className="simpleKbKey simpleKbDanger"; clear.textContent="クリア";
+  clear.addEventListener("click",()=>{
+    const el=simpleKeyboardTarget || activeSimpleKeyboardTarget();
+    if(!el)return;
+    simpleKeyboardTarget=el;
+    el.value="";
+    el.dispatchEvent(new Event("input",{bubbles:true}));
+  });
+
+  const space=document.createElement("button");
+  space.type="button"; space.className="simpleKbKey simpleKbWide"; space.textContent="空白";
+  space.addEventListener("click",()=>simpleKeyboardInsert(" "));
+
+  const back=document.createElement("button");
+  back.type="button"; back.className="simpleKbKey simpleKbWide"; back.textContent="⌫";
+  back.addEventListener("click",simpleKeyboardBackspace);
+
+  const search=document.createElement("button");
+  search.type="button"; search.className="simpleKbKey simpleKbWider simpleKbPrimary"; search.textContent="検索";
+  search.addEventListener("click",simpleKeyboardRunSearch);
+
+  actions.append(clear,space,back,search);
+  host.appendChild(actions);
+
+  const hint=document.createElement("div");
+  hint.className="simpleKbHint";
+  hint.textContent="必要な時だけ表示します。消している間は従来の入力動作です。";
+  host.appendChild(hint);
+}
+
+function setSimpleKeyboardVisible(show){
+  simpleKeyboardVisible=!!show;
+  const wrap=$("simpleSearchKeyboardWrap");
+  const btn=$("simpleKeyboardToggleBtn");
+  if(wrap)wrap.classList.toggle("open",simpleKeyboardVisible);
+  if(btn)btn.textContent=simpleKeyboardVisible?"簡易キーボードを消す":"簡易キーボードを表示";
+
+  if(simpleKeyboardVisible){
+    simpleKeyboardTarget=activeSimpleKeyboardTarget();
+    // Stop the HID capture only while the manual keyboard is open.
+    suspendExternalScannerForTextEntry();
+    renderSimpleKeyboard();
+  }else{
+    simpleKeyboardTarget=null;
+    // Return to the pre-keyboard v4.4.40 behavior.
+    restoreExternalScannerAfterTextEntry();
+  }
+}
+
+function initManualSimpleKeyboard(){
+  const btn=$("simpleKeyboardToggleBtn");
+  if(!btn)return;
+  setSimpleKeyboardVisible(false);
+  btn.addEventListener("click",()=>{
+    setSimpleKeyboardVisible(!simpleKeyboardVisible);
+  });
+
+  ["searchText","qrSearch","flashSearch"].forEach(id=>{
+    const el=$(id);
+    if(!el)return;
+    el.addEventListener("focus",()=>{
+      if(simpleKeyboardVisible)simpleKeyboardTarget=el;
+    });
+    el.addEventListener("click",()=>{
+      if(simpleKeyboardVisible)simpleKeyboardTarget=el;
+    });
+  });
+}
+
 function scannerCaptureSuspended(){
   if(scannerTextEditing)return true;
   const a=document.activeElement;
