@@ -2860,8 +2860,20 @@ button.flashActionAccepted{
 .qrCreateTopCard .sizeSettingGrid + .sizeSettingGrid{
   margin-top:8px !important;
 }
+
 .qrCreateTopCard details.advancedSettings > summary{
   padding:10px 14px;
+}
+#flashcardPanel > .card{
+  padding:16px 18px;
+}
+#flashcardPanel .flashQrLikeBar{
+  margin-top:0;
+  padding:10px 12px;
+}
+#flashcardPanel .flashSearchCard,
+#flashcardPanel details.flashAdvancedSettings{
+  margin-top:8px;
 }
 .qrCreateTopCard .advancedSettingsBody{
   padding:4px 12px 12px;
@@ -2882,7 +2894,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.48 / 更新 2026-08-31 18:53</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.49 / 更新 2026-08-31 19:04</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3337,7 +3349,7 @@ button.flashActionAccepted{
 <div class="qrSheet" id="qrSheet"></div>
 <div class="row" id="qrPagerRowBottom">
   <button class="secondary" id="prevQrPageBtnBottom">前のページ</button>
-  <button class="secondary" id="nextQrPageBtnBottom">次のページ</button>
+  <button class="secondary" id="nextQrPageBtnBottom">次のページ(ページ先頭に)</button>
 </div>
 <div class="qrSheet printOnlySheet" id="printQrSheet"></div>
 </section>
@@ -3502,8 +3514,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.48";
-const APP_UPDATED="2026-08-31 18:53";
+const APP_VERSION="v4.4.49";
+const APP_UPDATED="2026-08-31 19:04";
 
 function outputDateTimeStamp(){
   const d=new Date();
