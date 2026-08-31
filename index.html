@@ -2821,6 +2821,13 @@ button.flashActionAccepted{
     padding-right:8px !important;
   }
 }
+
+.qrCreateTopCard{margin-bottom:14px;}
+.qrCreateTopCard .qrCompactBar,
+.qrCreateTopCard .qrMethodCard,
+.qrCreateTopCard .qrCombinedSettingsBox{margin-left:0;margin-right:0;}
+.qrCreateTopCard .grid2{margin-top:10px;}
+
 </style>
 </head>
 <body>
@@ -2836,7 +2843,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.44 / 更新 2026-08-31 14:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.45 / 更新 2026-08-31 15:03</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3166,6 +3173,7 @@ button.flashActionAccepted{
 </div>
 </section>
 <section class="panel" id="qrPanel">
+<div class="card qrCreateTopCard">
 <select aria-hidden="true" id="qrCount" style="display:none;">
 <option>6</option><option>8</option><option>10</option><option>12</option>
 <option>20</option><option>30</option><option selected="">50</option>
@@ -3255,6 +3263,7 @@ button.flashActionAccepted{
 <div class="masterPreviewCanvas"><div class="masterPreviewCard" id="masterPreviewCard"></div></div>
 </div></div>
 </details></div>
+</div>
 </div>
 </div>
 <div class="row">
@@ -3454,8 +3463,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.44";
-const APP_UPDATED="2026-08-31 14:54";
+const APP_VERSION="v4.4.45";
+const APP_UPDATED="2026-08-31 15:03";
 
 function outputDateTimeStamp(){
   const d=new Date();
