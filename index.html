@@ -1552,8 +1552,9 @@
 }
 
 .flashAdvancedSettings{
-  margin-top:12px;
-}
+      border:1px solid #d8dee8 !important;
+      background:#fbfcfe;
+    }
 .flashPane{
   white-space:normal !important;
   overflow-wrap:break-word !important;
@@ -2840,16 +2841,18 @@ button.flashActionAccepted{
   gap:8px;
 }
 .qrCreateTopCard .qrCombinedSettingsBox{
-  border:none;
-  border-radius:0;
+  border:1px solid #d8dee8;
+  border-radius:12px;
   padding:0;
-  background:transparent;
+  background:#fbfcfe;
   margin-top:0;
+  overflow:hidden;
 }
 .qrCreateTopCard .qrCombinedSettingsBox .advancedSettings{
   margin-top:0 !important;
   padding-top:0;
-  border-top:none !important;
+  border:none !important;
+  background:transparent;
 }
 .qrCreateTopCard .qrOptionBox + .qrOptionBox,
 .qrCreateTopCard .qrOptionBox + .sizeSettingGrid,
@@ -2879,7 +2882,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.46 / 更新 2026-08-31 18:37</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.47 / 更新 2026-08-31 18:43</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3499,8 +3502,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.46";
-const APP_UPDATED="2026-08-31 18:37";
+const APP_VERSION="v4.4.47";
+const APP_UPDATED="2026-08-31 18:43";
 
 function outputDateTimeStamp(){
   const d=new Date();
