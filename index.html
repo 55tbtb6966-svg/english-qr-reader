@@ -2791,6 +2791,36 @@ button.flashActionAccepted{
 .numbersCsvHint{
   margin:0 0 10px;
 }
+
+.manualTextInputBtn{
+  min-height:34px !important;
+  height:34px !important;
+  width:auto !important;
+  min-width:86px !important;
+  padding:4px 10px !important;
+  font-size:.78rem !important;
+  font-weight:600 !important;
+}
+.searchActionRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:7px;
+}
+.searchActionRow .searchMainAction{
+  flex:1 1 auto;
+  min-width:0;
+}
+.searchActionRow .manualTextInputBtn{
+  flex:0 0 auto;
+}
+@media(max-width:520px){
+  .manualTextInputBtn{
+    min-width:82px !important;
+    padding-left:8px !important;
+    padding-right:8px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2806,7 +2836,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.43 / 更新 2026-08-31 12:50</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.44 / 更新 2026-08-31 14:54</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3060,11 +3090,11 @@ button.flashActionAccepted{
 <div class="dataSearchArea" style="margin-top:14px;">
   <label><span>検索（スペース区切りAND検索／A: B: C: N: W: P: S: で共通IDを指定・全角：も可）</span>
     <input id="searchText" placeholder="例：apple red / N:2500 / W: / P: / S:" type="text"/>
-<div class="row" style="margin-top:6px;">
-  <button type="button" id="showIosKeyboardDataBtn" class="secondary">iPhoneキーボード</button>
-</div>
   </label>
-  <button class="secondary dataSearchMainBtn" id="dataSearchBtn" type="button">検索</button>
+  <div class="searchActionRow">
+    <button class="secondary dataSearchMainBtn searchMainAction" id="dataSearchBtn" type="button">検索</button>
+    <button type="button" id="showIosKeyboardDataBtn" class="secondary manualTextInputBtn">文字入力</button>
+  </div>
   <div class="dataSearchPageSize">
     <label><span>1ページの件数</span>
       <select id="pageSize"><option>25</option><option selected="">50</option><option>100</option></select>
@@ -3155,15 +3185,18 @@ button.flashActionAccepted{
 <h3>検索結果から作る</h3>
 <p>ID・英語・日本語・日本語読み・Commentなどをスペース区切りAND検索できます。N: / W: / P: / S: で共通IDだけに絞れます。</p>
 <p class="hint">データ管理でチェックした項目がある場合は、その項目の中から検索します。チェックがない場合は、全項目から検索します。</p>
-<label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/>
-<div class="row" style="margin-top:6px;">
-  <button type="button" id="showIosKeyboardQrBtn" class="secondary">iPhoneキーボード</button>
-</div></label>
-<div class="row" style="margin-top:10px;"><button class="secondary" id="makeSearchQrBtn">検索結果から作る</button></div>
+<label><span>検索（検索結果から作る用）</span><input id="qrSearch" placeholder="ID・英語・日本語・日本語読み・Commentを検索" type="text"/></label>
+<div class="searchActionRow">
+  <button class="secondary searchMainAction" id="makeSearchQrBtn">検索結果から作る</button>
+  <button type="button" id="showIosKeyboardQrBtn" class="secondary manualTextInputBtn">文字入力</button>
+</div>
 </div>
 <div class="grid2" style="margin-top:10px;">
 <div style="grid-column:1 / -1;">
-<div class="qrCombinedSettingsBox"><div class="qrOptionBox">
+<div class="qrCombinedSettingsBox"><details class="advancedSettings">
+<summary>詳細設定（カード項目、表示件数、QR・文字サイズ、マスターカード設定）</summary>
+<div class="advancedSettingsBody">
+<div class="qrOptionBox" style="margin-bottom:14px;">
 <div class="qrOptionTitle">QRカードに表示する項目</div>
 <div class="qrOptionRow">
 <label class="qrCheckLabel"><input checked="" id="qrShowId" type="checkbox"/><span>ID</span></label>
@@ -3172,10 +3205,8 @@ button.flashActionAccepted{
 <label class="qrCheckLabel"><input checked="" id="qrShowJapanese" type="checkbox"/><span>日本語</span></label>
 <label class="qrCheckLabel"><input checked="" id="qrShowJapaneseRead" type="checkbox"/><span>日本語読み</span></label>
 </div>
-<p class="hint" style="margin:8px 0 0;">日本語は表示用、 日本語読みは読み上げ用のひらがな表記です。</p>
-</div><details class="advancedSettings">
-<summary>詳細設定（表示件数、QR・文字サイズ、マスターカード設定）</summary>
-<div class="advancedSettingsBody">
+<p class="hint" style="margin:8px 0 0;">日本語は表示用、日本語読みは読み上げ用のひらがな表記です。</p>
+</div>
 <div class="sizeSettingGrid">
 <label><span>QR表示件数の初期値</span>
 <select id="settingQrDefaultCount">
@@ -3283,12 +3314,10 @@ button.flashActionAccepted{
   <label>
     <span>検索（検索結果から作る用）</span>
     <input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など">
-<div class="row" style="margin-top:6px;">
-  <button type="button" id="showIosKeyboardFlashBtn" class="secondary">iPhoneキーボード</button>
-</div>
   </label>
-  <div class="row" style="margin-top:10px;">
-    <button type="button" id="flashFromSearchBtn" class="secondary">検索結果から作る</button>
+  <div class="searchActionRow">
+    <button type="button" id="flashFromSearchBtn" class="secondary searchMainAction">検索結果から作る</button>
+    <button type="button" id="showIosKeyboardFlashBtn" class="secondary manualTextInputBtn">文字入力</button>
   </div>
 </div>
 
@@ -3425,8 +3454,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.43";
-const APP_UPDATED="2026-08-31 12:50";
+const APP_VERSION="v4.4.44";
+const APP_UPDATED="2026-08-31 14:54";
 
 function outputDateTimeStamp(){
   const d=new Date();
