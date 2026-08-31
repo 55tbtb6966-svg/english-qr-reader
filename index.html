@@ -1629,25 +1629,37 @@
 }
 .flashTouchEdge{
   position:absolute;
-  top:8px;
-  bottom:8px;
+  top:0;
+  bottom:0;
   width:25%;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
 }
 .flashTouchEdgeLeft{
   left:0;
-  align-items:flex-start;
 }
 .flashTouchEdgeRight{
   right:0;
-  align-items:flex-end;
 }
 .flashTouchEdgeLabel{
+  position:absolute;
   padding:3px 7px;
   line-height:1;
   white-space:nowrap;
+}
+.flashTouchEdgeLeft .flashTouchEdgeLabel{
+  left:6px;
+}
+.flashTouchEdgeRight .flashTouchEdgeLabel{
+  right:6px;
+}
+#flashTouchPrevTop,
+#flashTouchNextTop{
+  top:20%;
+  transform:translateY(-50%);
+}
+#flashTouchPrevBottom,
+#flashTouchNextBottom{
+  top:80%;
+  transform:translateY(-50%);
 }
 .flashTouchCenterLabel{
   position:absolute;
@@ -2916,7 +2928,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.52 / 更新 2026-08-31 19:45</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.53 / 更新 2026-08-31 19:52</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3542,8 +3554,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.52";
-const APP_UPDATED="2026-08-31 19:45";
+const APP_VERSION="v4.4.53";
+const APP_UPDATED="2026-08-31 19:52";
 
 function outputDateTimeStamp(){
   const d=new Date();
