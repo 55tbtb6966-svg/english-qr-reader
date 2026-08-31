@@ -2822,11 +2822,47 @@ button.flashActionAccepted{
   }
 }
 
-.qrCreateTopCard{margin-bottom:14px;}
+.qrCreateTopCard{margin-bottom:14px;padding:16px 18px;}
 .qrCreateTopCard .qrCompactBar,
 .qrCreateTopCard .qrMethodCard,
 .qrCreateTopCard .qrCombinedSettingsBox{margin-left:0;margin-right:0;}
-.qrCreateTopCard .grid2{margin-top:10px;}
+.qrCreateTopCard .qrCompactBar{
+  margin-top:0;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#fff !important;
+}
+.qrCreateTopCard .qrMethodCard{
+  margin-top:8px;
+}
+.qrCreateTopCard .grid2{
+  margin-top:8px;
+  gap:8px;
+}
+.qrCreateTopCard .qrCombinedSettingsBox{
+  border:none;
+  border-radius:0;
+  padding:0;
+  background:transparent;
+  margin-top:0;
+}
+.qrCreateTopCard .qrCombinedSettingsBox .advancedSettings{
+  margin-top:0 !important;
+  padding-top:0;
+  border-top:none !important;
+}
+.qrCreateTopCard .qrOptionBox + .qrOptionBox,
+.qrCreateTopCard .qrOptionBox + .sizeSettingGrid,
+.qrCreateTopCard .sizeSettingGrid + .qrOptionBox,
+.qrCreateTopCard .sizeSettingGrid + .sizeSettingGrid{
+  margin-top:8px !important;
+}
+.qrCreateTopCard details.advancedSettings > summary{
+  padding:10px 14px;
+}
+.qrCreateTopCard .advancedSettingsBody{
+  padding:4px 12px 12px;
+}
 
 </style>
 </head>
@@ -2843,7 +2879,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.45 / 更新 2026-08-31 15:03</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.46 / 更新 2026-08-31 18:37</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3199,7 +3235,7 @@ button.flashActionAccepted{
   <button type="button" id="showIosKeyboardQrBtn" class="secondary manualTextInputBtn">文字入力</button>
 </div>
 </div>
-<div class="grid2" style="margin-top:10px;">
+<div class="grid2" style="margin-top:8px;">
 <div style="grid-column:1 / -1;">
 <div class="qrCombinedSettingsBox"><details class="advancedSettings">
 <summary>詳細設定（カード項目、表示件数、QR・文字サイズ、マスターカード設定）</summary>
@@ -3463,8 +3499,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.45";
-const APP_UPDATED="2026-08-31 15:03";
+const APP_VERSION="v4.4.46";
+const APP_UPDATED="2026-08-31 18:37";
 
 function outputDateTimeStamp(){
   const d=new Date();
