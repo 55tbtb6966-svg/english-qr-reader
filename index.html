@@ -2894,7 +2894,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.50 / 更新 2026-08-31 19:10</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.51 / 更新 2026-08-31 19:33</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3512,8 +3512,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.50";
-const APP_UPDATED="2026-08-31 19:10";
+const APP_VERSION="v4.4.51";
+const APP_UPDATED="2026-08-31 19:33";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6791,13 +6791,21 @@ function setFlashcardSide(side){
   renderFlashcard();
 }
 function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
-function flashNavAccepted(delta){
-  const btn=$(delta<0?"flashPrevBtn":"flashNextBtn");
+function flashControlBlink(btn){
   if(!btn)return;
   btn.classList.remove("flashNavAccepted");
   void btn.offsetWidth;
   btn.classList.add("flashNavAccepted");
   setTimeout(()=>btn.classList.remove("flashNavAccepted"),260);
+}
+
+function flashNavAccepted(delta){
+  const btn=$(delta<0?"flashPrevBtn":"flashNextBtn");
+  flashControlBlink(btn);
+}
+
+function flashSpeakAccepted(){
+  flashControlBlink($("flashSpeakBtn"));
 }
 
 function stepFlashcard(delta){
@@ -7030,7 +7038,10 @@ $("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
 $("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
 $("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
 $("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
-$("flashSpeakBtn")?.addEventListener("click",speakCurrentFlashcard);
+$("flashSpeakBtn")?.addEventListener("click",()=>{
+  flashSpeakAccepted();
+  speakCurrentFlashcard();
+});
 $("flashCheckBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleCurrentFlashCheck();});
 $("flashShuffleToggleBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashShuffle();});
 $("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashFullscreen();});
@@ -7063,6 +7074,7 @@ $("flashCard")?.addEventListener("click",e=>{
   const speakMode=flashTouchSpeakMode();
 
   if(shouldSpeak && speakMode==="current"){
+    flashSpeakAccepted();
     speakCurrentFlashcardEnglish();
     stepFlashcard(delta);
     return;
@@ -7071,7 +7083,10 @@ $("flashCard")?.addEventListener("click",e=>{
   stepFlashcard(delta);
 
   if(shouldSpeak && speakMode==="destination"){
-    setTimeout(()=>{speakCurrentFlashcardEnglish();},20);
+    setTimeout(()=>{
+      flashSpeakAccepted();
+      speakCurrentFlashcardEnglish();
+    },20);
   }
 });
 $("flashCard")?.addEventListener("keydown",e=>{
