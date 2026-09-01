@@ -2923,6 +2923,10 @@ button.flashActionAccepted{
   margin:0;
 }
 
+
+#scanChoiceHint:empty{
+  display:none;
+}
 </style>
 </head>
 <body>
@@ -2938,7 +2942,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.54 / 更新 2026-09-01 18:33</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.55 / 更新 2026-09-01 18:43</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -2956,7 +2960,7 @@ button.flashActionAccepted{
 <button id="useCameraModeBtn" type="button">iPhoneカメラ</button>
 <button class="secondary" id="useExternalScannerModeBtn" type="button">外部スキャナー</button>
 </div>
-<div class="scanChoiceHint" id="scanChoiceHint">読み取り方法を選んでください。</div>
+<div class="scanChoiceHint" id="scanChoiceHint"></div>
 <div class="scannerModeStatus" id="scannerModeStatus"></div>
 <input autocapitalize="off" autocomplete="off" autocorrect="off" class="hidCapture" id="hidCaptureInput" inputmode="latin" lang="en" spellcheck="false" type="text"/>
 </div>
@@ -2993,6 +2997,7 @@ button.flashActionAccepted{
 <p class="status" id="scanStatus"></p>
 </div>
 <div class="card">
+<h2>読み上げ</h2>
 <span class="badge" id="idBadge">ID：未選択</span>
 <span class="badge" id="modeBadge">読み方：未選択</span>
 <div class="initialPrompt" id="english">CSVを登録してQRコードを読み取ってください</div>
@@ -3029,8 +3034,7 @@ button.flashActionAccepted{
 </div>
 </div>
 <div class="qrOptionBox" style="margin-top:12px;">
-<div class="qrOptionTitle">読み上げ設定</div>
-<details class="advancedSettings" style="margin-top:10px;">
+<details class="advancedSettings" style="margin-top:0;">
 <summary>詳細設定</summary>
 <div class="advancedSettingsBody">
 <p class="hint" style="margin:0 0 12px;">
@@ -3564,8 +3568,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.54";
-const APP_UPDATED="2026-09-01 18:33";
+const APP_VERSION="v4.4.55";
+const APP_UPDATED="2026-09-01 18:43";
 
 function outputDateTimeStamp(){
   const d=new Date();
