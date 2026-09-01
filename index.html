@@ -2669,15 +2669,18 @@ body.flashFullscreenBody{
   cursor:pointer;
 }
 .configuredReadBtn{
-  background:#d1d5db !important;
-  color:#111827 !important;
-  border:2px solid #111827 !important;
-  font-weight:800 !important;
+  background:#e9edf3 !important;
+  color:#111 !important;
+  border:0 !important;
+  box-shadow:none !important;
+  font-weight:700 !important;
 }
 .configuredReadBtn:hover,
 .configuredReadBtn:focus{
-  background:#d1d5db !important;
-  color:#111827 !important;
+  background:#e9edf3 !important;
+  color:#111 !important;
+  border:0 !important;
+  box-shadow:none !important;
 }
 
 .standardActionBtn{
@@ -2913,6 +2916,13 @@ button.flashActionAccepted{
   padding:4px 12px 12px;
 }
 
+
+#scanStatus:empty{
+  display:none;
+  min-height:0;
+  margin:0;
+}
+
 </style>
 </head>
 <body>
@@ -2928,7 +2938,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.53 / 更新 2026-08-31 19:52</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.54 / 更新 2026-09-01 18:33</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3198,8 +3208,8 @@ button.flashActionAccepted{
 <button class="secondary" id="nextBtn">次のページ</button>
 </div>
 <div class="row" style="margin-top:8px;">
-<button class="secondary" id="selectAllFilteredBtn">検索結果をすべてチェック</button>
-<button class="secondary" id="clearAllFilteredBtn">検索結果のチェックを解除</button>
+<button class="secondary" id="selectAllFilteredBtn">すべてチェック</button>
+<button class="secondary" id="clearAllFilteredBtn">チェックを解除</button>
 </div>
 <p class="hint" id="pageStatus"></p>
 <div class="tableWrap">
@@ -3554,8 +3564,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.53";
-const APP_UPDATED="2026-08-31 19:52";
+const APP_VERSION="v4.4.54";
+const APP_UPDATED="2026-09-01 18:33";
 
 function outputDateTimeStamp(){
   const d=new Date();
