@@ -2830,6 +2830,60 @@ button.flashActionAccepted{
   margin:0 0 10px;
 }
 
+.csvMajorGroup{
+  margin-top:14px;
+  padding:14px;
+  border:1px solid #d9dee7;
+  border-radius:14px;
+  background:#f8fafc;
+}
+.csvMajorTitle{
+  font-size:1.08rem;
+  font-weight:800;
+  color:#1f2937;
+  margin-bottom:10px;
+}
+.csvMajorHint{
+  margin:0 0 10px;
+}
+.csvCommonItems{
+  display:grid;
+  gap:12px;
+}
+.csvCommonGroup .numbersCsvBox{
+  margin-top:0;
+  padding:12px;
+  border:1px solid #d9dee7;
+  border-radius:12px;
+  background:#fff;
+}
+.csvCommonGroup .numbersCsvBox + .numbersCsvBox{
+  margin-top:0;
+}
+.csvPrimaryGroup > .row:last-of-type,
+.csvCommonGroup .row:last-of-type{
+  margin-bottom:0;
+}
+.readerDetailsShell{
+  margin-top:12px;
+}
+.readerDetailsShell .advancedSettings{
+  border:1px solid #d9dee7;
+  border-radius:12px;
+  background:#fff;
+  overflow:hidden;
+}
+.readerDetailsShell .advancedSettings > summary{
+  padding:11px 14px;
+  cursor:pointer;
+  font-weight:700;
+  color:#4a5668;
+  user-select:none;
+}
+.readerDetailsShell .advancedSettingsBody{
+  padding:4px 14px 14px;
+}
+
 .manualTextInputBtn{
   min-height:34px !important;
   height:34px !important;
@@ -2942,7 +2996,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.55 / 更新 2026-09-01 18:43</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.56 / 更新 2026-09-01 19:05</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3033,7 +3087,7 @@ button.flashActionAccepted{
 </label>
 </div>
 </div>
-<div class="qrOptionBox" style="margin-top:12px;">
+<div class="readerDetailsShell" style="margin-top:12px;">
 <details class="advancedSettings" style="margin-top:0;">
 <summary>詳細設定</summary>
 <div class="advancedSettingsBody">
@@ -3072,122 +3126,130 @@ button.flashActionAccepted{
 <section class="panel" id="csvPanel">
 <div class="card">
 <h2>CSVをIndexedDBへ登録</h2>
-<div class="currentCsvFileNameBox">
-  <span class="currentCsvFileNameLabel">最後に読み込んだCSV</span>
-  <strong id="currentCsvFileName">未登録</strong>
-</div>
-<input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
-<div class="row">
-<button class="secondary standardActionBtn" id="replaceImportBtn">全置換で読み込む</button>
-</div>
-<details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
-  <summary>詳細設定（追加・書き出し）</summary>
-  <div class="advancedSettingsBody">
-    <div class="row">
-      <button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
-      <button class="secondary" id="exportBtn">CSVを書き出す</button>
-    </div>
-  </div>
-</details>
-<p class="status" id="importStatus"></p>
-<div class="metric">
-<div>登録件数：<strong id="recordCount">0</strong></div>
-<div>データ版：<strong id="dataVersion">未設定</strong></div>
-<div>保存使用量：<strong id="storageUsage">確認中</strong></div>
-</div>
-
-<div class="numbersCsvBox">
-  <div class="numbersCsvTitle">Numbers（共通追加CSV）</div>
-  <p class="hint numbersCsvHint">
-    N＋数字のIDをA/B/C共通で管理します。例：N1、N0.1、N2500。Commentは N: に統一します。
-  </p>
+<div class="csvMajorGroup csvPrimaryGroup">
+  <div class="csvMajorTitle">A/B/C 個別CSV</div>
   <div class="currentCsvFileNameBox">
-    <span class="currentCsvFileNameLabel">最後に読み込んだNumbers CSV</span>
-    <strong id="numbersCsvFileName">未登録</strong>
+    <span class="currentCsvFileNameLabel">最後に読み込んだCSV</span>
+    <strong id="currentCsvFileName">未登録</strong>
   </div>
-  <input accept=".csv,text/csv,text/plain" id="numbersCsvFile" type="file"/>
+  <input accept=".csv,text/csv,text/plain" id="csvFile" type="file"/>
   <div class="row">
-    <button class="secondary standardActionBtn" id="numbersReplaceImportBtn">Numbersを全置換で読み込む</button>
+    <button class="secondary standardActionBtn" id="replaceImportBtn">全置換で読み込む</button>
   </div>
   <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
     <summary>詳細設定（追加・書き出し）</summary>
     <div class="advancedSettingsBody">
       <div class="row">
-        <button class="secondary" id="numbersMergeImportBtn">Numbersを追加・上書き</button>
-        <button class="secondary" id="numbersExportBtn">Numbers CSVを書き出す</button>
+        <button class="secondary" id="mergeImportBtn">追加・上書きで読み込む</button>
+        <button class="secondary" id="exportBtn">CSVを書き出す</button>
       </div>
     </div>
   </details>
-  <p class="status" id="numbersImportStatus"></p>
+  <p class="status" id="importStatus"></p>
   <div class="metric">
-    <div>Numbers登録件数：<strong id="numbersRecordCount">0</strong></div>
+    <div>登録件数：<strong id="recordCount">0</strong></div>
+    <div>データ版：<strong id="dataVersion">未設定</strong></div>
+    <div>保存使用量：<strong id="storageUsage">確認中</strong></div>
   </div>
 </div>
 
-<div class="numbersCsvBox">
-  <div class="numbersCsvTitle">Words（共通追加CSV）</div>
-  <p class="hint numbersCsvHint">W＋6桁のIDをA/B/C共通で管理します。例：W000001。Commentは W: に統一します。</p>
-  <div class="currentCsvFileNameBox">
-    <span class="currentCsvFileNameLabel">最後に読み込んだWords CSV</span>
-    <strong id="wordsCsvFileName">未登録</strong>
-  </div>
-  <input accept=".csv,text/csv,text/plain" id="wordsCsvFile" type="file"/>
-  <div class="row">
-    <button class="secondary standardActionBtn" id="wordsReplaceImportBtn">Wordsを全置換で読み込む</button>
-  </div>
-  <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
-    <summary>詳細設定（追加・書き出し）</summary>
-    <div class="advancedSettingsBody"><div class="row">
-      <button class="secondary" id="wordsMergeImportBtn">Wordsを追加・上書き</button>
-      <button class="secondary" id="wordsExportBtn">Words CSVを書き出す</button>
-    </div></div>
-  </details>
-  <p class="status" id="wordsImportStatus"></p>
-  <div class="metric"><div>Words登録件数：<strong id="wordsRecordCount">0</strong></div></div>
-</div>
+<div class="csvMajorGroup csvCommonGroup">
+  <div class="csvMajorTitle">共通追加CSV</div>
+  <div class="csvCommonItems">
+    <div class="numbersCsvBox">
+      <div class="numbersCsvTitle">Numbers（共通追加CSV）</div>
+      <p class="hint numbersCsvHint">
+        N＋数字のIDをA/B/C共通で管理します。例：N1、N0.1、N2500。Commentは N: に統一します。
+      </p>
+      <div class="currentCsvFileNameBox">
+        <span class="currentCsvFileNameLabel">最後に読み込んだNumbers CSV</span>
+        <strong id="numbersCsvFileName">未登録</strong>
+      </div>
+      <input accept=".csv,text/csv,text/plain" id="numbersCsvFile" type="file"/>
+      <div class="row">
+        <button class="secondary standardActionBtn" id="numbersReplaceImportBtn">Numbersを全置換で読み込む</button>
+      </div>
+      <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+        <summary>詳細設定（追加・書き出し）</summary>
+        <div class="advancedSettingsBody">
+          <div class="row">
+            <button class="secondary" id="numbersMergeImportBtn">Numbersを追加・上書き</button>
+            <button class="secondary" id="numbersExportBtn">Numbers CSVを書き出す</button>
+          </div>
+        </div>
+      </details>
+      <p class="status" id="numbersImportStatus"></p>
+      <div class="metric">
+        <div>Numbers登録件数：<strong id="numbersRecordCount">0</strong></div>
+      </div>
+    </div>
 
-<div class="numbersCsvBox">
-  <div class="numbersCsvTitle">Phrases（共通追加CSV）</div>
-  <p class="hint numbersCsvHint">P＋6桁のIDをA/B/C共通で管理します。例：P000001。Commentは P: に統一します。</p>
-  <div class="currentCsvFileNameBox">
-    <span class="currentCsvFileNameLabel">最後に読み込んだPhrases CSV</span>
-    <strong id="phrasesCsvFileName">未登録</strong>
-  </div>
-  <input accept=".csv,text/csv,text/plain" id="phrasesCsvFile" type="file"/>
-  <div class="row">
-    <button class="secondary standardActionBtn" id="phrasesReplaceImportBtn">Phrasesを全置換で読み込む</button>
-  </div>
-  <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
-    <summary>詳細設定（追加・書き出し）</summary>
-    <div class="advancedSettingsBody"><div class="row">
-      <button class="secondary" id="phrasesMergeImportBtn">Phrasesを追加・上書き</button>
-      <button class="secondary" id="phrasesExportBtn">Phrases CSVを書き出す</button>
-    </div></div>
-  </details>
-  <p class="status" id="phrasesImportStatus"></p>
-  <div class="metric"><div>Phrases登録件数：<strong id="phrasesRecordCount">0</strong></div></div>
-</div>
+    <div class="numbersCsvBox">
+      <div class="numbersCsvTitle">Words（共通追加CSV）</div>
+      <p class="hint numbersCsvHint">W＋6桁のIDをA/B/C共通で管理します。例：W000001。Commentは W: に統一します。</p>
+      <div class="currentCsvFileNameBox">
+        <span class="currentCsvFileNameLabel">最後に読み込んだWords CSV</span>
+        <strong id="wordsCsvFileName">未登録</strong>
+      </div>
+      <input accept=".csv,text/csv,text/plain" id="wordsCsvFile" type="file"/>
+      <div class="row">
+        <button class="secondary standardActionBtn" id="wordsReplaceImportBtn">Wordsを全置換で読み込む</button>
+      </div>
+      <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+        <summary>詳細設定（追加・書き出し）</summary>
+        <div class="advancedSettingsBody"><div class="row">
+          <button class="secondary" id="wordsMergeImportBtn">Wordsを追加・上書き</button>
+          <button class="secondary" id="wordsExportBtn">Words CSVを書き出す</button>
+        </div></div>
+      </details>
+      <p class="status" id="wordsImportStatus"></p>
+      <div class="metric"><div>Words登録件数：<strong id="wordsRecordCount">0</strong></div></div>
+    </div>
 
-<div class="numbersCsvBox">
-  <div class="numbersCsvTitle">Sounds（共通追加CSV）</div>
-  <p class="hint numbersCsvHint">S＋6桁のIDをA/B/C共通で管理します。例：S000001。Commentは S: に統一します。</p>
-  <div class="currentCsvFileNameBox">
-    <span class="currentCsvFileNameLabel">最後に読み込んだSounds CSV</span>
-    <strong id="soundsCsvFileName">未登録</strong>
+    <div class="numbersCsvBox">
+      <div class="numbersCsvTitle">Phrases（共通追加CSV）</div>
+      <p class="hint numbersCsvHint">P＋6桁のIDをA/B/C共通で管理します。例：P000001。Commentは P: に統一します。</p>
+      <div class="currentCsvFileNameBox">
+        <span class="currentCsvFileNameLabel">最後に読み込んだPhrases CSV</span>
+        <strong id="phrasesCsvFileName">未登録</strong>
+      </div>
+      <input accept=".csv,text/csv,text/plain" id="phrasesCsvFile" type="file"/>
+      <div class="row">
+        <button class="secondary standardActionBtn" id="phrasesReplaceImportBtn">Phrasesを全置換で読み込む</button>
+      </div>
+      <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+        <summary>詳細設定（追加・書き出し）</summary>
+        <div class="advancedSettingsBody"><div class="row">
+          <button class="secondary" id="phrasesMergeImportBtn">Phrasesを追加・上書き</button>
+          <button class="secondary" id="phrasesExportBtn">Phrases CSVを書き出す</button>
+        </div></div>
+      </details>
+      <p class="status" id="phrasesImportStatus"></p>
+      <div class="metric"><div>Phrases登録件数：<strong id="phrasesRecordCount">0</strong></div></div>
+    </div>
+
+    <div class="numbersCsvBox">
+      <div class="numbersCsvTitle">Sounds（共通追加CSV）</div>
+      <p class="hint numbersCsvHint">S＋6桁のIDをA/B/C共通で管理します。例：S000001。Commentは S: に統一します。</p>
+      <div class="currentCsvFileNameBox">
+        <span class="currentCsvFileNameLabel">最後に読み込んだSounds CSV</span>
+        <strong id="soundsCsvFileName">未登録</strong>
+      </div>
+      <input accept=".csv,text/csv,text/plain" id="soundsCsvFile" type="file"/>
+      <div class="row">
+        <button class="secondary standardActionBtn" id="soundsReplaceImportBtn">Soundsを全置換で読み込む</button>
+      </div>
+      <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
+        <summary>詳細設定（追加・書き出し）</summary>
+        <div class="advancedSettingsBody"><div class="row">
+          <button class="secondary" id="soundsMergeImportBtn">Soundsを追加・上書き</button>
+          <button class="secondary" id="soundsExportBtn">Sounds CSVを書き出す</button>
+        </div></div>
+      </details>
+      <p class="status" id="soundsImportStatus"></p>
+      <div class="metric"><div>Sounds登録件数：<strong id="soundsRecordCount">0</strong></div></div>
+    </div>
   </div>
-  <input accept=".csv,text/csv,text/plain" id="soundsCsvFile" type="file"/>
-  <div class="row">
-    <button class="secondary standardActionBtn" id="soundsReplaceImportBtn">Soundsを全置換で読み込む</button>
-  </div>
-  <details class="advancedSettings csvAdvancedActions" style="margin-top:10px;">
-    <summary>詳細設定（追加・書き出し）</summary>
-    <div class="advancedSettingsBody"><div class="row">
-      <button class="secondary" id="soundsMergeImportBtn">Soundsを追加・上書き</button>
-      <button class="secondary" id="soundsExportBtn">Sounds CSVを書き出す</button>
-    </div></div>
-  </details>
-  <p class="status" id="soundsImportStatus"></p>
-  <div class="metric"><div>Sounds登録件数：<strong id="soundsRecordCount">0</strong></div></div>
 </div>
 
 </div></section>
