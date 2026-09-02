@@ -188,8 +188,47 @@
       line-height:1.15;
       white-space:nowrap;
     }
+    .qrPreviewControls{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      flex-wrap:wrap;
+      width:100%;
+    }
+    .qrPreviewCopiesControl{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      min-height:34px;
+      padding:4px 9px;
+      border:1px solid #c9cdd4;
+      border-radius:999px;
+      background:#e9edf3;
+      color:#111;
+      font-size:.82rem;
+      font-weight:700;
+      box-sizing:border-box;
+    }
+    .qrPreviewCopiesControl span{
+      display:inline;
+      margin:0;
+      white-space:nowrap;
+    }
+    .qrPreviewCopiesControl select{
+      width:auto;
+      min-width:64px;
+      height:28px;
+      min-height:28px;
+      padding:2px 24px 2px 8px;
+      border-radius:999px;
+      background:#fff;
+      font-size:.82rem;
+    }
     @media print{
-      .qrPreviewSpeakBtn{display:none!important;}
+      .qrPreviewSpeakBtn,
+      .qrPreviewControls,
+      .qrPreviewCopiesControl{display:none!important;}
     }
 
   
@@ -2996,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.59 / 更新 2026-09-02 12:52</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.60 / 更新 2026-09-02 15:54</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3388,6 +3427,12 @@ button.flashActionAccepted{
 <option value="on">ON</option>
 </select>
 </label>
+<label><span>印刷枚数設定</span>
+<select id="settingPrintCopies">
+<option selected="" value="off">OFF</option>
+<option value="on">ON</option>
+</select>
+</label>
 </div>
 <div id="legacySizeSettingsCompat" style="display:none;"><label><span>QRコードサイズ（px）</span><input id="settingQrSize" max="220" min="80" step="2" type="number" value="132"/></label><label><span>ID文字サイズ（rem）</span><input id="settingIdSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>英語文字サイズ（rem）</span><input id="settingEnglishSize" max="2.5" min="0.7" step="0.05" type="number" value="1.18"/></label><label><span>発音記号サイズ（rem）</span><input id="settingIpaSize" max="2.0" min="0.6" step="0.05" type="number" value="1.05"/></label><label><span>日本語文字サイズ（rem）</span><input id="settingJapaneseSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><label><span>日本語読み文字サイズ（rem）</span><input id="settingJapaneseReadSize" max="2.5" min="0.7" step="0.05" type="number" value="1.12"/></label><button id="applySizeSettingsBtn" type="button">サイズを適用</button><button class="secondary" id="resetSizeSettingsBtn" type="button">初期値に戻す</button></div><div class="masterPreviewBox">
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
@@ -3630,8 +3675,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.59";
-const APP_UPDATED="2026-09-02 12:52";
+const APP_VERSION="v4.4.60";
+const APP_UPDATED="2026-09-02 15:54";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6120,6 +6165,71 @@ function previewSpeakButtonEnabled(){
   return (localStorage.getItem("qrPreviewSpeakButton")||"off")==="on";
 }
 
+const qrPrintCopiesById=new Map();
+
+function printCopiesSettingEnabled(){
+  return (localStorage.getItem("qrPrintCopiesSetting")||"off")==="on";
+}
+
+function getQrPrintCopies(record){
+  const id=String(record?.id||"");
+  const n=Number(qrPrintCopiesById.get(id)||1);
+  return Math.max(1,Math.min(20,Number.isFinite(n)?Math.round(n):1));
+}
+
+function setQrPrintCopies(record,count){
+  const id=String(record?.id||"");
+  if(!id)return;
+  const n=Math.max(1,Math.min(20,Number(count)||1));
+  qrPrintCopiesById.set(id,n);
+}
+
+function makePreviewCopiesControl(record){
+  const label=document.createElement("label");
+  label.className="qrPreviewCopiesControl";
+
+  const caption=document.createElement("span");
+  caption.textContent="枚数";
+  label.appendChild(caption);
+
+  const sel=document.createElement("select");
+  sel.setAttribute("aria-label",String(record?.id||"")+" の印刷枚数");
+  for(let i=1;i<=20;i++){
+    const op=document.createElement("option");
+    op.value=String(i);
+    op.textContent=i+"枚";
+    if(i===getQrPrintCopies(record))op.selected=true;
+    sel.appendChild(op);
+  }
+  sel.addEventListener("change",()=>{
+    setQrPrintCopies(record,sel.value);
+  });
+  label.appendChild(sel);
+  return label;
+}
+
+function loadPrintCopiesSetting(){
+  const sel=$("settingPrintCopies");
+  if(!sel)return;
+  sel.value=localStorage.getItem("qrPrintCopiesSetting")||"off";
+  sel.addEventListener("change",()=>{
+    localStorage.setItem("qrPrintCopiesSetting",sel.value==="on"?"on":"off");
+    if(qrPageSource.length){
+      renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+    }
+  });
+}
+
+function expandQrOutputItemsByCopies(items){
+  if(!printCopiesSettingEnabled())return items.slice();
+  const out=[];
+  items.forEach(item=>{
+    const count=getQrPrintCopies(item?.record);
+    for(let i=0;i<count;i++)out.push(item);
+  });
+  return out;
+}
+
 async function playRecordFromPreview(record){
   if(!record)return;
   const previous=currentRecord;
@@ -6251,9 +6361,20 @@ function renderQr(records){
       jr.textContent=r.japaneseRead||r.japanese;
       card.appendChild(jr);
     }
-    if(previewSpeakButtonEnabled()){
+    const copiesOn=printCopiesSettingEnabled();
+    const speakOn=previewSpeakButtonEnabled();
+
+    if(copiesOn){
+      const controls=document.createElement("div");
+      controls.className="qrPreviewControls";
+      if(speakOn)controls.appendChild(makePreviewSpeakButton(r));
+      controls.appendChild(makePreviewCopiesControl(r));
+      item.appendChild(controls);
+    }else if(speakOn){
+      // OFF preserves the previous preview layout exactly.
       item.appendChild(makePreviewSpeakButton(r));
     }
+
     sheet.appendChild(item);
   });
 
@@ -7402,6 +7523,7 @@ function flashQrActionAccepted(btn){
 }
 
 async function buildQrFromSelected(){
+  qrPrintCopiesById.clear();
   const selectedNow=latestDataManagementSelection();
   const all=await getRecordsForSelectedIds(selectedNow);
   const list=all
@@ -7437,6 +7559,7 @@ $("makeSelectedQrBtn").addEventListener("click",()=>{
 });
 
 async function buildQrFromSearch(){
+  qrPrintCopiesById.clear();
   const latestSelection=latestDataManagementSelection();
   const sourceText=String($("qrSearch")?.value||"");
   const query=parseCommonSearchQuery(sourceText);
@@ -7899,6 +8022,8 @@ async function exportCurrentQrPageToPowerPoint(){
     }
     selected=pos.map(n=>items[n-1]).filter(Boolean);
   }
+
+  selected=expandQrOutputItemsByCopies(selected);
 
   try{
     const pptx=new PptxGenJS();
@@ -9397,6 +9522,7 @@ async function printMasterCards(){
   }
 
   selected=selected.map(applyPrintOverrideToItem);
+  selected=expandQrOutputItemsByCopies(selected);
 
   const state=readMasterState();
 
@@ -9569,6 +9695,7 @@ updateFlashShuffleUi();
 loadFlashCheckedIds();
 loadVariablePauseSetting();
 loadPreviewSpeakButtonSetting();
+loadPrintCopiesSetting();
 
 setTimeout(()=>{
   try{
