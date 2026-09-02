@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.60 / 更新 2026-09-02 15:54</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.61 / 更新 2026-09-03 00:33</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3675,8 +3675,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.60";
-const APP_UPDATED="2026-09-02 15:54";
+const APP_VERSION="v4.4.61";
+const APP_UPDATED="2026-09-03 00:33";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6173,14 +6173,16 @@ function printCopiesSettingEnabled(){
 
 function getQrPrintCopies(record){
   const id=String(record?.id||"");
-  const n=Number(qrPrintCopiesById.get(id)||1);
-  return Math.max(1,Math.min(20,Number.isFinite(n)?Math.round(n):1));
+  if(!qrPrintCopiesById.has(id))return 1;
+  const n=Number(qrPrintCopiesById.get(id));
+  return Math.max(0,Math.min(20,Number.isFinite(n)?Math.round(n):1));
 }
 
 function setQrPrintCopies(record,count){
   const id=String(record?.id||"");
   if(!id)return;
-  const n=Math.max(1,Math.min(20,Number(count)||1));
+  const raw=Number(count);
+  const n=Math.max(0,Math.min(20,Number.isFinite(raw)?Math.round(raw):1));
   qrPrintCopiesById.set(id,n);
 }
 
@@ -6194,7 +6196,7 @@ function makePreviewCopiesControl(record){
 
   const sel=document.createElement("select");
   sel.setAttribute("aria-label",String(record?.id||"")+" の印刷枚数");
-  for(let i=1;i<=20;i++){
+  for(let i=0;i<=20;i++){
     const op=document.createElement("option");
     op.value=String(i);
     op.textContent=i+"枚";
