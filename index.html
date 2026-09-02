@@ -946,7 +946,7 @@
   grid-template-columns:100px repeat(5,minmax(0,1fr));
 }
 .masterItemSettingsRow:first-child{
-  grid-template-columns:100px repeat(4,minmax(0,1fr));
+  grid-template-columns:100px repeat(5,minmax(0,1fr));
 }
 .masterItemSettingsRow select{width:100%;box-sizing:border-box;}
 .masterDefaultRow button{width:100%;}
@@ -2996,7 +2996,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.56 / 更新 2026-09-01 19:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.57 / 更新 2026-09-02 12:08</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3393,7 +3393,7 @@ button.flashActionAccepted{
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
 <div class="masterPreviewControls">
 </div>
-<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow masterMarginSettingsRow"><div class="masterItemName">余白</div><label><span>横余白（%）</span><input id="masterMarginX" max="45" min="0" step="1" type="number" value="3"/></label><label><span>縦余白（%）</span><input id="masterMarginY" max="45" min="0" step="1" type="number" value="3"/></label><label><span>外枠</span><select id="masterMarginGuide"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number" value="100"/></label><label><span>中心X（左から%）</span><input id="masterQrCenterX" max="100" min="0" step="0.1" type="number" value="15"/></label><label><span>中心Y（上から%）</span><input id="masterQrCenterY" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number" value="1"/></label><label><span>中心X（左から%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>文字揃え</span>
+<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow masterMarginSettingsRow"><div class="masterItemName">余白</div><label><span>横余白（%）</span><input id="masterMarginX" max="45" min="0" step="1" type="number" value="3"/></label><label><span>縦余白（%）</span><input id="masterMarginY" max="45" min="0" step="1" type="number" value="3"/></label><label><span>外枠</span><select id="masterMarginGuide"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label><span>外枠の色</span><select id="masterBorderColor"><option selected="" value="#b8bec7">グレー</option><option value="#111827">黒</option><option value="#2563eb">青</option><option value="#dc2626">赤</option><option value="#16a34a">緑</option><option value="#ea580c">オレンジ</option><option value="#7c3aed">紫</option></select></label><label><span>外枠の太さ</span><select id="masterBorderWidth"><option selected="" value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number" value="100"/></label><label><span>中心X（左から%）</span><input id="masterQrCenterX" max="100" min="0" step="0.1" type="number" value="15"/></label><label><span>中心Y（上から%）</span><input id="masterQrCenterY" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number" value="1"/></label><label><span>中心X（左から%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>文字揃え</span>
 <select id="masterIdAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
@@ -5112,7 +5112,7 @@ function updateScanInputModeUi(){
 
   if(hint){
     hint.textContent = none
-      ? "読み取り方法を選んでください。"
+      ? ""
       : camera
         ? "選択中：iPhoneカメラ"
         : "選択中：外部スキャナー";
@@ -7962,7 +7962,7 @@ async function exportCurrentQrPageToPowerPoint(){
             w:cw*(item.border.width/100),
             h:ch*(item.border.height/100),
             rectRadius:0.03,
-            line:{color:"B8BEC7",width:1},
+            line:{color:masterBorderColor(state).replace("#","").toUpperCase(),width:masterBorderWidth(state)},
             fill:{color:"FFFFFF",transparency:100}
           });
           objectCount++;
@@ -8223,9 +8223,9 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,w
 }
 
 
-const MASTER_DEFAULT_VERSION="2026-08-19-layout-4";
+const MASTER_DEFAULT_VERSION="2026-09-02-layout-5";
 const MASTER_DEFAULT_STATE={
-  marginX:3,marginY:3,border:"on",
+  marginX:3,marginY:3,border:"on",borderColor:"#b8bec7",borderWidth:1,
   qr:{size:100,x:15,y:20},
   id:{size:1,x:50,y:10,align:"center",autoFit:"on",w:35,h:10},
   english:{size:5,x:50,y:45,align:"center",autoFit:"on",w:90,h:25},
@@ -8247,6 +8247,8 @@ function readMasterState(){
   return {
     marginX:num("masterMarginX",8),marginY:num("masterMarginY",8),
     border:$("masterMarginGuide")?.value||"on",
+    borderColor:$("masterBorderColor")?.value||previous?.borderColor||MASTER_DEFAULT_STATE.borderColor,
+    borderWidth:num("masterBorderWidth",Number(previous?.borderWidth)||MASTER_DEFAULT_STATE.borderWidth),
     qr:{size:num("masterMirror_settingQrSize",132),x:num("masterQrCenterX",50),y:num("masterQrCenterY",50)},
     id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:num("masterIdWidth",prev("id","w",36)),h:num("masterIdHeight",prev("id","h",9))},
     english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:num("masterEnglishWidth",prev("english","w",55)),h:num("masterEnglishHeight",prev("english","h",13))},
@@ -8259,6 +8261,8 @@ function readMasterState(){
 function applyMasterStateToControls(s){
   const set=(id,v)=>{if($(id)!=null)$(id).value=String(v);};
   set("masterMarginX",s.marginX);set("masterMarginY",s.marginY);set("masterMarginGuide",s.border);
+  set("masterBorderColor",s.borderColor||MASTER_DEFAULT_STATE.borderColor);
+  set("masterBorderWidth",s.borderWidth||MASTER_DEFAULT_STATE.borderWidth);
   set("masterMirror_settingQrSize",s.qr.size);set("masterQrCenterX",s.qr.x);set("masterQrCenterY",s.qr.y);
   const map={id:"Id",english:"English",ipa:"Ipa",japanese:"Japanese",japaneseRead:"JapaneseRead"};
   const sizeIds={id:"masterMirror_settingIdSize",english:"masterMirror_settingEnglishSize",ipa:"masterMirror_settingIpaSize",japanese:"masterMirror_settingJapaneseSize",japaneseRead:"masterMirror_settingJapaneseReadSize"};
@@ -8333,6 +8337,18 @@ function fitMasterPlainText(box,text,baseRem,enabled){
   requestAnimationFrame(()=>requestAnimationFrame(fitNow));
 }
 
+function masterBorderColor(state=readMasterState()){
+  const c=String(state?.borderColor||MASTER_DEFAULT_STATE.borderColor||"#b8bec7").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(c)?c:"#b8bec7";
+}
+function masterBorderWidth(state=readMasterState()){
+  const n=Number(state?.borderWidth);
+  return Math.max(1,Math.min(5,Number.isFinite(n)?n:1));
+}
+function masterBorderCss(state=readMasterState()){
+  return state?.border==="off" ? "1px solid transparent" : `${masterBorderWidth(state)}px solid ${masterBorderColor(state)}`;
+}
+
 function applyMasterLayoutToCard(card,state=readMasterState()){
   if(!card)return;
 
@@ -8362,7 +8378,7 @@ function applyMasterLayoutToCard(card,state=readMasterState()){
   inner.style.boxSizing="border-box";
   inner.style.background="#fff";
   inner.style.overflow="hidden";
-  inner.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
+  inner.style.border=masterBorderCss(state);
   inner.style.borderRadius="14px";
 
   const movable=[...card.children].filter(el=>el!==inner);
@@ -8667,6 +8683,8 @@ function updateMasterPreview(){
  const mx=Math.max(0,Math.min(45,Number($("masterMarginX")?.value)||0));
  const my=Math.max(0,Math.min(45,Number($("masterMarginY")?.value)||0));
  const borderOn=$("masterMarginGuide")?.value!=="off";
+ const borderColor=$("masterBorderColor")?.value||MASTER_DEFAULT_STATE.borderColor;
+ const borderWidth=Math.max(1,Math.min(5,Number($("masterBorderWidth")?.value)||MASTER_DEFAULT_STATE.borderWidth));
 
  const card=document.createElement("div");
  card.id="masterCardInner";
@@ -8675,7 +8693,7 @@ function updateMasterPreview(){
  card.style.right=mx+"%";
  card.style.top=my+"%";
  card.style.bottom=my+"%";
- card.style.border=borderOn?"1px solid #b8bec7":"1px solid transparent";
+ card.style.border=borderOn?`${borderWidth}px solid ${borderColor}`:"1px solid transparent";
  card.style.borderRadius="14px";
  card.style.background="#fff";
  card.style.boxSizing="border-box";
@@ -8729,13 +8747,13 @@ function updateMasterPreview(){
  createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize","masterJapaneseWidth","masterJapaneseHeight",32,55,55,12);
  createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize","masterJapaneseReadWidth","masterJapaneseReadHeight",32,70,55,12);
 }
-["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderWidth","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 
 
 
 
-["masterMarginX","masterMarginY","masterMarginGuide","masterQrCenterX","masterQrCenterY",
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderWidth","masterQrCenterX","masterQrCenterY",
  "masterMirror_settingQrSize","masterMirror_settingIdSize","masterMirror_settingEnglishSize",
  "masterMirror_settingIpaSize","masterMirror_settingJapaneseSize","masterMirror_settingJapaneseReadSize",
  "masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop",
@@ -8936,7 +8954,7 @@ function buildMasterPrintSheet(records){
     inner.style.boxSizing="border-box";
     inner.style.background="#fff";
     inner.style.overflow="hidden";
-    inner.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
+    inner.style.border=masterBorderCss(state);
     inner.style.borderRadius="14px";
     card.appendChild(inner);
 
@@ -9426,7 +9444,7 @@ async function printMasterCards(){
       inner.style.boxSizing="border-box";
       inner.style.background="#fff";
       inner.style.overflow="hidden";
-      inner.style.border=state.border==="off"?"1px solid transparent":"1px solid #b8bec7";
+      inner.style.border=masterBorderCss(state);
       inner.style.borderRadius="14px";
       card.appendChild(inner);
     }
