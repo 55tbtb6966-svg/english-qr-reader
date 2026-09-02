@@ -2996,7 +2996,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.57 / 更新 2026-09-02 12:08</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.4.58 / 更新 2026-09-02 12:22</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3630,8 +3630,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.55";
-const APP_UPDATED="2026-09-01 18:43";
+const APP_VERSION="v4.4.58";
+const APP_UPDATED="2026-09-02 12:22";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -7521,14 +7521,14 @@ document.addEventListener("click",e=>{
 function requestIosSoftwareKeyboardFor(el){
   if(!el)return;
 
-  // Stop the external HID capture only for this explicit user action.
+  // Stop HID capture first, while this is still the user's button tap.
   suspendExternalScannerForTextEntry();
 
   try{el.readOnly=false;}catch(e){}
   try{el.disabled=false;}catch(e){}
 
-  // Focus immediately in the button's tap/click gesture, then once more
-  // on the next task because iOS may briefly keep the hardware-keyboard bar.
+  // Do the important focus synchronously inside the trusted click gesture.
+  // A delayed focus alone is less reliable on iPhone Safari.
   try{el.focus({preventScroll:true});}catch(e){
     try{el.focus();}catch(_){}
   }
@@ -7538,11 +7538,8 @@ function requestIosSoftwareKeyboardFor(el){
     el.setSelectionRange(len,len);
   }catch(e){}
 
-  setTimeout(()=>{
-    try{el.focus({preventScroll:true});}catch(e){
-      try{el.focus();}catch(_){}
-    }
-  },30);
+  // Do not immediately give focus back to the HID capture field.
+  scannerTextEditing=true;
 }
 
 function initIosKeyboardButtons(){
@@ -7558,11 +7555,6 @@ function initIosKeyboardButtons(){
       e.preventDefault();
       requestIosSoftwareKeyboardFor(el);
     });
-
-    btn.addEventListener("touchend",e=>{
-      e.preventDefault();
-      requestIosSoftwareKeyboardFor(el);
-    },{passive:false});
   });
 }
 
@@ -7611,13 +7603,8 @@ function restoreExternalScannerAfterTextEntry(){
 document.addEventListener("pointerdown",e=>{
   const target=e.target;
   if(isUserTextEditingElement(target)){
+    // Disable/blur the hidden HID field before Safari performs its normal tap focus.
     suspendExternalScannerForTextEntry();
-    // Keep the actual field as the focus target during the same user gesture.
-    setTimeout(()=>{
-      try{target.focus({preventScroll:true});}catch(err){
-        try{target.focus();}catch(_){}
-      }
-    },0);
   }
 },true);
 
@@ -7625,11 +7612,6 @@ document.addEventListener("touchstart",e=>{
   const target=e.target;
   if(isUserTextEditingElement(target)){
     suspendExternalScannerForTextEntry();
-    setTimeout(()=>{
-      try{target.focus({preventScroll:true});}catch(err){
-        try{target.focus();}catch(_){}
-      }
-    },0);
   }
 },{capture:true,passive:true});
 
