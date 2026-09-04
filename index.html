@@ -3568,6 +3568,161 @@ button.flashActionAccepted{
   }
 }
 
+
+/* v4.5.13 Reader alignment refinement */
+.readerStudyLine{
+  display:grid;
+  grid-template-columns:82px minmax(0,1fr);
+  gap:10px;
+  align-items:start;
+}
+.readerStudyLine + .readerStudyLine{
+  margin-top:9px;
+}
+.readerStudyLeftCell{
+  width:82px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:0;
+  min-height:34px;
+}
+.readerStudyIdLine .readerStudyLeftCell{
+  width:82px;
+}
+.readerStudyIdActions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:6px;
+  width:100%;
+}
+.readerStudySpeak,
+.readerStudyJapaneseToggle,
+.readerStudyExplanation summary{
+  width:82px;
+  min-width:82px;
+  height:34px;
+  min-height:34px;
+  padding:5px 7px;
+  box-sizing:border-box;
+  border:1px solid #d4dae3;
+  border-radius:9px;
+  background:#e9edf3;
+  color:#26313f;
+  font-size:.84rem;
+  font-weight:750;
+  box-shadow:none;
+}
+.readerStudySpeak{
+  cursor:pointer;
+}
+.readerStudyJapaneseToggle{
+  cursor:pointer;
+}
+.readerStudyExplanation{
+  margin:0;
+  padding:0;
+  border:0;
+}
+.readerStudyExplanation summary{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+  list-style:none;
+}
+.readerStudyExplanation summary::-webkit-details-marker{
+  display:none;
+}
+.readerStudyExplanation summary::after{
+  content:"";
+  display:none;
+}
+.readerStudyExplanation[open] summary{
+  background:#dbe3ec;
+  border-color:#b9c4d0;
+  color:#1f2937;
+}
+.readerStudyJapaneseToggle[aria-pressed="false"]{
+  background:#f5f6f8;
+  color:#8a94a3;
+}
+.readerStudyStar{
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  flex:0 0 34px;
+}
+.readerStudyQr{
+  margin:0;
+  display:flex;
+  align-items:center;
+}
+.readerStudyQr[hidden]{
+  display:none !important;
+}
+.readerStudyQrBox{
+  width:34px;
+  height:34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid #e5e7eb;
+  border-radius:6px;
+  background:#fff;
+}
+.readerStudyQrBox canvas,.readerStudyQrBox img{
+  width:30px!important;
+  height:30px!important;
+}
+.readerStudyIdLine .readerStudyBodyCell{
+  display:flex;
+  align-items:center;
+  min-height:34px;
+}
+.readerStudyItemId{
+  margin:0;
+}
+.readerStudyExplanationBody{
+  font-size:1.07rem;
+}
+@media(max-width:650px){
+  .readerStudyLine{
+    grid-template-columns:76px minmax(0,1fr);
+    gap:9px;
+  }
+  .readerStudyLeftCell,
+  .readerStudyIdLine .readerStudyLeftCell{
+    width:76px;
+  }
+  .readerStudySpeak,
+  .readerStudyJapaneseToggle,
+  .readerStudyExplanation summary{
+    width:76px;
+    min-width:76px;
+    font-size:.8rem;
+  }
+  .readerStudyStar{
+    width:32px;
+    height:32px;
+    min-width:32px;
+    min-height:32px;
+    flex-basis:32px;
+  }
+  .readerStudyQrBox{
+    width:32px;
+    height:32px;
+  }
+  .readerStudyQrBox canvas,.readerStudyQrBox img{
+    width:28px!important;
+    height:28px!important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3583,7 +3738,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.12 / 更新 2026-09-05 01:46</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.13 / 更新 2026-09-05 02:02</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4276,8 +4431,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.12";
-const APP_UPDATED="2026-09-05 01:46";
+const APP_VERSION="v4.5.13";
+const APP_UPDATED="2026-09-05 02:02";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -10667,8 +10822,10 @@ function renderStudyReader(){
     const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
     row.innerHTML=`<div class="readerStudyLine readerStudyIdLine">
       <div class="readerStudyLeftCell">
-        <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div></div>
-        <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現"></button>
+        <div class="readerStudyIdActions">
+          <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現"></button>
+          <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div></div>
+        </div>
       </div>
       <div class="readerStudyBodyCell"><div class="readerStudyItemId"></div></div>
     </div>
@@ -10744,7 +10901,7 @@ function applyStudyReaderDisplayOptions(){
       if(box&&!box.dataset.done&&item?.id){
         box.innerHTML="";
         try{
-          new QRCode(box,{text:item.id,width:52,height:52,correctLevel:QRCode.CorrectLevel.M});
+          new QRCode(box,{text:item.id,width:30,height:30,correctLevel:QRCode.CorrectLevel.M});
           box.dataset.done="1";
         }catch(e){}
       }
