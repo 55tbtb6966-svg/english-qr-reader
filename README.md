@@ -536,3 +536,8 @@ ReaderSet CSVは端末内localStorageへ保存されます。A/B/C/N/W/P/S本体
 - 「単語」「医療英語」「TOEIC」「英検」「NEJM」のクイックボタンを追加。
 - Comment欄はスペース区切りAND検索に対応（例：`単語 NEJM`）。
 - 通常検索と Comment絞り込みはAND条件。B教材の単語帳・医療英語・NEJM由来語彙などを抽出してフラッシュカード化しやすくした。
+
+
+## v4.5.3
+- ReaderSet CSV import fix: corrected the ReaderSet importer to use the existing iPhone/Safari-compatible FileReader helper (`readCsvFileText`).
+- Fixes the error where selecting a ReaderSet CSV could not be read/registered.
