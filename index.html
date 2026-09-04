@@ -3723,6 +3723,46 @@ button.flashActionAccepted{
   }
 }
 
+
+/* v4.5.14 Reader Japanese toggle + content filter */
+.readerSetKeywordLabel{
+  grid-column:1/-1;
+}
+.readerSetKeywordLabel input{
+  width:100%;
+  box-sizing:border-box;
+}
+.readerStudyJapaneseToggle{
+  background:#e9edf3;
+  border-color:#d4dae3;
+  color:#26313f;
+}
+.readerStudyJapaneseToggle[aria-pressed="true"]{
+  background:#dbe3ec;
+  border-color:#b9c4d0;
+  color:#1f2937;
+}
+.readerStudyJapaneseToggle[aria-pressed="false"]{
+  background:#e9edf3;
+  border-color:#d4dae3;
+  color:#26313f;
+}
+.readerStudyJapaneseLine{
+  min-height:34px;
+}
+.readerStudyJapaneseLine .readerStudyBodyCell{
+  min-height:34px;
+  display:flex;
+  align-items:flex-start;
+}
+.readerStudyJapanese{
+  min-height:1.6em;
+  width:100%;
+}
+.readerStudyJapanese.isCollapsed{
+  visibility:hidden;
+}
+
 </style>
 </head>
 <body>
@@ -3738,7 +3778,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.13 / 更新 2026-09-05 02:02</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.14 / 更新 2026-09-05 02:18</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4396,6 +4436,7 @@ button.flashActionAccepted{
         <div class="readerSetSearchGrid">
           <label><span>SetTitle</span><select id="readerSetTitleSearch"><option value="">選択してください</option></select></label>
           <label><span>Section</span><select id="readerSetSectionSearch"><option value="">すべて</option></select></label>
+          <label class="readerSetKeywordLabel"><span>内容検索</span><input id="readerSetKeywordSearch" type="search" placeholder="英語・日本語・解説・IDを検索"></label>
           <button type="button" id="readerSetLoadBtn" class="secondary standardActionBtn">表示</button>
         </div>
         <p class="hint" style="margin:8px 0 0;">SetTitleを変更するとSection候補も自動で切り替わります。</p>
@@ -4431,8 +4472,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.13";
-const APP_UPDATED="2026-09-05 02:02";
+const APP_VERSION="v4.5.14";
+const APP_UPDATED="2026-09-05 02:18";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -10737,10 +10778,24 @@ async function loadReaderSetSelection(){
   const setIds=uniqueSorted(filtered.map(x=>x.setId));
   if(setIds.length>1)filtered=filtered.filter(x=>x.setId===setIds[0]);
   studyReaderItems=await buildReaderItemsFromSetRows(filtered);
+  const keyword=String($("readerSetKeywordSearch")?.value||"").trim().normalize("NFKC").toLowerCase();
+  if(keyword){
+    const terms=keyword.split(/\s+/).filter(Boolean);
+    studyReaderItems=studyReaderItems.filter(item=>{
+      const haystack=[
+        item.id,item.section,item.english,item.englishSpeak,item.japanese,item.ipa,item.explanation
+      ].map(v=>String(v||"").normalize("NFKC").toLowerCase()).join("\n");
+      return terms.every(t=>haystack.includes(t));
+    });
+  }
   studyReaderContext={setId:filtered[0].setId,setTitle:filtered[0].setTitle,section:section};
   renderStudyReader();
   const missing=studyReaderItems.filter(x=>x.missing).length;
-  setStudyReaderStatus(`${studyReaderContext.setTitle}${section?` / ${section}`:""}：${studyReaderItems.length}文${missing?`（未登録ID ${missing}件）`:""}${setIds.length>1?` / 複数Set一致のため ${setIds[0]} を表示`:""}`);
+  if(keyword && !studyReaderItems.length){
+    setStudyReaderStatus(`検索「${keyword}」に一致する項目はありません。`);
+    return;
+  }
+  setStudyReaderStatus(`${studyReaderContext.setTitle}${section?` / ${section}`:""}：${studyReaderItems.length}文${keyword?` / 検索「${keyword}」`:""}${missing?`（未登録ID ${missing}件）`:""}${setIds.length>1?` / 複数Set一致のため ${setIds[0]} を表示`:""}`);
 }
 function setReaderSetImportStatus(text,isError=false){
   const el=$("readerSetImportStatus");
@@ -10859,11 +10914,10 @@ function renderStudyReader(){
       if(my===studyReaderSequenceToken){row.classList.remove("isReading");setStudyReaderStatus("停止中");}
     });
     row.querySelector(".readerStudyJapaneseToggle")?.addEventListener("click",e=>{
-      const line=row.querySelector(".readerStudyJapaneseLine");
       const ja=row.querySelector(".readerStudyJapanese");
-      const next=ja?.hidden===true;
-      if(ja)ja.hidden=!next;
-      if(line)line.classList.toggle("isHidden",!next);
+      const currentlyOn=e.currentTarget.getAttribute("aria-pressed")!=="false";
+      const next=!currentlyOn;
+      if(ja)ja.classList.toggle("isCollapsed",!next);
       e.currentTarget.setAttribute("aria-pressed",next?"true":"false");
     });
     row.querySelector(".readerStudyStar").addEventListener("click",e=>{
@@ -10881,8 +10935,7 @@ function applyStudyReaderDisplayOptions(){
   document.querySelectorAll(".readerStudyJapaneseLine").forEach(line=>{
     const ja=line.querySelector(".readerStudyJapanese");
     const btn=line.querySelector(".readerStudyJapaneseToggle");
-    if(ja)ja.hidden=!showJa;
-    line.classList.toggle("isHidden",!showJa);
+    if(ja)ja.classList.toggle("isCollapsed",!showJa);
     if(btn)btn.setAttribute("aria-pressed",showJa?"true":"false");
   });
   document.querySelectorAll(".readerStudyExplanationLine").forEach(line=>{
@@ -10939,6 +10992,9 @@ $("readerSetTitleSearch")?.addEventListener("change",()=>{
   refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
 });
 $("readerSetSectionSearch")?.addEventListener("change",()=>{});
+$("readerSetKeywordSearch")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();loadReaderSetSelection();}
+});
 refreshReaderSetSuggestions();
 renderStudyReader();
 </script>
