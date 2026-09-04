@@ -3824,6 +3824,21 @@ button.flashActionAccepted{
   }
 }
 
+
+/* v4.5.16 unify Japanese / Explanation toggle states */
+.readerStudyJapaneseToggle[aria-pressed="true"],
+.readerStudyExplanation summary[aria-pressed="true"]{
+  background:#dbe3ec;
+  border-color:#b9c4d0;
+  color:#1f2937;
+}
+.readerStudyJapaneseToggle[aria-pressed="false"],
+.readerStudyExplanation summary[aria-pressed="false"]{
+  background:#e9edf3;
+  border-color:#d4dae3;
+  color:#26313f;
+}
+
 </style>
 </head>
 <body>
@@ -3839,7 +3854,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.15 / 更新 2026-09-05 02:31</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.16 / 更新 2026-09-05 02:42</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4505,10 +4520,10 @@ button.flashActionAccepted{
     </div>
 
     <div class="readerStudyQuickControls">
-      <button type="button" id="studyReaderJapaneseAllOnBtn" class="secondary">日本語訳 全表示</button>
-      <button type="button" id="studyReaderJapaneseAllOffBtn" class="secondary">日本語訳 全部消す</button>
-      <button type="button" id="studyReaderExplanationOpenBtn" class="secondary">解説 全て開く</button>
-      <button type="button" id="studyReaderExplanationCloseBtn" class="secondary">解説 全て閉じる</button>
+      <button type="button" id="studyReaderJapaneseAllOnBtn" class="secondary">日本語 すべて表示</button>
+      <button type="button" id="studyReaderJapaneseAllOffBtn" class="secondary">日本語 すべて非表示</button>
+      <button type="button" id="studyReaderExplanationOpenBtn" class="secondary">解説 すべて表示</button>
+      <button type="button" id="studyReaderExplanationCloseBtn" class="secondary">解説 すべて非表示</button>
     </div>
 
     <details class="readerStudyAdvanced">
@@ -4544,8 +4559,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.15";
-const APP_UPDATED="2026-09-05 02:31";
+const APP_VERSION="v4.5.16";
+const APP_UPDATED="2026-09-05 02:42";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -10965,7 +10980,7 @@ function renderStudyReader(){
       <div class="readerStudyBodyCell"><div class="readerStudyJapanese"></div></div>
     </div>
     <div class="readerStudyLine readerStudyExplanationLine">
-      <div class="readerStudyLeftCell"><details class="readerStudyExplanation"><summary>解説</summary></details></div>
+      <div class="readerStudyLeftCell"><details class="readerStudyExplanation"><summary aria-pressed="false">解説</summary></details></div>
       <div class="readerStudyBodyCell"><div class="readerStudyExplanationBody"></div></div>
     </div>`;
     row.querySelector(".readerStudyItemId").textContent=r.id;
@@ -10975,7 +10990,11 @@ function renderStudyReader(){
     const expDetails=row.querySelector(".readerStudyExplanation");
     const expBody=row.querySelector(".readerStudyExplanationBody");
     if(expBody)expBody.hidden=true;
-    expDetails?.addEventListener("toggle",()=>{if(expBody)expBody.hidden=!expDetails.open;});
+    expDetails?.addEventListener("toggle",()=>{
+      if(expBody)expBody.hidden=!expDetails.open;
+      const summary=expDetails.querySelector("summary");
+      if(summary)summary.setAttribute("aria-pressed",expDetails.open?"true":"false");
+    });
     row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
       if(r.missing)return;
       const my=++studyReaderSequenceToken; speakingToken++; const token=speakingToken;
@@ -11066,7 +11085,11 @@ function setAllStudyReaderExplanation(open){
   document.querySelectorAll(".readerStudyExplanationLine").forEach(line=>{
     const details=line.querySelector(".readerStudyExplanation");
     const body=line.querySelector(".readerStudyExplanationBody");
-    if(details)details.open=!!open;
+    if(details){
+      details.open=!!open;
+      const summary=details.querySelector("summary");
+      if(summary)summary.setAttribute("aria-pressed",open?"true":"false");
+    }
     if(body)body.hidden=!open;
   });
 }
