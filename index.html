@@ -3675,20 +3675,28 @@ button.flashActionAccepted{
     <p class="hint" style="margin-top:0;">ReaderSet CSVで SetTitle・Section・Order・ItemID を管理し、A/B/C/N/W/P/Sの各IDを文書順に並べて読み上げます。</p>
 
     <div class="readerSetManager">
-      <div class="readerSetManagerTitle">ReaderSet CSV</div>
-      <div class="readerSetImportRow">
+      <div class="csvMajorGroup readerSetCsvGroup">
+        <div class="csvMajorTitle">ReaderSet CSV登録</div>
+        <p class="hint" style="margin-top:0;">SetID / SetTitle / Section / Order / ItemID のCSVを登録します。</p>
         <input id="readerSetCsvInput" type="file" accept=".csv,.txt,text/csv,text/plain">
-        <button type="button" id="readerSetImportBtn" class="secondary">CSVを登録</button>
+        <div class="row">
+          <button type="button" id="readerSetImportBtn" class="secondary standardActionBtn">ReaderSet CSVを登録</button>
+        </div>
+        <p class="status" id="readerSetImportStatus">CSVを選択して「ReaderSet CSVを登録」を押してください。</p>
+        <div class="metric">
+          <div id="readerSetMeta">ReaderSet CSV未登録。サンプル文書を表示します。</div>
+        </div>
       </div>
-      <div class="readerSetMeta" id="readerSetImportStatus">CSVを選択して「CSVを登録」を押してください。</div>
-      <div class="readerSetSearchGrid">
-        <label><span>SetTitle</span><input id="readerSetTitleSearch" list="readerSetTitleList" placeholder="例：NEJM"></label>
-        <label><span>Section</span><input id="readerSetSectionSearch" list="readerSetSectionList" placeholder="例：Case 1-1"></label>
-        <button type="button" id="readerSetLoadBtn">表示</button>
+
+      <div class="csvMajorGroup readerSetOpenGroup">
+        <div class="csvMajorTitle">ReaderSetを開く</div>
+        <div class="readerSetSearchGrid">
+          <label><span>SetTitle</span><select id="readerSetTitleSearch"><option value="">選択してください</option></select></label>
+          <label><span>Section</span><select id="readerSetSectionSearch"><option value="">すべて</option></select></label>
+          <button type="button" id="readerSetLoadBtn">表示</button>
+        </div>
+        <p class="hint" style="margin:8px 0 0;">SetTitleを変更するとSection候補も自動で切り替わります。</p>
       </div>
-      <datalist id="readerSetTitleList"></datalist>
-      <datalist id="readerSetSectionList"></datalist>
-      <div class="readerSetMeta" id="readerSetMeta">ReaderSet CSV未登録。サンプル文書を表示します。</div>
     </div>
 
     <div class="readerStudyToolbar">
@@ -3720,8 +3728,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.7";
-const APP_UPDATED="2026-09-05 00:05";
+const APP_VERSION="v4.5.8";
+const APP_UPDATED="2026-09-05 00:34";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9026,12 +9034,12 @@ async function previewCardToImageDataUrl(card, scale=2){
 .readerStudyId{font-size:.8rem;color:#6b7280;}
 .readerStudyStatus{min-height:1.4em;font-weight:650;margin:10px 0 0;}
 
-.readerSetManager{border:1px solid #d9dee7;border-radius:14px;padding:13px;margin-top:12px;background:#fff;}
+.readerSetManager{margin-top:12px;}
 .readerSetManagerTitle{font-weight:800;margin-bottom:8px;}
 .readerSetImportRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
 .readerSetSearchGrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;}
 .readerSetSearchGrid label{display:flex;flex-direction:column;gap:5px;font-weight:700;}
-.readerSetSearchGrid input{width:100%;box-sizing:border-box;padding:10px 11px;background:#fff;}
+.readerSetSearchGrid input,.readerSetSearchGrid select{width:100%;box-sizing:border-box;padding:10px 11px;background:#fff;}
 .readerSetMeta{font-size:.86rem;color:#667085;line-height:1.5;margin-top:8px;}
 .readerStudySetTitle{font-size:1.35rem;font-weight:850;line-height:1.3;margin:0 0 4px;}
 .readerStudyDocMeta{font-size:.84rem;color:#667085;margin-bottom:9px;}
@@ -9967,18 +9975,28 @@ function escapeHtml(value){
     .replace(/'/g,"&#39;");
 }
 function uniqueSorted(xs){return [...new Set(xs.filter(Boolean).map(String))].sort((a,b)=>a.localeCompare(b,"ja",{numeric:true}));}
-function refreshReaderSetSuggestions(){
+function refreshReaderSetSuggestions({preserveTitle=true,preserveSection=true}={}){
   const all=loadReaderSetRecords();
-  const title=$('readerSetTitleSearch')?.value.trim()||"";
-  const titleList=$('readerSetTitleList');
-  if(titleList)titleList.innerHTML=uniqueSorted(all.map(x=>x.setTitle)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
-  const sectionList=$('readerSetSectionList');
-  const scoped=title?all.filter(x=>x.setTitle===title):all;
-  if(sectionList)sectionList.innerHTML=uniqueSorted(scoped.map(x=>x.section)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
-  const meta=$('readerSetMeta');
+  const titleEl=$("readerSetTitleSearch");
+  const sectionEl=$("readerSetSectionSearch");
+  const oldTitle=preserveTitle?(titleEl?.value||""):"";
+  const oldSection=preserveSection?(sectionEl?.value||""):"";
+  const titles=uniqueSorted(all.map(x=>x.setTitle));
+  if(titleEl){
+    titleEl.innerHTML='<option value="">選択してください</option>'+titles.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+    if(oldTitle && titles.includes(oldTitle))titleEl.value=oldTitle;
+  }
+  const selectedTitle=titleEl?.value||"";
+  const scoped=selectedTitle?all.filter(x=>x.setTitle===selectedTitle):[];
+  const sections=uniqueSorted(scoped.map(x=>x.section));
+  if(sectionEl){
+    sectionEl.innerHTML='<option value="">すべて</option>'+sections.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+    if(oldSection && sections.includes(oldSection))sectionEl.value=oldSection;
+  }
+  const meta=$("readerSetMeta");
   if(meta){
     const sets=uniqueSorted(all.map(x=>x.setId)).length;
-    meta.textContent=all.length?`登録 ${all.length}行 / ${sets} Set`:"ReaderSet CSV未登録。サンプル文書を表示します。";
+    meta.textContent=all.length?`登録件数：${all.length}行 / ${sets} Set`:`ReaderSet CSV未登録。サンプル文書を表示します。`;
   }
 }
 async function getReaderRecordById(id){
@@ -10005,11 +10023,11 @@ async function buildReaderItemsFromSetRows(rows){
 async function loadReaderSetSelection(){
   const all=loadReaderSetRecords();
   if(!all.length){studyReaderItems=STUDY_READER_DEMO.slice();studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};renderStudyReader();setStudyReaderStatus("ReaderSet CSV未登録のためサンプルを表示しています。");return;}
-  const title=$('readerSetTitleSearch')?.value.trim()||"";
-  const section=$('readerSetSectionSearch')?.value.trim()||"";
+  const title=$('readerSetTitleSearch')?.value||"";
+  const section=$('readerSetSectionSearch')?.value||"";
   let filtered=all;
-  if(title)filtered=filtered.filter(x=>x.setTitle.toLowerCase().includes(title.toLowerCase()));
-  if(section)filtered=filtered.filter(x=>x.section.toLowerCase().includes(section.toLowerCase()));
+  if(title)filtered=filtered.filter(x=>x.setTitle===title);
+  if(section)filtered=filtered.filter(x=>x.section===section);
   if(!filtered.length){setStudyReaderStatus("一致するReaderSetがありません。");return;}
   const setIds=uniqueSorted(filtered.map(x=>x.setId));
   if(setIds.length>1)filtered=filtered.filter(x=>x.setId===setIds[0]);
@@ -10059,11 +10077,11 @@ async function importReaderSetCsv(){
     const rows=parseReaderSetDelimited(text);
     const records=csvToReaderSetRecords(rows);
     saveReaderSetRecords(records,"");
-    refreshReaderSetSuggestions();
+    refreshReaderSetSuggestions({preserveTitle:false,preserveSection:false});
     const first=records.slice().sort((a,b)=>a.order-b.order)[0];
     if($("readerSetTitleSearch"))$("readerSetTitleSearch").value=first.setTitle;
-    if($("readerSetSectionSearch"))$("readerSetSectionSearch").value=first.section||"";
-    refreshReaderSetSuggestions();
+    refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
+    if($("readerSetSectionSearch") && first.section){$("readerSetSectionSearch").value=first.section;}
     const setCount=uniqueSorted(records.map(x=>x.setId)).length;
     setReaderSetImportStatus(`登録完了：${records.length}行 / ${setCount} Set`);
     // 登録と文書表示は分離。参照先CSVが未登録でもReaderSet自体は登録成功とする。
@@ -10162,9 +10180,11 @@ $("readerSetCsvInput")?.addEventListener("change",()=>{
   setReaderSetImportStatus(f?"CSVを選択しました。登録ボタンを押してください。":"CSVを選択してください。");
 });
 $("readerSetLoadBtn")?.addEventListener("click",loadReaderSetSelection);
-$("readerSetTitleSearch")?.addEventListener("input",()=>{if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";refreshReaderSetSuggestions();});
-$("readerSetTitleSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
-$("readerSetSectionSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
+$("readerSetTitleSearch")?.addEventListener("change",()=>{
+  if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";
+  refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
+});
+$("readerSetSectionSearch")?.addEventListener("change",()=>{});
 refreshReaderSetSuggestions();
 renderStudyReader();
 </script>
