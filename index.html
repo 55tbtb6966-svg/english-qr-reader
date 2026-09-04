@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.3 / 更新 2026-09-04 21:32</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.4 / 更新 2026-09-04 21:48</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3692,9 +3692,10 @@ button.flashActionAccepted{
     <div class="readerSetManager">
       <div class="readerSetManagerTitle">ReaderSet CSV</div>
       <div class="readerSetImportRow">
-        <input id="readerSetCsvInput" type="file" accept=".csv,text/csv">
-        <button type="button" id="readerSetImportBtn" class="secondary">CSVを登録</button>
+        <input id="readerSetCsvInput" type="file" accept=".csv,text/csv,text/plain">
+        <button type="button" id="readerSetImportBtn" class="secondary">選択したCSVを登録</button>
       </div>
+      <div class="readerSetMeta" id="readerSetImportStatus">CSVを選ぶと自動で登録します。</div>
       <div class="readerSetSearchGrid">
         <label><span>SetTitle</span><input id="readerSetTitleSearch" list="readerSetTitleList" placeholder="例：NEJM"></label>
         <label><span>Section</span><input id="readerSetSectionSearch" list="readerSetSectionList" placeholder="例：Case 1-1"></label>
@@ -3734,8 +3735,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.3";
-const APP_UPDATED="2026-09-04 21:32";
+const APP_VERSION="v4.5.4";
+const APP_UPDATED="2026-09-04 21:48";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9940,34 +9941,82 @@ let studyReaderSequenceToken=0;
 let studyReaderItems=STUDY_READER_DEMO.slice();
 let studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};
 
-function loadReaderSetRecords(){
-  try{const v=JSON.parse(localStorage.getItem(READER_SET_STORAGE_KEY)||"[]");return Array.isArray(v)?v:[];}catch(e){return [];}
+let readerSetMemory=[];
+function setReaderSetImportStatus(text,isError=false){
+  const el=$("readerSetImportStatus");
+  if(!el)return;
+  el.textContent=text||"";
+  el.style.color=isError?"#b42318":"#667085";
 }
-function saveReaderSetRecords(rows,fileName=""){
-  localStorage.setItem(READER_SET_STORAGE_KEY,JSON.stringify(rows||[]));
-  if(fileName)localStorage.setItem(READER_SET_FILENAME_KEY,String(fileName));
+function loadReaderSetRecords(){
+  if(readerSetMemory.length)return readerSetMemory.slice();
+  try{
+    const v=JSON.parse(localStorage.getItem(READER_SET_STORAGE_KEY)||"[]");
+    if(Array.isArray(v)){readerSetMemory=v;return v.slice();}
+  }catch(e){}
+  return [];
+}
+async function saveReaderSetRecords(rows,fileName=""){
+  readerSetMemory=Array.isArray(rows)?rows.slice():[];
+  let localOk=false,dbOk=false;
+  try{
+    localStorage.setItem(READER_SET_STORAGE_KEY,JSON.stringify(readerSetMemory));
+    if(fileName)localStorage.setItem(READER_SET_FILENAME_KEY,String(fileName));
+    localOk=true;
+  }catch(e){console.warn("ReaderSet localStorage save failed",e);}
+  try{
+    await putMeta(READER_SET_STORAGE_KEY,readerSetMemory);
+    if(fileName)await putMeta(READER_SET_FILENAME_KEY,String(fileName));
+    dbOk=true;
+  }catch(e){console.warn("ReaderSet IndexedDB save failed",e);}
+  if(!localOk&&!dbOk)throw new Error("ReaderSetの端末保存に失敗しました。");
+  return {localOk,dbOk};
+}
+async function hydrateReaderSetRecords(){
+  if(loadReaderSetRecords().length)return;
+  try{
+    const v=await getMeta(READER_SET_STORAGE_KEY);
+    if(Array.isArray(v)&&v.length){
+      readerSetMemory=v.slice();
+      try{localStorage.setItem(READER_SET_STORAGE_KEY,JSON.stringify(v));}catch(e){}
+    }
+    const fn=await getMeta(READER_SET_FILENAME_KEY);
+    if(fn){try{localStorage.setItem(READER_SET_FILENAME_KEY,String(fn));}catch(e){}}
+  }catch(e){console.warn("ReaderSet hydrate failed",e);}
 }
 function readerSetCellIndex(headers,names){
-  const h=headers.map(x=>String(x||"").replace(/^\uFEFF/,"").trim().toLowerCase());
-  return h.findIndex(x=>names.includes(x));
+  const norm=x=>String(x||"").replace(/^\uFEFF/,"").normalize("NFKC").trim().toLowerCase().replace(/[ _-]/g,"");
+  const wanted=names.map(norm);
+  const h=headers.map(norm);
+  return h.findIndex(x=>wanted.includes(x));
+}
+function parseReaderSetText(text){
+  let t=String(text||"").replace(/^\uFEFF/,"");
+  if(!t.trim())throw new Error("CSVが空です。");
+  let rows=parseCsv(t);
+  // Excel等でタブ区切りになった場合も受け付ける。
+  if(rows.length&&rows[0].length===1&&t.includes("\t")){
+    rows=t.split(/\r?\n/).filter(x=>x.trim()!=="").map(line=>line.split("\t"));
+  }
+  return rows;
 }
 function csvToReaderSetRecords(rows){
   if(rows.length<2)throw new Error("ReaderSet CSVにデータ行がありません。");
   const h=rows[0];
-  const iSet=readerSetCellIndex(h,["setid","set_id","セットid"]);
-  const iTitle=readerSetCellIndex(h,["settitle","set_title","title","セット名"]);
-  const iSec=readerSetCellIndex(h,["section","セクション","章"]);
-  const iOrder=readerSetCellIndex(h,["order","順番","表示順"]);
-  const iItem=readerSetCellIndex(h,["itemid","item_id","id","教材id"]);
-  if(iSet<0||iTitle<0||iSec<0||iOrder<0||iItem<0)throw new Error("必要列：SetID, SetTitle, Section, Order, ItemID");
+  const iSet=readerSetCellIndex(h,["setid","セットid","readerid","rid"]);
+  const iTitle=readerSetCellIndex(h,["settitle","title","セット名","教材名"]);
+  const iSec=readerSetCellIndex(h,["section","セクション","章","見出し"]);
+  const iOrder=readerSetCellIndex(h,["order","順番","表示順","並び順"]);
+  const iItem=readerSetCellIndex(h,["itemid","id","教材id","参照id"]);
+  if(iSet<0||iTitle<0||iOrder<0||iItem<0)throw new Error("必要列：SetID, SetTitle, Order, ItemID（Sectionは空欄可）");
   const out=[];
   for(let i=1;i<rows.length;i++){
     const c=rows[i];
-    const setId=String(c[iSet]||"").trim();
+    const setId=String(c[iSet]||"").normalize("NFKC").trim();
     const setTitle=String(c[iTitle]||"").trim();
-    const section=String(c[iSec]||"").trim();
-    const itemId=String(c[iItem]||"").trim().toUpperCase();
-    const orderRaw=String(c[iOrder]||"").trim();
+    const section=iSec>=0?String(c[iSec]||"").trim():"";
+    const itemId=String(c[iItem]||"").normalize("NFKC").trim().toUpperCase();
+    const orderRaw=String(c[iOrder]||"").normalize("NFKC").trim();
     const order=Number(orderRaw);
     if(!setId&&!setTitle&&!section&&!itemId&&!orderRaw)continue;
     if(!setId||!setTitle||!itemId||!Number.isFinite(order))throw new Error(`${i+1}行目：SetID / SetTitle / Order / ItemID を確認してください。`);
@@ -9988,7 +10037,7 @@ function refreshReaderSetSuggestions(){
   if(sectionList)sectionList.innerHTML=uniqueSorted(scoped.map(x=>x.section)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
   const meta=$('readerSetMeta');
   if(meta){
-    const file=localStorage.getItem(READER_SET_FILENAME_KEY)||"";
+    let file="";try{file=localStorage.getItem(READER_SET_FILENAME_KEY)||"";}catch(e){}
     const sets=uniqueSorted(all.map(x=>x.setId)).length;
     meta.textContent=all.length?`登録 ${all.length}行 / ${sets} Set${file?` / ${file}`:""}`:"ReaderSet CSV未登録。サンプル文書を表示します。";
   }
@@ -10028,31 +10077,38 @@ async function loadReaderSetSelection(){
   if(section)filtered=filtered.filter(x=>x.section.toLowerCase().includes(section.toLowerCase()));
   if(!filtered.length){setStudyReaderStatus("一致するReaderSetがありません。");return;}
   const setIds=uniqueSorted(filtered.map(x=>x.setId));
-  if(setIds.length>1){
-    // Prefer the first set deterministically; status tells the user if a broad query matched more than one.
-    filtered=filtered.filter(x=>x.setId===setIds[0]);
-  }
+  if(setIds.length>1)filtered=filtered.filter(x=>x.setId===setIds[0]);
   studyReaderItems=await buildReaderItemsFromSetRows(filtered);
   studyReaderContext={setId:filtered[0].setId,setTitle:filtered[0].setTitle,section:section};
   renderStudyReader();
   const missing=studyReaderItems.filter(x=>x.missing).length;
   setStudyReaderStatus(`${studyReaderContext.setTitle}${section?` / ${section}`:""}：${studyReaderItems.length}文${missing?`（未登録ID ${missing}件）`:""}${setIds.length>1?` / 複数Set一致のため ${setIds[0]} を表示`:""}`);
 }
-async function importReaderSetCsv(){
-  const file=$('readerSetCsvInput')?.files?.[0];
-  if(!file){setStudyReaderStatus("ReaderSet CSVを選択してください。");return;}
+async function importReaderSetCsv(fileArg){
+  const file=fileArg||$('readerSetCsvInput')?.files?.[0];
+  if(!file){
+    setReaderSetImportStatus("CSVを選択してください。",true);
+    $('readerSetCsvInput')?.click();
+    return;
+  }
   try{
+    setReaderSetImportStatus(`「${file.name||"CSV"}」を読み込み中…`);
     const text=await readCsvFileText(file);
-    const records=csvToReaderSetRecords(parseCsv(text));
-    saveReaderSetRecords(records,file.name);
+    const records=csvToReaderSetRecords(parseReaderSetText(text));
+    const saved=await saveReaderSetRecords(records,file.name);
     refreshReaderSetSuggestions();
     const first=records.slice().sort((a,b)=>a.order-b.order)[0];
     if($('readerSetTitleSearch'))$('readerSetTitleSearch').value=first.setTitle;
     if($('readerSetSectionSearch'))$('readerSetSectionSearch').value=first.section||"";
     refreshReaderSetSuggestions();
     await loadReaderSetSelection();
+    setReaderSetImportStatus(`登録完了：${records.length}行 / ${uniqueSorted(records.map(x=>x.setId)).length} Set${saved.dbOk?" / 端末保存確認済み":""}`);
     setStudyReaderStatus(`ReaderSet CSVを登録しました：${records.length}行`);
-  }catch(e){setStudyReaderStatus(`ReaderSet CSVエラー：${e?.message||e}`);}
+  }catch(e){
+    const msg=e?.message||String(e);
+    setReaderSetImportStatus(`登録できません：${msg}`,true);
+    setStudyReaderStatus(`ReaderSet CSVエラー：${msg}`);
+  }
 }
 
 function studyReaderRate(){
@@ -10131,12 +10187,13 @@ $("studyReaderPlayAllBtn")?.addEventListener("click",()=>playStudyReader(studyRe
 $("studyReaderPlayMarkedBtn")?.addEventListener("click",()=>playStudyReader(studyReaderItems.filter(x=>studyReaderMarked.has(x.id))));
 $("studyReaderStopBtn")?.addEventListener("click",()=>{studyReaderSequenceToken++;speakingToken++;clearStudyReaderHighlight();try{window.speechSynthesis?.cancel();}catch(e){}setStudyReaderStatus("停止しました。");});
 ["studyReaderShowJapanese","studyReaderShowExplanation","studyReaderShowQr"].forEach(id=>$(id)?.addEventListener("change",applyStudyReaderDisplayOptions));
-$("readerSetImportBtn")?.addEventListener("click",importReaderSetCsv);
+$("readerSetImportBtn")?.addEventListener("click",()=>importReaderSetCsv());
+$("readerSetCsvInput")?.addEventListener("change",e=>{const f=e.target?.files?.[0];if(f)importReaderSetCsv(f);});
 $("readerSetLoadBtn")?.addEventListener("click",loadReaderSetSelection);
 $("readerSetTitleSearch")?.addEventListener("input",()=>{if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";refreshReaderSetSuggestions();});
 $("readerSetTitleSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
 $("readerSetSectionSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
-refreshReaderSetSuggestions();
+(async()=>{await hydrateReaderSetRecords();refreshReaderSetSuggestions();})();
 renderStudyReader();
 </script>
 </body>
