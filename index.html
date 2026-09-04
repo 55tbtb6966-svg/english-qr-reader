@@ -3693,14 +3693,14 @@ button.flashActionAccepted{
         <div class="readerSetSearchGrid">
           <label><span>SetTitle</span><select id="readerSetTitleSearch"><option value="">選択してください</option></select></label>
           <label><span>Section</span><select id="readerSetSectionSearch"><option value="">すべて</option></select></label>
-          <button type="button" id="readerSetLoadBtn">表示</button>
+          <button type="button" id="readerSetLoadBtn" class="secondary standardActionBtn">表示</button>
         </div>
         <p class="hint" style="margin:8px 0 0;">SetTitleを変更するとSection候補も自動で切り替わります。</p>
       </div>
     </div>
 
     <div class="readerStudyToolbar">
-      <button type="button" id="studyReaderPlayAllBtn">▶ 全文読む</button>
+      <button type="button" id="studyReaderPlayAllBtn" class="secondary">▶ 全文読む</button>
       <button type="button" id="studyReaderPlayMarkedBtn" class="secondary">★だけ読む</button>
       <button type="button" id="studyReaderStopBtn" class="secondary">■ 停止</button>
       <label><span>英語速度</span><select id="studyReaderRate"><option value="0.7">0.7</option><option value="0.8">0.8</option><option value="0.9">0.9</option><option value="1" selected>1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option></select></label>
@@ -3728,8 +3728,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.8";
-const APP_UPDATED="2026-09-05 00:34";
+const APP_VERSION="v4.5.9";
+const APP_UPDATED="2026-09-05 00:48";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9020,11 +9020,11 @@ async function previewCardToImageDataUrl(card, scale=2){
 .readerStudyRow.isReading{border-color:#111;box-shadow:0 0 0 2px #111 inset;}
 .readerStudyTop{display:flex;gap:10px;align-items:flex-start;}
 .readerStudySpeak{flex:0 0 auto;padding:9px 11px;min-width:48px;}
-.readerStudyStar{flex:0 0 auto;padding:9px 11px;min-width:48px;background:#e9edf3;color:#111;}
-.readerStudyStar.active{background:#111;color:#fff;}
+ .readerStudyStar{flex:0 0 auto;padding:7px 9px;min-width:42px;background:#f8fafc;color:#667085;border:1px solid #d0d5dd;font-size:.82rem;font-weight:700;}
+.readerStudyStar.active{background:#eef2f6;color:#344054;border:1px solid #98a2b3;font-weight:750;}
 .readerStudyTexts{flex:1 1 auto;min-width:0;}
-.readerStudyEnglish{font-size:1.16rem;font-weight:780;line-height:1.5;overflow-wrap:anywhere;}
-.readerStudyJapanese{font-size:.98rem;color:#4b5563;line-height:1.55;margin-top:5px;}
+.readerStudyEnglish{font-size:1.38rem;font-weight:780;line-height:1.5;overflow-wrap:anywhere;}
+.readerStudyJapanese{font-size:1.05rem;color:#4b5563;line-height:1.55;margin-top:6px;}
 .readerStudyExplanation{margin-top:10px;border-top:1px solid #e5e7eb;padding-top:9px;}
 .readerStudyExplanation summary{cursor:pointer;font-weight:700;color:#374151;}
 .readerStudyExplanationBody{white-space:pre-wrap;line-height:1.55;color:#444;margin-top:7px;font-size:.94rem;}
@@ -9037,7 +9037,8 @@ async function previewCardToImageDataUrl(card, scale=2){
 .readerSetManager{margin-top:12px;}
 .readerSetManagerTitle{font-weight:800;margin-bottom:8px;}
 .readerSetImportRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
-.readerSetSearchGrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;}
+.readerSetSearchGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-items:end;margin-top:10px;}
+.readerSetSearchGrid #readerSetLoadBtn{grid-column:1/-1;width:100%;margin-top:8px;min-height:46px;}
 .readerSetSearchGrid label{display:flex;flex-direction:column;gap:5px;font-weight:700;}
 .readerSetSearchGrid input,.readerSetSearchGrid select{width:100%;box-sizing:border-box;padding:10px 11px;background:#fff;}
 .readerSetMeta{font-size:.86rem;color:#667085;line-height:1.5;margin-top:8px;}
@@ -9045,12 +9046,13 @@ async function previewCardToImageDataUrl(card, scale=2){
 .readerStudyDocMeta{font-size:.84rem;color:#667085;margin-bottom:9px;}
 .readerStudyMissing{border-color:#b42318;background:#fff7f6;}
 .readerStudyMissing .readerStudyEnglish{color:#b42318;}
-@media(max-width:640px){.readerSetImportRow{grid-template-columns:1fr}.readerSetSearchGrid{grid-template-columns:1fr 1fr}.readerSetSearchGrid button{grid-column:1/-1}.readerStudySetTitle{font-size:1.2rem}}
+@media(max-width:640px){.readerSetImportRow{grid-template-columns:1fr}.readerSetSearchGrid{grid-template-columns:1fr 1fr}.readerStudySetTitle{font-size:1.2rem}}
 @media(max-width:650px){
   .readerStudyRow{padding:12px;}
-  .readerStudyEnglish{font-size:1.1rem;}
+  .readerStudyEnglish{font-size:1.26rem;}
   .readerStudyTop{gap:8px;}
-  .readerStudySpeak,.readerStudyStar{padding:8px 9px;min-width:44px;}
+  .readerStudySpeak{padding:7px 9px;min-width:42px;}
+  .readerStudyStar{padding:6px 8px;min-width:40px;}
 }
 </style>
         ${serialized}
@@ -10117,7 +10119,7 @@ function renderStudyReader(){
     const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
     row.innerHTML=`<div class="readerStudyTop">
       <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊</button>
-      <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">★</button>
+      <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">${studyReaderMarked.has(r.id)?"✓ 済":"✓"}</button>
       <div class="readerStudyTexts"><div class="readerStudyEnglish"></div><div class="readerStudyJapanese"></div></div>
     </div>
     <details class="readerStudyExplanation"><summary>解説</summary><div class="readerStudyExplanationBody"></div></details>
@@ -10137,7 +10139,7 @@ function renderStudyReader(){
     });
     row.querySelector(".readerStudyStar").addEventListener("click",e=>{
       const b=e.currentTarget;if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
-      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");setStudyReaderStatus(`★ ${studyReaderMarked.size}件`);
+      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");setStudyReaderStatus(`✓ ${studyReaderMarked.size}件`);
     });
     host.appendChild(row);
   });
