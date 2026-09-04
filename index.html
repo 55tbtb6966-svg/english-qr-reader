@@ -3252,6 +3252,115 @@ button.flashActionAccepted{
   .readerStudyToolbar{margin-top:24px;}
 }
 
+
+/* v4.5.11 Reader controls / explanation / QR refinement */
+.readerStudyTop{
+  display:grid;
+  grid-template-columns:82px minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+.readerStudyControls{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+}
+.readerStudySpeak{
+  width:100%;
+  min-width:0;
+  min-height:32px;
+  padding:5px 7px;
+  font-size:.88rem;
+}
+.readerStudyStar{
+  width:100%;
+  min-width:0;
+  min-height:28px;
+  padding:3px 6px;
+  font-size:.72rem;
+}
+.readerStudyQr{
+  margin-top:2px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.readerStudyQr[hidden]{
+  display:none !important;
+}
+.readerStudyQrBox{
+  width:72px;
+  height:72px;
+}
+.readerStudyQrBox canvas,.readerStudyQrBox img{
+  width:64px!important;
+  height:64px!important;
+}
+.readerStudyExplanation{
+  margin-top:12px;
+  border-top:1px solid #e5e7eb;
+  padding-top:10px;
+}
+.readerStudyExplanation summary{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:6px 12px;
+  border:1px solid #d4dae3;
+  border-radius:9px;
+  background:#e9edf3;
+  color:#26313f;
+  font-size:.95rem;
+  font-weight:750;
+  cursor:pointer;
+  user-select:none;
+  list-style:none;
+}
+.readerStudyExplanation summary::-webkit-details-marker{
+  display:none;
+}
+.readerStudyExplanation summary::after{
+  content:"▼";
+  margin-left:7px;
+  font-size:.72rem;
+  color:#667085;
+}
+.readerStudyExplanation[open] summary::after{
+  content:"▲";
+}
+.readerStudyExplanationBody{
+  white-space:pre-wrap;
+  line-height:1.68;
+  color:#374151;
+  margin-top:10px;
+  font-size:1.06rem;
+}
+.readerStudyOptions{
+  margin-top:14px;
+}
+.readerStudyOptions label{
+  padding:3px 0;
+}
+@media(max-width:650px){
+  .readerStudyTop{
+    grid-template-columns:74px minmax(0,1fr);
+    gap:9px;
+  }
+  .readerStudyQrBox{
+    width:66px;
+    height:66px;
+  }
+  .readerStudyQrBox canvas,.readerStudyQrBox img{
+    width:58px!important;
+    height:58px!important;
+  }
+  .readerStudyExplanationBody{
+    font-size:1.02rem;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3267,7 +3376,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.7 / 更新 2026-09-05 00:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.11 / 更新 2026-09-05 01:32</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3960,8 +4069,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.10";
-const APP_UPDATED="2026-09-05 01:08";
+const APP_VERSION="v4.5.11";
+const APP_UPDATED="2026-09-05 01:32";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -10350,17 +10459,18 @@ function renderStudyReader(){
     lastSection=sec;
     const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
     row.innerHTML=`<div class="readerStudyTop">
-      <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊</button>
-      <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">${studyReaderMarked.has(r.id)?"✓":"○"}</button>
+      <div class="readerStudyControls">
+        <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊</button>
+        <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">${studyReaderMarked.has(r.id)?"✓":"○"}</button>
+        <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div></div>
+      </div>
       <div class="readerStudyTexts"><div class="readerStudyItemId"></div><div class="readerStudyEnglish"></div><div class="readerStudyJapanese"></div></div>
     </div>
-    <details class="readerStudyExplanation"><summary>解説</summary><div class="readerStudyExplanationBody"></div></details>
-    <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div><div class="readerStudyId"></div></div>`;
+    <details class="readerStudyExplanation"><summary>解説</summary><div class="readerStudyExplanationBody"></div></details>`;
     row.querySelector(".readerStudyItemId").textContent=r.id;
     row.querySelector(".readerStudyEnglish").textContent=r.english;
     row.querySelector(".readerStudyJapanese").textContent=r.japanese;
     row.querySelector(".readerStudyExplanationBody").textContent=r.explanation||"解説はありません。";
-    row.querySelector(".readerStudyId").textContent=r.id;
     row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
       if(r.missing)return;
       const my=++studyReaderSequenceToken; speakingToken++; const token=speakingToken;
@@ -10384,9 +10494,21 @@ function applyStudyReaderDisplayOptions(){
   const showQr=$("studyReaderShowQr")?.checked===true;
   document.querySelectorAll(".readerStudyJapanese").forEach(x=>x.hidden=!showJa);
   document.querySelectorAll(".readerStudyExplanation").forEach(x=>x.open=openExp);
-  document.querySelectorAll(".readerStudyQr").forEach((x,i)=>{
+  document.querySelectorAll(".readerStudyQr").forEach(x=>{
     x.hidden=!showQr;
-    if(showQr){const box=x.querySelector(".readerStudyQrBox");const item=studyReaderItems[i];if(box&&!box.dataset.done){box.innerHTML="";try{new QRCode(box,{text:item?.id||"",width:68,height:68,correctLevel:QRCode.CorrectLevel.M});box.dataset.done="1";}catch(e){}}}
+    if(showQr){
+      const row=x.closest(".readerStudyRow");
+      const i=Number(row?.dataset?.readerIndex);
+      const item=Number.isFinite(i)?studyReaderItems[i]:null;
+      const box=x.querySelector(".readerStudyQrBox");
+      if(box&&!box.dataset.done&&item?.id){
+        box.innerHTML="";
+        try{
+          new QRCode(box,{text:item.id,width:64,height:64,correctLevel:QRCode.CorrectLevel.M});
+          box.dataset.done="1";
+        }catch(e){}
+      }
+    }
   });
 }
 async function playStudyReader(items){
