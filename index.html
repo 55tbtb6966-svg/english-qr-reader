@@ -3035,13 +3035,14 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.4.61 / 更新 2026-09-03 00:33</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.0 / 更新 2026-09-04 19:07</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
 <button class="tabBtn" data-target="dataPanel">データ管理</button>
 <button class="tabBtn" data-target="qrPanel">QR作成</button>
 <button class="tabBtn" data-target="flashcardPanel">フラッシュカード</button>
+<button class="tabBtn" data-target="studyReaderPanel">リーダー</button>
 </div>
 <section class="panel active" id="readerPanel">
 <input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
@@ -3668,6 +3669,33 @@ button.flashActionAccepted{
   </details>
 </section>
 
+<section class="panel" id="studyReaderPanel">
+  <div class="card">
+    <h2>リーダー <span class="badge">試作版</span></h2>
+    <p class="hint" style="margin-top:0;">長文を縦に読み進めながら、各文を個別に発音できます。QRは補助機能として初期状態では非表示です。</p>
+    <div class="readerStudyToolbar">
+      <button type="button" id="studyReaderPlayAllBtn">▶ 全文読む</button>
+      <button type="button" id="studyReaderPlayMarkedBtn" class="secondary">★だけ読む</button>
+      <button type="button" id="studyReaderStopBtn" class="secondary">■ 停止</button>
+      <label><span>英語速度</span><select id="studyReaderRate"><option value="0.7">0.7</option><option value="0.8">0.8</option><option value="0.9">0.9</option><option value="1" selected>1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option></select></label>
+    </div>
+    <div class="readerStudyOptions">
+      <label><input id="studyReaderShowJapanese" type="checkbox" checked><span>日本語訳</span></label>
+      <label><input id="studyReaderShowExplanation" type="checkbox"><span>解説を開く</span></label>
+      <label><input id="studyReaderShowQr" type="checkbox"><span>QR表示</span></label>
+      <label><input id="studyReaderAutoScroll" type="checkbox" checked><span>読み上げ位置へ移動</span></label>
+    </div>
+    <p class="readerStudyStatus" id="studyReaderStatus">短いサンプル文書を表示しています。</p>
+  </div>
+
+  <div class="card">
+    <div style="font-size:.82rem;color:#667085;margin-bottom:4px;">Medical English / Reader demo</div>
+    <h2 style="margin-bottom:4px;">診察英語：診察のはじまり</h2>
+    <p class="hint" style="margin:0;">将来はB-IDの文章セットをここに読み込みます。</p>
+    <div class="readerStudyDoc" id="studyReaderDoc"></div>
+  </div>
+</section>
+
 </main>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -3675,8 +3703,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.4.61";
-const APP_UPDATED="2026-09-03 00:33";
+const APP_VERSION="v4.5.0";
+const APP_UPDATED="2026-09-04 19:07";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -8953,7 +8981,40 @@ async function previewCardToImageDataUrl(card, scale=2){
   <svg xmlns="http://www.w3.org/2000/svg" width="${width*scale}" height="${height*scale}" viewBox="0 0 ${width} ${height}">
     <foreignObject x="0" y="0" width="${width}" height="${height}">
       <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#fff;">
-        <style>${css}</style>
+        <style>${css}
+/* v4.5.0 Reader prototype: long-form reading and pronunciation study */
+.readerStudyToolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:12px;}
+.readerStudyToolbar>button{flex:1 1 150px;}
+.readerStudyToolbar>label{flex:1 1 150px;}
+.readerStudyOptions{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+.readerStudyOptions label{display:flex;align-items:center;gap:7px;font-weight:650;}
+.readerStudyOptions label span{margin:0;}
+.readerStudyDoc{display:flex;flex-direction:column;gap:12px;margin-top:14px;}
+.readerStudySectionTitle{font-size:1.08rem;font-weight:800;margin:2px 0 0;padding:10px 12px;background:#f1f3f6;border-radius:12px;}
+.readerStudyRow{background:#fff;border:1px solid #d9dee7;border-radius:15px;padding:14px;scroll-margin-top:12px;transition:box-shadow .15s,border-color .15s;}
+.readerStudyRow.isReading{border-color:#111;box-shadow:0 0 0 2px #111 inset;}
+.readerStudyTop{display:flex;gap:10px;align-items:flex-start;}
+.readerStudySpeak{flex:0 0 auto;padding:9px 11px;min-width:48px;}
+.readerStudyStar{flex:0 0 auto;padding:9px 11px;min-width:48px;background:#e9edf3;color:#111;}
+.readerStudyStar.active{background:#111;color:#fff;}
+.readerStudyTexts{flex:1 1 auto;min-width:0;}
+.readerStudyEnglish{font-size:1.16rem;font-weight:780;line-height:1.5;overflow-wrap:anywhere;}
+.readerStudyJapanese{font-size:.98rem;color:#4b5563;line-height:1.55;margin-top:5px;}
+.readerStudyExplanation{margin-top:10px;border-top:1px solid #e5e7eb;padding-top:9px;}
+.readerStudyExplanation summary{cursor:pointer;font-weight:700;color:#374151;}
+.readerStudyExplanationBody{white-space:pre-wrap;line-height:1.55;color:#444;margin-top:7px;font-size:.94rem;}
+.readerStudyQr{margin-top:10px;display:flex;align-items:center;gap:10px;}
+.readerStudyQrBox{width:76px;height:76px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid #e5e7eb;border-radius:8px;background:#fff;}
+.readerStudyQrBox canvas,.readerStudyQrBox img{width:68px!important;height:68px!important;}
+.readerStudyId{font-size:.8rem;color:#6b7280;}
+.readerStudyStatus{min-height:1.4em;font-weight:650;margin:10px 0 0;}
+@media(max-width:650px){
+  .readerStudyRow{padding:12px;}
+  .readerStudyEnglish{font-size:1.1rem;}
+  .readerStudyTop{gap:8px;}
+  .readerStudySpeak,.readerStudyStar{padding:8px 9px;min-width:44px;}
+}
+</style>
         ${serialized}
       </div>
     </foreignObject>
@@ -9776,6 +9837,111 @@ setTimeout(async()=>{
   }catch(e){}
 })();
 
+
+
+/* ===== v4.5.0 Reader prototype ===== */
+const STUDY_READER_DEMO=[
+  {id:"DEMO-B001",section:"① 診察のはじまり",english:"Hello, I’m Dr. ___ .",japanese:"こんにちは、___医師です。",explanation:"【表現】診察開始時の自己紹介。\n【発音】Dr. は読み上げでは doctor と発音されることがあります。"},
+  {id:"DEMO-B002",english:"How can I help you today?",japanese:"今日はどうされましたか？",explanation:"【表現】診察の冒頭で患者さんの主訴を尋ねる表現。"},
+  {id:"DEMO-B003",english:"What brings you in today?",japanese:"今日はどんな症状で来られましたか？",explanation:"【表現】受診理由を自然に尋ねる表現。"},
+  {id:"DEMO-B004",english:"Since when have you had these symptoms?",japanese:"いつから症状がありますか？",explanation:"【表現】since when = いつから。\n【文法】現在完了と組み合わせて症状の持続期間を尋ねる。"},
+  {id:"DEMO-B005",english:"Have you been able to drink fluids?",japanese:"水分は取れていますか？",explanation:"【表現】be able to = ～することができる。\n【単語】fluids = 水分・飲み物。"},
+  {id:"DEMO-B006",english:"How much have you been drinking?",japanese:"どのくらい飲めていますか？",explanation:"【表現】摂取量を尋ねる短い表現。"}
+];
+let studyReaderMarked=new Set();
+let studyReaderSequenceToken=0;
+
+function studyReaderRate(){
+  const n=Number($("studyReaderRate")?.value||1);
+  return Number.isFinite(n)?n:1;
+}
+function clearStudyReaderHighlight(){
+  document.querySelectorAll(".readerStudyRow.isReading").forEach(x=>x.classList.remove("isReading"));
+}
+function setStudyReaderStatus(text){
+  const el=$("studyReaderStatus"); if(el)el.textContent=text||"";
+}
+function renderStudyReaderDemo(){
+  const host=$("studyReaderDoc"); if(!host)return;
+  host.innerHTML="";
+  let lastSection="";
+  STUDY_READER_DEMO.forEach((r,i)=>{
+    if(r.section&&r.section!==lastSection){
+      const h=document.createElement("div"); h.className="readerStudySectionTitle"; h.textContent=r.section; host.appendChild(h); lastSection=r.section;
+    }
+    const row=document.createElement("div"); row.className="readerStudyRow"; row.dataset.readerIndex=String(i);
+    row.innerHTML=`<div class="readerStudyTop">
+      <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音">🔊</button>
+      <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">★</button>
+      <div class="readerStudyTexts"><div class="readerStudyEnglish"></div><div class="readerStudyJapanese"></div></div>
+    </div>
+    <details class="readerStudyExplanation"><summary>解説</summary><div class="readerStudyExplanationBody"></div></details>
+    <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div><div class="readerStudyId"></div></div>`;
+    row.querySelector(".readerStudyEnglish").textContent=r.english;
+    row.querySelector(".readerStudyJapanese").textContent=r.japanese;
+    row.querySelector(".readerStudyExplanationBody").textContent=r.explanation||"解説はありません。";
+    row.querySelector(".readerStudyId").textContent=r.id+"（試作）";
+    row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
+      studyReaderSequenceToken++; speakingToken++;
+      clearStudyReaderHighlight(); row.classList.add("isReading");
+      if($("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
+      setStudyReaderStatus(`${i+1}/${STUDY_READER_DEMO.length} を発音中`);
+      await speakText(r.english,"en-US",studyReaderRate());
+      row.classList.remove("isReading"); setStudyReaderStatus("停止中");
+    });
+    row.querySelector(".readerStudyStar").addEventListener("click",e=>{
+      const b=e.currentTarget;
+      if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
+      const on=studyReaderMarked.has(r.id); b.classList.toggle("active",on); b.setAttribute("aria-pressed",on?"true":"false");
+      setStudyReaderStatus(`★ ${studyReaderMarked.size}件`);
+    });
+    host.appendChild(row);
+  });
+  applyStudyReaderDisplayOptions();
+}
+function applyStudyReaderDisplayOptions(){
+  const showJa=$("studyReaderShowJapanese")?.checked!==false;
+  const openExp=$("studyReaderShowExplanation")?.checked===true;
+  const showQr=$("studyReaderShowQr")?.checked===true;
+  document.querySelectorAll(".readerStudyJapanese").forEach(x=>x.hidden=!showJa);
+  document.querySelectorAll(".readerStudyExplanation").forEach(x=>x.open=openExp);
+  document.querySelectorAll(".readerStudyQr").forEach((x,i)=>{
+    x.hidden=!showQr;
+    if(showQr){
+      const box=x.querySelector(".readerStudyQrBox");
+      if(box && !box.dataset.done){
+        box.innerHTML="";
+        try{new QRCode(box,{text:STUDY_READER_DEMO[i]?.id||"DEMO",width:68,height:68,correctLevel:QRCode.CorrectLevel.M}); box.dataset.done="1";}catch(e){}
+      }
+    }
+  });
+}
+async function playStudyReader(items){
+  if(!items.length){setStudyReaderStatus("★を付けた文がありません。");return;}
+  const my=++studyReaderSequenceToken; speakingToken++;
+  clearStudyReaderHighlight();
+  for(let pos=0;pos<items.length;pos++){
+    if(my!==studyReaderSequenceToken)return;
+    const item=items[pos];
+    const i=STUDY_READER_DEMO.indexOf(item);
+    const row=document.querySelector(`.readerStudyRow[data-reader-index="${i}"]`);
+    clearStudyReaderHighlight(); if(row)row.classList.add("isReading");
+    if(row && $("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
+    setStudyReaderStatus(`${pos+1}/${items.length} を読み上げ中`);
+    await speakText(item.english,"en-US",studyReaderRate());
+    if(my!==studyReaderSequenceToken)return;
+    await new Promise(r=>setTimeout(r,350));
+  }
+  clearStudyReaderHighlight(); setStudyReaderStatus("読み上げが終わりました。");
+}
+$("studyReaderPlayAllBtn")?.addEventListener("click",()=>playStudyReader(STUDY_READER_DEMO));
+$("studyReaderPlayMarkedBtn")?.addEventListener("click",()=>playStudyReader(STUDY_READER_DEMO.filter(x=>studyReaderMarked.has(x.id))));
+$("studyReaderStopBtn")?.addEventListener("click",()=>{
+  studyReaderSequenceToken++; speakingToken++; clearStudyReaderHighlight();
+  try{window.speechSynthesis?.cancel();}catch(e){} setStudyReaderStatus("停止しました。");
+});
+["studyReaderShowJapanese","studyReaderShowExplanation","studyReaderShowQr"].forEach(id=>$(id)?.addEventListener("change",applyStudyReaderDisplayOptions));
+renderStudyReaderDemo();
 </script>
 </body>
 </html>
