@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.6 / 更新 2026-09-04 23:24</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.7 / 更新 2026-09-05 00:05</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3720,8 +3720,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.6";
-const APP_UPDATED="2026-09-04 23:24";
+const APP_VERSION="v4.5.7";
+const APP_UPDATED="2026-09-05 00:05";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9957,6 +9957,14 @@ function csvToReaderSetRecords(rows){
   }
   if(!out.length)throw new Error("有効なReaderSetデータがありません。");
   return out;
+}
+function escapeHtml(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
 }
 function uniqueSorted(xs){return [...new Set(xs.filter(Boolean).map(String))].sort((a,b)=>a.localeCompare(b,"ja",{numeric:true}));}
 function refreshReaderSetSuggestions(){
