@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.1 / 更新 2026-09-04 20:09</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.2 / 更新 2026-09-04 21:17</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3523,12 +3523,27 @@ button.flashActionAccepted{
 
 <div class="qrMethodCard qrSearchCard flashSearchCard">
   <h3>検索結果から作る</h3>
-  <p>ID・英語・発音記号・日本語・読み・Comment・解説などを、スペース区切りのAND検索で絞り込みます。</p>
+  <p>ID・英語・発音記号・日本語・読み・Comment・解説などを、スペース区切りのAND検索で絞り込みます。Commentだけを対象にする専用絞り込みも使えます。</p>
   <p class="hint">データ管理でチェックした項目がある場合は、その項目の中から検索します。チェックがない場合は、全項目から検索します。</p>
   <label>
     <span>検索（検索結果から作る用）</span>
     <input id="flashSearch" type="text" placeholder="ID・英語・発音記号・日本語・読み・Comment・解説など">
   </label>
+  <div class="flashCommentFilterBox">
+    <label>
+      <span>Comment絞り込み（任意）</span>
+      <input id="flashCommentFilter" type="text" placeholder="例：単語 / NEJM / TOEIC / 医療英語">
+    </label>
+    <div class="flashCommentPresetRow" id="flashCommentPresetRow">
+      <button type="button" class="secondary" data-comment-filter="単語">単語</button>
+      <button type="button" class="secondary" data-comment-filter="医療英語">医療英語</button>
+      <button type="button" class="secondary" data-comment-filter="TOEIC">TOEIC</button>
+      <button type="button" class="secondary" data-comment-filter="英検">英検</button>
+      <button type="button" class="secondary" data-comment-filter="NEJM">NEJM</button>
+      <button type="button" class="secondary" data-comment-filter="">解除</button>
+    </div>
+    <div class="flashCommentFilterHint">通常検索とはAND条件です。たとえば「単語」＋「NEJM」で絞りたい場合は Comment欄に「単語 NEJM」と入力します。</div>
+  </div>
   <div class="searchActionRow">
     <button type="button" id="flashFromSearchBtn" class="secondary searchMainAction">検索結果から作る</button>
     <button type="button" id="showIosKeyboardFlashBtn" class="secondary manualTextInputBtn">文字入力</button>
@@ -3719,8 +3734,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.1";
-const APP_UPDATED="2026-09-04 20:09";
+const APP_VERSION="v4.5.2";
+const APP_UPDATED="2026-09-04 21:17";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6988,6 +7003,23 @@ function flashMatchesSearch(r,terms){
   return terms.every(term=>searchable.includes(term));
 }
 
+function flashCommentFilterTerms(){
+  return splitAndSearchTerms(String($("flashCommentFilter")?.value||""));
+}
+function flashMatchesCommentFilter(r){
+  const terms=flashCommentFilterTerms();
+  if(!terms.length)return true;
+  const c=String(r?.comment||"").toLowerCase();
+  return terms.every(t=>c.includes(String(t).toLowerCase()));
+}
+function updateFlashCommentPresetUi(){
+  const value=String($("flashCommentFilter")?.value||"").trim().toLowerCase();
+  document.querySelectorAll("#flashCommentPresetRow [data-comment-filter]").forEach(b=>{
+    const f=String(b.dataset.commentFilter||"").trim().toLowerCase();
+    b.classList.toggle("active",!!f && value===f);
+  });
+}
+
 async function buildFlashcardsFromSearch(){
   const latestSelection=latestDataManagementSelection();
   flashSourceMode="search";
@@ -7006,6 +7038,7 @@ async function buildFlashcardsFromSearch(){
 
   flashRecords=source
     .filter(r=>matchesCommonSearchQuery(r,query))
+    .filter(flashMatchesCommentFilter)
     .sort(compareRecordIds);
 
   if(flashShuffleEnabled)shuffleFlashRecordOrder();
@@ -7018,7 +7051,9 @@ async function buildFlashcardsFromSearch(){
     const filterNote=query.namespaceFilters.length
       ? `（${query.namespaceFilters.map(f=>f.prefix+":").join(" / ")}）`
       : hasSearch?"＋共通ID":"";
-    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${filterNote}`;
+    const commentTerms=flashCommentFilterTerms();
+    const commentNote=commentTerms.length?` / Comment: ${commentTerms.join(" + ")}`:"";
+    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${filterNote}${commentNote}`;
   }
   if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
   return flashRecords.length;
@@ -7330,6 +7365,18 @@ $("flashFromSelectedBtn")?.addEventListener("click",()=>{
 $("flashFromSearchBtn")?.addEventListener("click",()=>{
   runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
 });
+$("flashCommentFilter")?.addEventListener("input",updateFlashCommentPresetUi);
+$("flashCommentFilter")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);}
+});
+document.querySelectorAll("#flashCommentPresetRow [data-comment-filter]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const input=$("flashCommentFilter");if(!input)return;
+    input.value=String(btn.dataset.commentFilter||"");
+    updateFlashCommentPresetUi();
+  });
+});
+updateFlashCommentPresetUi();
 $("flashReloadBtn")?.addEventListener("click",()=>{
   runFlashSettingsApplyFeedback($("flashReloadBtn"),loadFlashcards);
 });
@@ -8998,6 +9045,15 @@ async function previewCardToImageDataUrl(card, scale=2){
     <foreignObject x="0" y="0" width="${width}" height="${height}">
       <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#fff;">
         <style>${css}
+
+/* v4.5.2 Comment-based extraction for adult/B vocabulary study */
+.flashCommentFilterBox{margin-top:10px;padding:10px 11px;border:1px solid #d9dee7;border-radius:12px;background:#fff;}
+.flashCommentFilterBox label{margin:0;}
+.flashCommentPresetRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.flashCommentPresetRow button{padding:7px 10px;font-size:.84rem;min-width:0;background:#e9edf3;color:#111;}
+.flashCommentPresetRow button.active{background:#111;color:#fff;}
+.flashCommentFilterHint{font-size:.8rem;color:#667085;margin-top:6px;line-height:1.45;}
+
 /* v4.5.0 Reader prototype: long-form reading and pronunciation study */
 .readerStudyToolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:12px;}
 .readerStudyToolbar>button{flex:1 1 150px;}
