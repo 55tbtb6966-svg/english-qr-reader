@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.0 / 更新 2026-09-04 19:07</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.1 / 更新 2026-09-04 20:09</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3671,8 +3671,25 @@ button.flashActionAccepted{
 
 <section class="panel" id="studyReaderPanel">
   <div class="card">
-    <h2>リーダー <span class="badge">試作版</span></h2>
-    <p class="hint" style="margin-top:0;">長文を縦に読み進めながら、各文を個別に発音できます。QRは補助機能として初期状態では非表示です。</p>
+    <h2>リーダー <span class="badge">ReaderSet対応</span></h2>
+    <p class="hint" style="margin-top:0;">ReaderSet CSVで SetTitle・Section・Order・ItemID を管理し、A/B/C/N/W/P/Sの各IDを文書順に並べて読み上げます。</p>
+
+    <div class="readerSetManager">
+      <div class="readerSetManagerTitle">ReaderSet CSV</div>
+      <div class="readerSetImportRow">
+        <input id="readerSetCsvInput" type="file" accept=".csv,text/csv">
+        <button type="button" id="readerSetImportBtn" class="secondary">CSVを登録</button>
+      </div>
+      <div class="readerSetSearchGrid">
+        <label><span>SetTitle</span><input id="readerSetTitleSearch" list="readerSetTitleList" placeholder="例：NEJM"></label>
+        <label><span>Section</span><input id="readerSetSectionSearch" list="readerSetSectionList" placeholder="例：Case 1-1"></label>
+        <button type="button" id="readerSetLoadBtn">表示</button>
+      </div>
+      <datalist id="readerSetTitleList"></datalist>
+      <datalist id="readerSetSectionList"></datalist>
+      <div class="readerSetMeta" id="readerSetMeta">ReaderSet CSV未登録。サンプル文書を表示します。</div>
+    </div>
+
     <div class="readerStudyToolbar">
       <button type="button" id="studyReaderPlayAllBtn">▶ 全文読む</button>
       <button type="button" id="studyReaderPlayMarkedBtn" class="secondary">★だけ読む</button>
@@ -3685,13 +3702,12 @@ button.flashActionAccepted{
       <label><input id="studyReaderShowQr" type="checkbox"><span>QR表示</span></label>
       <label><input id="studyReaderAutoScroll" type="checkbox" checked><span>読み上げ位置へ移動</span></label>
     </div>
-    <p class="readerStudyStatus" id="studyReaderStatus">短いサンプル文書を表示しています。</p>
+    <p class="readerStudyStatus" id="studyReaderStatus">サンプル文書を表示しています。</p>
   </div>
 
   <div class="card">
-    <div style="font-size:.82rem;color:#667085;margin-bottom:4px;">Medical English / Reader demo</div>
-    <h2 style="margin-bottom:4px;">診察英語：診察のはじまり</h2>
-    <p class="hint" style="margin:0;">将来はB-IDの文章セットをここに読み込みます。</p>
+    <div class="readerStudySetTitle" id="studyReaderSetTitle">Medical English / Reader demo</div>
+    <div class="readerStudyDocMeta" id="studyReaderDocMeta">サンプル</div>
     <div class="readerStudyDoc" id="studyReaderDoc"></div>
   </div>
 </section>
@@ -3703,8 +3719,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.0";
-const APP_UPDATED="2026-09-04 19:07";
+const APP_VERSION="v4.5.1";
+const APP_UPDATED="2026-09-04 20:09";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9008,6 +9024,19 @@ async function previewCardToImageDataUrl(card, scale=2){
 .readerStudyQrBox canvas,.readerStudyQrBox img{width:68px!important;height:68px!important;}
 .readerStudyId{font-size:.8rem;color:#6b7280;}
 .readerStudyStatus{min-height:1.4em;font-weight:650;margin:10px 0 0;}
+
+.readerSetManager{border:1px solid #d9dee7;border-radius:14px;padding:13px;margin-top:12px;background:#fff;}
+.readerSetManagerTitle{font-weight:800;margin-bottom:8px;}
+.readerSetImportRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+.readerSetSearchGrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;}
+.readerSetSearchGrid label{display:flex;flex-direction:column;gap:5px;font-weight:700;}
+.readerSetSearchGrid input{width:100%;box-sizing:border-box;padding:10px 11px;background:#fff;}
+.readerSetMeta{font-size:.86rem;color:#667085;line-height:1.5;margin-top:8px;}
+.readerStudySetTitle{font-size:1.35rem;font-weight:850;line-height:1.3;margin:0 0 4px;}
+.readerStudyDocMeta{font-size:.84rem;color:#667085;margin-bottom:9px;}
+.readerStudyMissing{border-color:#b42318;background:#fff7f6;}
+.readerStudyMissing .readerStudyEnglish{color:#b42318;}
+@media(max-width:640px){.readerSetImportRow{grid-template-columns:1fr}.readerSetSearchGrid{grid-template-columns:1fr 1fr}.readerSetSearchGrid button{grid-column:1/-1}.readerStudySetTitle{font-size:1.2rem}}
 @media(max-width:650px){
   .readerStudyRow{padding:12px;}
   .readerStudyEnglish{font-size:1.1rem;}
@@ -9839,39 +9868,156 @@ setTimeout(async()=>{
 
 
 
-/* ===== v4.5.0 Reader prototype ===== */
+/* ===== v4.5.1 ReaderSet CSV + long-form Reader ===== */
+const READER_SET_STORAGE_KEY="readerSetRecordsV1";
+const READER_SET_FILENAME_KEY="readerSetFileNameV1";
 const STUDY_READER_DEMO=[
-  {id:"DEMO-B001",section:"① 診察のはじまり",english:"Hello, I’m Dr. ___ .",japanese:"こんにちは、___医師です。",explanation:"【表現】診察開始時の自己紹介。\n【発音】Dr. は読み上げでは doctor と発音されることがあります。"},
+  {id:"DEMO-B001",section:"① 診察のはじまり",english:"Hello, I’m Dr. ___ .",englishSpeak:"Hello, I’m Doctor blank.",japanese:"こんにちは、___医師です。",explanation:"【表現】診察開始時の自己紹介。\n【発音】Dr. は doctor と読みます。"},
   {id:"DEMO-B002",english:"How can I help you today?",japanese:"今日はどうされましたか？",explanation:"【表現】診察の冒頭で患者さんの主訴を尋ねる表現。"},
   {id:"DEMO-B003",english:"What brings you in today?",japanese:"今日はどんな症状で来られましたか？",explanation:"【表現】受診理由を自然に尋ねる表現。"},
   {id:"DEMO-B004",english:"Since when have you had these symptoms?",japanese:"いつから症状がありますか？",explanation:"【表現】since when = いつから。\n【文法】現在完了と組み合わせて症状の持続期間を尋ねる。"},
-  {id:"DEMO-B005",english:"Have you been able to drink fluids?",japanese:"水分は取れていますか？",explanation:"【表現】be able to = ～することができる。\n【単語】fluids = 水分・飲み物。"},
-  {id:"DEMO-B006",english:"How much have you been drinking?",japanese:"どのくらい飲めていますか？",explanation:"【表現】摂取量を尋ねる短い表現。"}
+  {id:"DEMO-B005",section:"② 症状を聞く",english:"Where does it hurt?",japanese:"どこが痛みますか？",explanation:"【表現】痛みの場所を尋ねる基本表現。"},
+  {id:"DEMO-B006",english:"Can you point to the pain?",japanese:"痛いところを指で示してください。",explanation:"【表現】point to = ～を指し示す。"}
 ];
 let studyReaderMarked=new Set();
 let studyReaderSequenceToken=0;
+let studyReaderItems=STUDY_READER_DEMO.slice();
+let studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};
+
+function loadReaderSetRecords(){
+  try{const v=JSON.parse(localStorage.getItem(READER_SET_STORAGE_KEY)||"[]");return Array.isArray(v)?v:[];}catch(e){return [];}
+}
+function saveReaderSetRecords(rows,fileName=""){
+  localStorage.setItem(READER_SET_STORAGE_KEY,JSON.stringify(rows||[]));
+  if(fileName)localStorage.setItem(READER_SET_FILENAME_KEY,String(fileName));
+}
+function readerSetCellIndex(headers,names){
+  const h=headers.map(x=>String(x||"").replace(/^\uFEFF/,"").trim().toLowerCase());
+  return h.findIndex(x=>names.includes(x));
+}
+function csvToReaderSetRecords(rows){
+  if(rows.length<2)throw new Error("ReaderSet CSVにデータ行がありません。");
+  const h=rows[0];
+  const iSet=readerSetCellIndex(h,["setid","set_id","セットid"]);
+  const iTitle=readerSetCellIndex(h,["settitle","set_title","title","セット名"]);
+  const iSec=readerSetCellIndex(h,["section","セクション","章"]);
+  const iOrder=readerSetCellIndex(h,["order","順番","表示順"]);
+  const iItem=readerSetCellIndex(h,["itemid","item_id","id","教材id"]);
+  if(iSet<0||iTitle<0||iSec<0||iOrder<0||iItem<0)throw new Error("必要列：SetID, SetTitle, Section, Order, ItemID");
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const c=rows[i];
+    const setId=String(c[iSet]||"").trim();
+    const setTitle=String(c[iTitle]||"").trim();
+    const section=String(c[iSec]||"").trim();
+    const itemId=String(c[iItem]||"").trim().toUpperCase();
+    const orderRaw=String(c[iOrder]||"").trim();
+    const order=Number(orderRaw);
+    if(!setId&&!setTitle&&!section&&!itemId&&!orderRaw)continue;
+    if(!setId||!setTitle||!itemId||!Number.isFinite(order))throw new Error(`${i+1}行目：SetID / SetTitle / Order / ItemID を確認してください。`);
+    if(!/^(?:[ABC]\d{6}|N(?:\d+(?:\.\d+)?)|[WPS]\d{6})$/i.test(itemId))throw new Error(`${i+1}行目：ItemID「${itemId}」の形式を確認してください。`);
+    out.push({setId,setTitle,section,order,itemId});
+  }
+  if(!out.length)throw new Error("有効なReaderSetデータがありません。");
+  return out;
+}
+function uniqueSorted(xs){return [...new Set(xs.filter(Boolean).map(String))].sort((a,b)=>a.localeCompare(b,"ja",{numeric:true}));}
+function refreshReaderSetSuggestions(){
+  const all=loadReaderSetRecords();
+  const title=$('readerSetTitleSearch')?.value.trim()||"";
+  const titleList=$('readerSetTitleList');
+  if(titleList)titleList.innerHTML=uniqueSorted(all.map(x=>x.setTitle)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
+  const sectionList=$('readerSetSectionList');
+  const scoped=title?all.filter(x=>x.setTitle===title):all;
+  if(sectionList)sectionList.innerHTML=uniqueSorted(scoped.map(x=>x.section)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
+  const meta=$('readerSetMeta');
+  if(meta){
+    const file=localStorage.getItem(READER_SET_FILENAME_KEY)||"";
+    const sets=uniqueSorted(all.map(x=>x.setId)).length;
+    meta.textContent=all.length?`登録 ${all.length}行 / ${sets} Set${file?` / ${file}`:""}`:"ReaderSet CSV未登録。サンプル文書を表示します。";
+  }
+}
+async function getReaderRecordById(id){
+  await ensureDb();
+  const s=String(id||"").toUpperCase();
+  if(isCommonRecordId(s))return await reqPromise(tx(STORE_N).get(s));
+  const m=s.match(/^([ABC])\d{6}$/);
+  if(!m)return undefined;
+  const store=m[1]==="A"?STORE_A:m[1]==="B"?STORE_B:STORE_C;
+  return await reqPromise(tx(store).get(s));
+}
+async function buildReaderItemsFromSetRows(rows){
+  const out=[];
+  for(const x of rows.slice().sort((a,b)=>a.order-b.order||a.itemId.localeCompare(b.itemId))){
+    const rec=await getReaderRecordById(x.itemId);
+    if(rec){
+      out.push({
+        id:String(rec.id||x.itemId),section:x.section||"",order:x.order,
+        english:String(rec.english||""),englishSpeak:String(rec.englishSpeak||rec.english||""),
+        japanese:String(rec.japanese||""),ipa:String(rec.ipa||""),explanation:String(rec.explanation||""),missing:false
+      });
+    }else{
+      out.push({id:x.itemId,section:x.section||"",order:x.order,english:`${x.itemId}：データが見つかりません`,englishSpeak:"",japanese:"",ipa:"",explanation:"ReaderSetには登録されていますが、対応するA/B/C/N/W/P/S CSVデータがこの端末にありません。",missing:true});
+    }
+  }
+  return out;
+}
+async function loadReaderSetSelection(){
+  const all=loadReaderSetRecords();
+  if(!all.length){studyReaderItems=STUDY_READER_DEMO.slice();studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};renderStudyReader();setStudyReaderStatus("ReaderSet CSV未登録のためサンプルを表示しています。");return;}
+  const title=$('readerSetTitleSearch')?.value.trim()||"";
+  const section=$('readerSetSectionSearch')?.value.trim()||"";
+  let filtered=all;
+  if(title)filtered=filtered.filter(x=>x.setTitle.toLowerCase().includes(title.toLowerCase()));
+  if(section)filtered=filtered.filter(x=>x.section.toLowerCase().includes(section.toLowerCase()));
+  if(!filtered.length){setStudyReaderStatus("一致するReaderSetがありません。");return;}
+  const setIds=uniqueSorted(filtered.map(x=>x.setId));
+  if(setIds.length>1){
+    // Prefer the first set deterministically; status tells the user if a broad query matched more than one.
+    filtered=filtered.filter(x=>x.setId===setIds[0]);
+  }
+  studyReaderItems=await buildReaderItemsFromSetRows(filtered);
+  studyReaderContext={setId:filtered[0].setId,setTitle:filtered[0].setTitle,section:section};
+  renderStudyReader();
+  const missing=studyReaderItems.filter(x=>x.missing).length;
+  setStudyReaderStatus(`${studyReaderContext.setTitle}${section?` / ${section}`:""}：${studyReaderItems.length}文${missing?`（未登録ID ${missing}件）`:""}${setIds.length>1?` / 複数Set一致のため ${setIds[0]} を表示`:""}`);
+}
+async function importReaderSetCsv(){
+  const file=$('readerSetCsvInput')?.files?.[0];
+  if(!file){setStudyReaderStatus("ReaderSet CSVを選択してください。");return;}
+  try{
+    const text=await readFileAsText(file);
+    const records=csvToReaderSetRecords(parseCsv(text));
+    saveReaderSetRecords(records,file.name);
+    refreshReaderSetSuggestions();
+    const first=records.slice().sort((a,b)=>a.order-b.order)[0];
+    if($('readerSetTitleSearch'))$('readerSetTitleSearch').value=first.setTitle;
+    if($('readerSetSectionSearch'))$('readerSetSectionSearch').value=first.section||"";
+    refreshReaderSetSuggestions();
+    await loadReaderSetSelection();
+    setStudyReaderStatus(`ReaderSet CSVを登録しました：${records.length}行`);
+  }catch(e){setStudyReaderStatus(`ReaderSet CSVエラー：${e?.message||e}`);}
+}
 
 function studyReaderRate(){
   const n=Number($("studyReaderRate")?.value||1);
   return Number.isFinite(n)?n:1;
 }
-function clearStudyReaderHighlight(){
-  document.querySelectorAll(".readerStudyRow.isReading").forEach(x=>x.classList.remove("isReading"));
-}
-function setStudyReaderStatus(text){
-  const el=$("studyReaderStatus"); if(el)el.textContent=text||"";
-}
-function renderStudyReaderDemo(){
-  const host=$("studyReaderDoc"); if(!host)return;
+function clearStudyReaderHighlight(){document.querySelectorAll(".readerStudyRow.isReading").forEach(x=>x.classList.remove("isReading"));}
+function setStudyReaderStatus(text){const el=$("studyReaderStatus");if(el)el.textContent=text||"";}
+function renderStudyReader(){
+  const host=$("studyReaderDoc");if(!host)return;
   host.innerHTML="";
-  let lastSection="";
-  STUDY_READER_DEMO.forEach((r,i)=>{
-    if(r.section&&r.section!==lastSection){
-      const h=document.createElement("div"); h.className="readerStudySectionTitle"; h.textContent=r.section; host.appendChild(h); lastSection=r.section;
-    }
-    const row=document.createElement("div"); row.className="readerStudyRow"; row.dataset.readerIndex=String(i);
+  const title=$("studyReaderSetTitle");if(title)title.textContent=studyReaderContext.setTitle||"Reader";
+  const meta=$("studyReaderDocMeta");if(meta)meta.textContent=`SetID: ${studyReaderContext.setId||"-"} / ${studyReaderItems.length}文`;
+  let lastSection=null;
+  studyReaderItems.forEach((r,i)=>{
+    const sec=String(r.section||"");
+    if(sec!==lastSection && sec){const h=document.createElement("div");h.className="readerStudySectionTitle";h.textContent=sec;host.appendChild(h);}
+    lastSection=sec;
+    const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
     row.innerHTML=`<div class="readerStudyTop">
-      <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音">🔊</button>
+      <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊</button>
       <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">★</button>
       <div class="readerStudyTexts"><div class="readerStudyEnglish"></div><div class="readerStudyJapanese"></div></div>
     </div>
@@ -9880,20 +10026,19 @@ function renderStudyReaderDemo(){
     row.querySelector(".readerStudyEnglish").textContent=r.english;
     row.querySelector(".readerStudyJapanese").textContent=r.japanese;
     row.querySelector(".readerStudyExplanationBody").textContent=r.explanation||"解説はありません。";
-    row.querySelector(".readerStudyId").textContent=r.id+"（試作）";
+    row.querySelector(".readerStudyId").textContent=r.id;
     row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
-      studyReaderSequenceToken++; speakingToken++;
-      clearStudyReaderHighlight(); row.classList.add("isReading");
+      if(r.missing)return;
+      const my=++studyReaderSequenceToken; speakingToken++; const token=speakingToken;
+      clearStudyReaderHighlight();row.classList.add("isReading");
       if($("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
-      setStudyReaderStatus(`${i+1}/${STUDY_READER_DEMO.length} を発音中`);
-      await speakText(r.english,"en-US",studyReaderRate());
-      row.classList.remove("isReading"); setStudyReaderStatus("停止中");
+      setStudyReaderStatus(`${i+1}/${studyReaderItems.length} を発音中：${r.id}`);
+      await speakScript(r.englishSpeak||r.english,"en-US",studyReaderRate(),token);
+      if(my===studyReaderSequenceToken){row.classList.remove("isReading");setStudyReaderStatus("停止中");}
     });
     row.querySelector(".readerStudyStar").addEventListener("click",e=>{
-      const b=e.currentTarget;
-      if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
-      const on=studyReaderMarked.has(r.id); b.classList.toggle("active",on); b.setAttribute("aria-pressed",on?"true":"false");
-      setStudyReaderStatus(`★ ${studyReaderMarked.size}件`);
+      const b=e.currentTarget;if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
+      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");setStudyReaderStatus(`★ ${studyReaderMarked.size}件`);
     });
     host.appendChild(row);
   });
@@ -9907,41 +10052,36 @@ function applyStudyReaderDisplayOptions(){
   document.querySelectorAll(".readerStudyExplanation").forEach(x=>x.open=openExp);
   document.querySelectorAll(".readerStudyQr").forEach((x,i)=>{
     x.hidden=!showQr;
-    if(showQr){
-      const box=x.querySelector(".readerStudyQrBox");
-      if(box && !box.dataset.done){
-        box.innerHTML="";
-        try{new QRCode(box,{text:STUDY_READER_DEMO[i]?.id||"DEMO",width:68,height:68,correctLevel:QRCode.CorrectLevel.M}); box.dataset.done="1";}catch(e){}
-      }
-    }
+    if(showQr){const box=x.querySelector(".readerStudyQrBox");const item=studyReaderItems[i];if(box&&!box.dataset.done){box.innerHTML="";try{new QRCode(box,{text:item?.id||"",width:68,height:68,correctLevel:QRCode.CorrectLevel.M});box.dataset.done="1";}catch(e){}}}
   });
 }
 async function playStudyReader(items){
-  if(!items.length){setStudyReaderStatus("★を付けた文がありません。");return;}
-  const my=++studyReaderSequenceToken; speakingToken++;
-  clearStudyReaderHighlight();
+  items=items.filter(x=>!x.missing&&String(x.englishSpeak||x.english||"").trim());
+  if(!items.length){setStudyReaderStatus("読み上げる文がありません。");return;}
+  const my=++studyReaderSequenceToken;speakingToken++;const token=speakingToken;clearStudyReaderHighlight();
   for(let pos=0;pos<items.length;pos++){
-    if(my!==studyReaderSequenceToken)return;
-    const item=items[pos];
-    const i=STUDY_READER_DEMO.indexOf(item);
-    const row=document.querySelector(`.readerStudyRow[data-reader-index="${i}"]`);
-    clearStudyReaderHighlight(); if(row)row.classList.add("isReading");
-    if(row && $("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
-    setStudyReaderStatus(`${pos+1}/${items.length} を読み上げ中`);
-    await speakText(item.english,"en-US",studyReaderRate());
-    if(my!==studyReaderSequenceToken)return;
-    await new Promise(r=>setTimeout(r,350));
+    if(my!==studyReaderSequenceToken||token!==speakingToken)return;
+    const item=items[pos];const i=studyReaderItems.indexOf(item);const row=document.querySelector(`.readerStudyRow[data-reader-index="${i}"]`);
+    clearStudyReaderHighlight();if(row)row.classList.add("isReading");
+    if(row&&$("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
+    setStudyReaderStatus(`${pos+1}/${items.length} を読み上げ中：${item.id}`);
+    await speakScript(item.englishSpeak||item.english,"en-US",studyReaderRate(),token);
+    if(my!==studyReaderSequenceToken||token!==speakingToken)return;
+    await keepAudioAliveForPause(350,token);
   }
-  clearStudyReaderHighlight(); setStudyReaderStatus("読み上げが終わりました。");
+  clearStudyReaderHighlight();setStudyReaderStatus("読み上げが終わりました。");
 }
-$("studyReaderPlayAllBtn")?.addEventListener("click",()=>playStudyReader(STUDY_READER_DEMO));
-$("studyReaderPlayMarkedBtn")?.addEventListener("click",()=>playStudyReader(STUDY_READER_DEMO.filter(x=>studyReaderMarked.has(x.id))));
-$("studyReaderStopBtn")?.addEventListener("click",()=>{
-  studyReaderSequenceToken++; speakingToken++; clearStudyReaderHighlight();
-  try{window.speechSynthesis?.cancel();}catch(e){} setStudyReaderStatus("停止しました。");
-});
+$("studyReaderPlayAllBtn")?.addEventListener("click",()=>playStudyReader(studyReaderItems));
+$("studyReaderPlayMarkedBtn")?.addEventListener("click",()=>playStudyReader(studyReaderItems.filter(x=>studyReaderMarked.has(x.id))));
+$("studyReaderStopBtn")?.addEventListener("click",()=>{studyReaderSequenceToken++;speakingToken++;clearStudyReaderHighlight();try{window.speechSynthesis?.cancel();}catch(e){}setStudyReaderStatus("停止しました。");});
 ["studyReaderShowJapanese","studyReaderShowExplanation","studyReaderShowQr"].forEach(id=>$(id)?.addEventListener("change",applyStudyReaderDisplayOptions));
-renderStudyReaderDemo();
+$("readerSetImportBtn")?.addEventListener("click",importReaderSetCsv);
+$("readerSetLoadBtn")?.addEventListener("click",loadReaderSetSelection);
+$("readerSetTitleSearch")?.addEventListener("input",()=>{if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";refreshReaderSetSuggestions();});
+$("readerSetTitleSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
+$("readerSetSectionSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadReaderSetSelection();});
+refreshReaderSetSuggestions();
+renderStudyReader();
 </script>
 </body>
 </html>

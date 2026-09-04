@@ -524,3 +524,8 @@ ID・英語・発音記号・日本語・日本語読み・Comment を検索で�
 - 「検索結果のチェックを解除」
 
 現在の検索条件に一致する全件が対象です。表示中の1ページだけではありません。
+
+## v4.5.1 ReaderSet CSV
+リーダーでは `SetID,SetTitle,Section,Order,ItemID` のReaderSet CSVを登録できます。
+ReaderSetはA/B/Cおよび共通N/W/P/SのItemIDを参照でき、SetTitle/Sectionで検索し、Order順に表示します。
+ReaderSet CSVは端末内localStorageへ保存されます。A/B/C/N/W/P/S本体のIndexedDB構造は変更していません。
