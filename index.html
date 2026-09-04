@@ -3361,6 +3361,213 @@ button.flashActionAccepted{
   }
 }
 
+
+/* v4.5.12 Reader row layout */
+.readerStudyRow{
+  padding:14px;
+}
+.readerStudyLine{
+  display:grid;
+  grid-template-columns:96px minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+.readerStudyLine + .readerStudyLine{
+  margin-top:9px;
+}
+.readerStudyLeftCell{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-height:34px;
+}
+.readerStudyIdLine .readerStudyLeftCell{
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+.readerStudySpeak,
+.readerStudyJapaneseToggle,
+.readerStudyExplanation summary{
+  min-height:34px;
+  min-width:78px;
+  padding:6px 10px;
+  border:1px solid #d4dae3;
+  border-radius:9px;
+  background:#e9edf3;
+  color:#26313f;
+  font-size:.9rem;
+  font-weight:750;
+  box-shadow:none;
+}
+.readerStudySpeak{
+  width:78px;
+}
+.readerStudyJapaneseToggle{
+  cursor:pointer;
+}
+.readerStudyStar{
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #cfd5dd;
+  border-radius:7px;
+  background:#f8fafc;
+  color:transparent;
+  font-size:0;
+  box-shadow:none;
+  cursor:pointer;
+  position:relative;
+}
+.readerStudyStar::before{
+  content:"";
+  width:15px;
+  height:15px;
+  border:1.7px solid #98a2b3;
+  border-radius:3px;
+  background:#fff;
+  box-sizing:border-box;
+}
+.readerStudyStar.active{
+  background:#e8edf3;
+  border-color:#aeb8c4;
+}
+.readerStudyStar.active::before{
+  content:"✓";
+  color:#334155;
+  font-size:14px;
+  line-height:13px;
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#fff;
+}
+.readerStudyQr{
+  margin:0;
+  display:flex;
+  align-items:flex-start;
+}
+.readerStudyQr[hidden]{
+  display:none !important;
+}
+.readerStudyQrBox{
+  width:58px;
+  height:58px;
+  border:1px solid #e5e7eb;
+  border-radius:8px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.readerStudyQrBox canvas,.readerStudyQrBox img{
+  width:52px!important;
+  height:52px!important;
+}
+.readerStudyItemId{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  margin:0;
+  padding:3px 9px;
+  border-radius:999px;
+  background:#f1f3f6;
+  color:#596273;
+  font-size:.78rem;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.readerStudyEnglish{
+  font-size:1.52rem;
+  font-weight:780;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+  padding-top:1px;
+}
+.readerStudyJapanese{
+  font-size:1.08rem;
+  color:#4b5563;
+  line-height:1.6;
+  padding-top:3px;
+}
+.readerStudyExplanation{
+  margin:0;
+  padding:0;
+  border:0;
+}
+.readerStudyExplanation summary{
+  list-style:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:78px;
+  cursor:pointer;
+  user-select:none;
+}
+.readerStudyExplanation summary::-webkit-details-marker{
+  display:none;
+}
+.readerStudyExplanation summary::after{
+  content:"";
+  margin:0;
+}
+.readerStudyExplanationBody{
+  white-space:pre-wrap;
+  line-height:1.68;
+  color:#374151;
+  margin:0;
+  padding-top:4px;
+  font-size:1.07rem;
+}
+.readerStudyBodyCell{
+  min-width:0;
+}
+.readerStudyJapaneseLine.isHidden .readerStudyBodyCell{
+  opacity:.55;
+}
+@media(max-width:650px){
+  .readerStudyLine{
+    grid-template-columns:84px minmax(0,1fr);
+    gap:9px;
+  }
+  .readerStudySpeak,
+  .readerStudyJapaneseToggle,
+  .readerStudyExplanation summary{
+    min-width:70px;
+    width:70px;
+    padding:5px 7px;
+    font-size:.82rem;
+  }
+  .readerStudyStar{
+    width:32px;
+    height:32px;
+    min-width:32px;
+    min-height:32px;
+  }
+  .readerStudyQrBox{
+    width:52px;
+    height:52px;
+  }
+  .readerStudyQrBox canvas,.readerStudyQrBox img{
+    width:46px!important;
+    height:46px!important;
+  }
+  .readerStudyEnglish{
+    font-size:1.4rem;
+  }
+  .readerStudyJapanese{
+    font-size:1.02rem;
+  }
+  .readerStudyExplanationBody{
+    font-size:1.03rem;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3376,7 +3583,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.11 / 更新 2026-09-05 01:32</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.12 / 更新 2026-09-05 01:46</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4042,7 +4249,7 @@ button.flashActionAccepted{
 
     <div class="readerStudyToolbar">
       <button type="button" id="studyReaderPlayAllBtn" class="secondary">▶ 全文読む</button>
-      <button type="button" id="studyReaderPlayMarkedBtn" class="secondary">★だけ読む</button>
+      <button type="button" id="studyReaderPlayMarkedBtn" class="secondary">✓だけ読む</button>
       <button type="button" id="studyReaderStopBtn" class="secondary">■ 停止</button>
       <label><span>英語速度</span><select id="studyReaderRate"><option value="0.7">0.7</option><option value="0.8">0.8</option><option value="0.9">0.9</option><option value="1" selected>1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option></select></label>
     </div>
@@ -4069,8 +4276,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.11";
-const APP_UPDATED="2026-09-05 01:32";
+const APP_VERSION="v4.5.12";
+const APP_UPDATED="2026-09-05 01:46";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -10458,19 +10665,33 @@ function renderStudyReader(){
     if(sec!==lastSection && sec){const h=document.createElement("div");h.className="readerStudySectionTitle";h.textContent=sec;host.appendChild(h);}
     lastSection=sec;
     const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
-    row.innerHTML=`<div class="readerStudyTop">
-      <div class="readerStudyControls">
-        <button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊</button>
-        <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現">${studyReaderMarked.has(r.id)?"✓":"○"}</button>
+    row.innerHTML=`<div class="readerStudyLine readerStudyIdLine">
+      <div class="readerStudyLeftCell">
         <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div></div>
+        <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現"></button>
       </div>
-      <div class="readerStudyTexts"><div class="readerStudyItemId"></div><div class="readerStudyEnglish"></div><div class="readerStudyJapanese"></div></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyItemId"></div></div>
     </div>
-    <details class="readerStudyExplanation"><summary>解説</summary><div class="readerStudyExplanationBody"></div></details>`;
+    <div class="readerStudyLine readerStudyEnglishLine">
+      <div class="readerStudyLeftCell"><button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊 発音</button></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyEnglish"></div></div>
+    </div>
+    <div class="readerStudyLine readerStudyJapaneseLine">
+      <div class="readerStudyLeftCell"><button type="button" class="readerStudyJapaneseToggle secondary" aria-pressed="true">日本語</button></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyJapanese"></div></div>
+    </div>
+    <div class="readerStudyLine readerStudyExplanationLine">
+      <div class="readerStudyLeftCell"><details class="readerStudyExplanation"><summary>解説</summary></details></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyExplanationBody"></div></div>
+    </div>`;
     row.querySelector(".readerStudyItemId").textContent=r.id;
     row.querySelector(".readerStudyEnglish").textContent=r.english;
     row.querySelector(".readerStudyJapanese").textContent=r.japanese;
     row.querySelector(".readerStudyExplanationBody").textContent=r.explanation||"解説はありません。";
+    const expDetails=row.querySelector(".readerStudyExplanation");
+    const expBody=row.querySelector(".readerStudyExplanationBody");
+    if(expBody)expBody.hidden=true;
+    expDetails?.addEventListener("toggle",()=>{if(expBody)expBody.hidden=!expDetails.open;});
     row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
       if(r.missing)return;
       const my=++studyReaderSequenceToken; speakingToken++; const token=speakingToken;
@@ -10480,9 +10701,17 @@ function renderStudyReader(){
       await speakScript(r.englishSpeak||r.english,"en-US",studyReaderRate(),token);
       if(my===studyReaderSequenceToken){row.classList.remove("isReading");setStudyReaderStatus("停止中");}
     });
+    row.querySelector(".readerStudyJapaneseToggle")?.addEventListener("click",e=>{
+      const line=row.querySelector(".readerStudyJapaneseLine");
+      const ja=row.querySelector(".readerStudyJapanese");
+      const next=ja?.hidden===true;
+      if(ja)ja.hidden=!next;
+      if(line)line.classList.toggle("isHidden",!next);
+      e.currentTarget.setAttribute("aria-pressed",next?"true":"false");
+    });
     row.querySelector(".readerStudyStar").addEventListener("click",e=>{
       const b=e.currentTarget;if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
-      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");b.textContent=on?"✓":"○";setStudyReaderStatus(`✓ ${studyReaderMarked.size}件`);
+      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");setStudyReaderStatus(`✓ ${studyReaderMarked.size}件`);
     });
     host.appendChild(row);
   });
@@ -10492,8 +10721,19 @@ function applyStudyReaderDisplayOptions(){
   const showJa=$("studyReaderShowJapanese")?.checked!==false;
   const openExp=$("studyReaderShowExplanation")?.checked===true;
   const showQr=$("studyReaderShowQr")?.checked===true;
-  document.querySelectorAll(".readerStudyJapanese").forEach(x=>x.hidden=!showJa);
-  document.querySelectorAll(".readerStudyExplanation").forEach(x=>x.open=openExp);
+  document.querySelectorAll(".readerStudyJapaneseLine").forEach(line=>{
+    const ja=line.querySelector(".readerStudyJapanese");
+    const btn=line.querySelector(".readerStudyJapaneseToggle");
+    if(ja)ja.hidden=!showJa;
+    line.classList.toggle("isHidden",!showJa);
+    if(btn)btn.setAttribute("aria-pressed",showJa?"true":"false");
+  });
+  document.querySelectorAll(".readerStudyExplanationLine").forEach(line=>{
+    const details=line.querySelector(".readerStudyExplanation");
+    const body=line.querySelector(".readerStudyExplanationBody");
+    if(details)details.open=openExp;
+    if(body)body.hidden=!openExp;
+  });
   document.querySelectorAll(".readerStudyQr").forEach(x=>{
     x.hidden=!showQr;
     if(showQr){
@@ -10504,7 +10744,7 @@ function applyStudyReaderDisplayOptions(){
       if(box&&!box.dataset.done&&item?.id){
         box.innerHTML="";
         try{
-          new QRCode(box,{text:item.id,width:64,height:64,correctLevel:QRCode.CorrectLevel.M});
+          new QRCode(box,{text:item.id,width:52,height:52,correctLevel:QRCode.CorrectLevel.M});
           box.dataset.done="1";
         }catch(e){}
       }
