@@ -3035,7 +3035,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.5 / 更新 2026-09-04 23:11</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.6 / 更新 2026-09-04 23:24</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -3720,8 +3720,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.5";
-const APP_UPDATED="2026-09-04 23:11";
+const APP_VERSION="v4.5.6";
+const APP_UPDATED="2026-09-04 23:24";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9892,27 +9892,63 @@ function saveReaderSetRecords(rows,fileName=""){
   localStorage.setItem(READER_SET_STORAGE_KEY,JSON.stringify(rows||[]));
   if(fileName)localStorage.setItem(READER_SET_FILENAME_KEY,String(fileName));
 }
+function readerSetNormalizeText(v){
+  return String(v??"").replace(/^\uFEFF/,"").normalize("NFKC").trim();
+}
 function readerSetCellIndex(headers,names){
-  const h=headers.map(x=>String(x||"").replace(/^\uFEFF/,"").trim().toLowerCase());
-  return h.findIndex(x=>names.includes(x));
+  const h=headers.map(x=>readerSetNormalizeText(x).toLowerCase().replace(/[\s　]+/g,""));
+  const nn=names.map(x=>readerSetNormalizeText(x).toLowerCase().replace(/[\s　]+/g,""));
+  return h.findIndex(x=>nn.includes(x));
+}
+function detectReaderSetDelimiter(text){
+  const first=(String(text||"").replace(/^\uFEFF/,"").split(/\r?\n/).find(x=>x.trim())||"");
+  const counts=[
+    [",",(first.match(/,/g)||[]).length],
+    ["\t",(first.match(/\t/g)||[]).length],
+    [";",(first.match(/;/g)||[]).length]
+  ].sort((a,b)=>b[1]-a[1]);
+  return counts[0][1]>0?counts[0][0]:",";
+}
+function parseReaderSetDelimited(text){
+  const delimiter=detectReaderSetDelimiter(text);
+  const rows=[]; let row=[],cell="",quoted=false;
+  const src=String(text||"").replace(/^\uFEFF/,"");
+  for(let i=0;i<src.length;i++){
+    const ch=src[i];
+    if(quoted){
+      if(ch==='"'){ if(src[i+1]==='"'){cell+='"';i++;} else quoted=false; }
+      else cell+=ch;
+    }else{
+      if(ch==='"')quoted=true;
+      else if(ch===delimiter){row.push(cell);cell="";}
+      else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell="";}
+      else if(ch!=='\r')cell+=ch;
+    }
+  }
+  row.push(cell); if(row.some(v=>String(v).trim()!==""))rows.push(row);
+  return rows;
 }
 function csvToReaderSetRecords(rows){
+  rows=(rows||[]).filter(r=>Array.isArray(r)&&r.some(v=>readerSetNormalizeText(v)!==""));
   if(rows.length<2)throw new Error("ReaderSet CSVにデータ行がありません。");
   const h=rows[0];
-  const iSet=readerSetCellIndex(h,["setid","set_id","セットid"]);
-  const iTitle=readerSetCellIndex(h,["settitle","set_title","title","セット名"]);
-  const iSec=readerSetCellIndex(h,["section","セクション","章"]);
-  const iOrder=readerSetCellIndex(h,["order","順番","表示順"]);
-  const iItem=readerSetCellIndex(h,["itemid","item_id","id","教材id"]);
-  if(iSet<0||iTitle<0||iSec<0||iOrder<0||iItem<0)throw new Error("必要列：SetID, SetTitle, Section, Order, ItemID");
+  const iSet=readerSetCellIndex(h,["setid","set_id","set id","セットid","セットID","r id","rid"]);
+  const iTitle=readerSetCellIndex(h,["settitle","set_title","set title","title","セット名","タイトル"]);
+  const iSec=readerSetCellIndex(h,["section","セクション","章","章名","sectiontitle"]);
+  const iOrder=readerSetCellIndex(h,["order","順番","表示順","並び順","no","番号"]);
+  const iItem=readerSetCellIndex(h,["itemid","item_id","item id","id","教材id","教材ID","参照id","参照ID"]);
+  if(iSet<0||iTitle<0||iOrder<0||iItem<0){
+    const got=h.map(readerSetNormalizeText).join(" / ");
+    throw new Error(`必要列は SetID, SetTitle, Order, ItemID です。Section列は任意です。\n読み取った見出し：${got}`);
+  }
   const out=[];
   for(let i=1;i<rows.length;i++){
     const c=rows[i];
-    const setId=String(c[iSet]||"").trim();
-    const setTitle=String(c[iTitle]||"").trim();
-    const section=String(c[iSec]||"").trim();
-    const itemId=String(c[iItem]||"").trim().toUpperCase();
-    const orderRaw=String(c[iOrder]||"").trim();
+    const setId=readerSetNormalizeText(c[iSet]);
+    const setTitle=readerSetNormalizeText(c[iTitle]);
+    const section=iSec>=0?readerSetNormalizeText(c[iSec]):"";
+    const itemId=readerSetNormalizeText(c[iItem]).toUpperCase().replace(/[\s　]+/g,"");
+    const orderRaw=readerSetNormalizeText(c[iOrder]);
     const order=Number(orderRaw);
     if(!setId&&!setTitle&&!section&&!itemId&&!orderRaw)continue;
     if(!setId||!setTitle||!itemId||!Number.isFinite(order))throw new Error(`${i+1}行目：SetID / SetTitle / Order / ItemID を確認してください。`);
@@ -9933,9 +9969,8 @@ function refreshReaderSetSuggestions(){
   if(sectionList)sectionList.innerHTML=uniqueSorted(scoped.map(x=>x.section)).map(x=>`<option value="${escapeHtml(x)}"></option>`).join("");
   const meta=$('readerSetMeta');
   if(meta){
-    const file=localStorage.getItem(READER_SET_FILENAME_KEY)||"";
     const sets=uniqueSorted(all.map(x=>x.setId)).length;
-    meta.textContent=all.length?`登録 ${all.length}行 / ${sets} Set${file?` / ${file}`:""}`:"ReaderSet CSV未登録。サンプル文書を表示します。";
+    meta.textContent=all.length?`登録 ${all.length}行 / ${sets} Set`:"ReaderSet CSV未登録。サンプル文書を表示します。";
   }
 }
 async function getReaderRecordById(id){
@@ -9952,11 +9987,7 @@ async function buildReaderItemsFromSetRows(rows){
   for(const x of rows.slice().sort((a,b)=>a.order-b.order||a.itemId.localeCompare(b.itemId))){
     const rec=await getReaderRecordById(x.itemId);
     if(rec){
-      out.push({
-        id:String(rec.id||x.itemId),section:x.section||"",order:x.order,
-        english:String(rec.english||""),englishSpeak:String(rec.englishSpeak||rec.english||""),
-        japanese:String(rec.japanese||""),ipa:String(rec.ipa||""),explanation:String(rec.explanation||""),missing:false
-      });
+      out.push({id:String(rec.id||x.itemId),section:x.section||"",order:x.order,english:String(rec.english||""),englishSpeak:String(rec.englishSpeak||rec.english||""),japanese:String(rec.japanese||""),ipa:String(rec.ipa||""),explanation:String(rec.explanation||""),missing:false});
     }else{
       out.push({id:x.itemId,section:x.section||"",order:x.order,english:`${x.itemId}：データが見つかりません`,englishSpeak:"",japanese:"",ipa:"",explanation:"ReaderSetには登録されていますが、対応するA/B/C/N/W/P/S CSVデータがこの端末にありません。",missing:true});
     }
@@ -9973,10 +10004,7 @@ async function loadReaderSetSelection(){
   if(section)filtered=filtered.filter(x=>x.section.toLowerCase().includes(section.toLowerCase()));
   if(!filtered.length){setStudyReaderStatus("一致するReaderSetがありません。");return;}
   const setIds=uniqueSorted(filtered.map(x=>x.setId));
-  if(setIds.length>1){
-    // Prefer the first set deterministically; status tells the user if a broad query matched more than one.
-    filtered=filtered.filter(x=>x.setId===setIds[0]);
-  }
+  if(setIds.length>1)filtered=filtered.filter(x=>x.setId===setIds[0]);
   studyReaderItems=await buildReaderItemsFromSetRows(filtered);
   studyReaderContext={setId:filtered[0].setId,setTitle:filtered[0].setTitle,section:section};
   renderStudyReader();
@@ -9987,31 +10015,27 @@ function setReaderSetImportStatus(text,isError=false){
   const el=$("readerSetImportStatus");
   if(!el)return;
   el.textContent=text||"";
+  el.style.whiteSpace="pre-wrap";
   el.style.color=isError?"#b42318":"#667085";
 }
 function decodeReaderSetBuffer(buffer){
   const bytes=new Uint8Array(buffer);
-  const decUtf8=new TextDecoder("utf-8",{fatal:false});
-  let text=decUtf8.decode(bytes).replace(/^\uFEFF/,"");
-  const bad=(text.match(/\uFFFD/g)||[]).length;
-  if(bad>0){
-    try{
-      const sjis=new TextDecoder("shift_jis",{fatal:false}).decode(bytes).replace(/^\uFEFF/,"");
-      const sjisBad=(sjis.match(/\uFFFD/g)||[]).length;
-      if(sjisBad<bad)text=sjis;
-    }catch(e){}
-  }
-  return text;
+  const candidates=[];
+  try{candidates.push(new TextDecoder("utf-8",{fatal:false}).decode(bytes));}catch(e){}
+  try{candidates.push(new TextDecoder("shift_jis",{fatal:false}).decode(bytes));}catch(e){}
+  if(!candidates.length)throw new Error("文字コードを判定できませんでした。");
+  candidates.sort((a,b)=>(a.match(/\uFFFD/g)||[]).length-(b.match(/\uFFFD/g)||[]).length);
+  return candidates[0].replace(/^\uFEFF/,"");
 }
-function readReaderSetFileText(file){
-  if(!file)return Promise.reject(new Error("ReaderSet CSVが選択されていません。"));
-  return new Promise((resolve,reject)=>{
+async function readReaderSetFileText(file){
+  if(!file)throw new Error("ReaderSet CSVが選択されていません。");
+  if(typeof file.arrayBuffer==="function"){
+    try{return decodeReaderSetBuffer(await file.arrayBuffer());}catch(e){}
+  }
+  return await new Promise((resolve,reject)=>{
     try{
       const reader=new FileReader();
-      reader.onload=()=>{
-        try{resolve(decodeReaderSetBuffer(reader.result));}
-        catch(e){reject(e);}
-      };
+      reader.onload=()=>{try{resolve(decodeReaderSetBuffer(reader.result));}catch(e){reject(e);}};
       reader.onerror=()=>reject(reader.error||new Error("ReaderSet CSVを読み込めませんでした。"));
       reader.onabort=()=>reject(new Error("ReaderSet CSVの読み込みが中断されました。"));
       reader.readAsArrayBuffer(file);
@@ -10024,18 +10048,23 @@ async function importReaderSetCsv(){
   try{
     setReaderSetImportStatus("CSVを読み込み中…");
     const text=await readReaderSetFileText(file);
-    const records=csvToReaderSetRecords(parseCsv(text));
-    // ファイル名は端末/ZIPの文字コード差で化けることがあるため、画面表示には使わない。
+    const rows=parseReaderSetDelimited(text);
+    const records=csvToReaderSetRecords(rows);
     saveReaderSetRecords(records,"");
     refreshReaderSetSuggestions();
     const first=records.slice().sort((a,b)=>a.order-b.order)[0];
     if($("readerSetTitleSearch"))$("readerSetTitleSearch").value=first.setTitle;
     if($("readerSetSectionSearch"))$("readerSetSectionSearch").value=first.section||"";
     refreshReaderSetSuggestions();
-    await loadReaderSetSelection();
     const setCount=uniqueSorted(records.map(x=>x.setId)).length;
     setReaderSetImportStatus(`登録完了：${records.length}行 / ${setCount} Set`);
-    setStudyReaderStatus(`ReaderSet CSVを登録しました：${records.length}行`);
+    // 登録と文書表示は分離。参照先CSVが未登録でもReaderSet自体は登録成功とする。
+    try{
+      await loadReaderSetSelection();
+      setStudyReaderStatus(`ReaderSet CSVを登録しました：${records.length}行`);
+    }catch(displayError){
+      setStudyReaderStatus(`ReaderSetは登録済みです。文書表示時の確認：${displayError?.message||displayError}`);
+    }
   }catch(e){
     const msg=e?.message||String(e);
     setReaderSetImportStatus(`登録できません：${msg}`,true);
