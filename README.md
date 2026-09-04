@@ -525,19 +525,13 @@ ID・英語・発音記号・日本語・日本語読み・Comment を検索で�
 
 現在の検索条件に一致する全件が対象です。表示中の1ページだけではありません。
 
-## v4.5.1 ReaderSet CSV
+## v4.5.5 ReaderSet CSV
 リーダーでは `SetID,SetTitle,Section,Order,ItemID` のReaderSet CSVを登録できます。
 ReaderSetはA/B/Cおよび共通N/W/P/SのItemIDを参照でき、SetTitle/Sectionで検索し、Order順に表示します。
 ReaderSet CSVは端末内localStorageへ保存されます。A/B/C/N/W/P/S本体のIndexedDB構造は変更していません。
 
 
-## v4.5.2
-- フラッシュカードの「検索結果から作る」に Comment 専用絞り込みを追加。
-- 「単語」「医療英語」「TOEIC」「英検」「NEJM」のクイックボタンを追加。
-- Comment欄はスペース区切りAND検索に対応（例：`単語 NEJM`）。
-- 通常検索と Comment絞り込みはAND条件。B教材の単語帳・医療英語・NEJM由来語彙などを抽出してフラッシュカード化しやすくした。
-
-
-## v4.5.3
-- ReaderSet CSV import fix: corrected the ReaderSet importer to use the existing iPhone/Safari-compatible FileReader helper (`readCsvFileText`).
-- Fixes the error where selecting a ReaderSet CSV could not be read/registered.
+## v4.5.5
+- フラッシュカードは v4.5.1 の状態に戻しました。
+- ReaderSet CSV 読み込みを FileReader(ArrayBuffer) + UTF-8/Shift_JIS 判定に変更しました。
+- ZIP内サンプル名を ASCII の ReaderSet_sample.csv に変更し、ファイル名文字化けの影響を避けました。
