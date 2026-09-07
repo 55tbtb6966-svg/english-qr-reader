@@ -3905,34 +3905,6 @@ button.flashActionAccepted{
 }
 
 
-/* v4.5.21 Raw CSV preview */
-.dataRawCsvPanel{
-  margin-top:12px;
-  border:1px solid #d8dee8;
-  border-radius:12px;
-  background:#fbfcfe;
-  overflow:hidden;
-}
-.dataRawCsvPanel[hidden]{
-  display:none !important;
-}
-.dataRawCsvHeader{
-  padding:9px 11px;
-  background:#f1f3f6;
-  border-bottom:1px solid #d8dee8;
-  color:#344054;
-}
-#dataRawCsvText{
-  margin:0;
-  padding:10px 12px;
-  max-height:360px;
-  overflow:auto;
-  white-space:pre;
-  font-size:.82rem;
-  line-height:1.45;
-  font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
-  background:#fff;
-}
 
 </style>
 </head>
@@ -3949,7 +3921,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.21 / 更新 2026-09-07 19:03</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.22 / 更新 2026-09-07 19:16</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4229,7 +4201,6 @@ button.flashActionAccepted{
   <div class="advancedSettingsBody">
     <p class="hint" style="margin-top:0;">1, 2, 3…で左からの表示順を指定します。「表示しない」を選んだ項目は一覧から隠れます。</p>
     <div class="dataConfirmSwitchRow">
-      <label class="dataSwitchLabel"><input id="dataCsvConfirmToggle" type="checkbox"><span>CSV生データを表示</span></label>
       <label class="dataSwitchLabel"><input id="dataOperationToggle" type="checkbox"><span>編集・削除操作を表示</span></label>
     </div>
     <div class="dataColumnSettingGrid" id="dataColumnSettingGrid">
@@ -4284,12 +4255,6 @@ button.flashActionAccepted{
 <div class="row dataBottomPager" style="margin-top:10px;">
   <button class="secondary" id="prevBtnBottom">前のページ</button>
   <button class="secondary" id="nextBtnBottom">次のページ</button>
-</div>
-<div class="dataRawCsvPanel" id="dataRawCsvPanel" hidden>
-  <div class="dataRawCsvHeader">
-    <strong id="dataRawCsvTitle">CSV生データ</strong>
-  </div>
-  <pre id="dataRawCsvText"></pre>
 </div>
 <div class="editorBlockBottom" style="margin-top:16px;"><button class="secondary dataEditorToggleBtn" id="toggleDataEditorBtn" type="button">データ追加・書き換え</button><div class="dataEditorBody dataEditorHidden" id="dataEditorPanel">
 <div class="grid2">
@@ -4703,8 +4668,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.21";
-const APP_UPDATED="2026-09-07 19:03";
+const APP_VERSION="v4.5.22";
+const APP_UPDATED="2026-09-07 19:16";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4815,27 +4780,6 @@ function csvFileNameMetaKey(profile=activeCsvProfile){
 }
 function csvFileNameLocalKey(profile=activeCsvProfile){
   return "lastCsvFileName_"+profile;
-}
-function csvRawTextLocalKey(profile=activeCsvProfile){
-  return "lastCsvRawText_"+profile;
-}
-function saveCurrentCsvRawText(rawText,profile=activeCsvProfile){
-  try{localStorage.setItem(csvRawTextLocalKey(profile),String(rawText||""));}catch(e){}
-}
-function loadCurrentCsvRawText(profile=activeCsvProfile){
-  try{return String(localStorage.getItem(csvRawTextLocalKey(profile))||"");}catch(e){return "";}
-}
-function refreshDataRawCsvPreview(){
-  const panel=$("dataRawCsvPanel");
-  const textEl=$("dataRawCsvText");
-  const title=$("dataRawCsvTitle");
-  if(!panel||!textEl)return;
-  const show=$("dataCsvConfirmToggle")?.checked===true;
-  panel.hidden=!show;
-  if(!show)return;
-  const raw=loadCurrentCsvRawText(activeCsvProfile);
-  if(title)title.textContent=`CSV生データ（${activeCsvProfile}）`;
-  textEl.textContent=raw||"生データは未保存です。CSVタブでこのA/B/CのCSVを一度読み込み直すと表示できます。";
 }
 async function saveCurrentCsvFileName(name,profile=activeCsvProfile){
   const safe=String(name||"").trim();
@@ -5003,7 +4947,6 @@ async function switchDataProfile(profile){
 
   updateProfileUi();
   refreshReaderSetForActiveProfile();
-  refreshDataRawCsvPreview();
   if($("editId")){
     $("editId").placeholder="例：A000001 / N1 / W000001 / P000001 / S000001";
   }
@@ -5311,8 +5254,7 @@ async function importCsv(replace) {
   const importStore=activeStoreName();
   try{
     setStatus($("importStatus"),`CSV ${importProfile}：${file.name||"選択ファイル"} を読み込み中…`);
-    const rawCsvText=await readCsvFileText(file);
-    const parsed=csvToRecords(parseCsv(rawCsvText));
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
 
 
     if(importProfile!==activeCsvProfile){
@@ -5337,9 +5279,7 @@ async function importCsv(replace) {
     const backupOk=await snapshotNamespaceToBackup(importProfile);
     if(parsed.version) await putMeta("version_"+importProfile,parsed.version);
     await saveCurrentCsvFileName(file.name||"",importProfile);
-    saveCurrentCsvRawText(rawCsvText,importProfile);
     await refreshCurrentCsvFileName();
-    refreshDataRawCsvPreview();
     setStatus(
       $("importStatus"),
       "CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+
@@ -7100,20 +7040,15 @@ function resetDataColumnSettings(){
   applyDataColumnSettingsToTable({...DATA_COLUMN_DEFAULTS});
 }
 
-const DATA_CSV_CONFIRM_KEY="dataCsvRawPreviewVisibleV2";
 const DATA_OPERATION_VISIBLE_KEY="dataOperationVisibleV1";
 
 function loadDataManagementViewSwitches(){
-  const confirmToggle=$("dataCsvConfirmToggle");
   const operationToggle=$("dataOperationToggle");
-  const confirmSaved=localStorage.getItem(DATA_CSV_CONFIRM_KEY);
   const operationSaved=localStorage.getItem(DATA_OPERATION_VISIBLE_KEY);
-  if(confirmToggle)confirmToggle.checked=confirmSaved==="true";
   if(operationToggle)operationToggle.checked=operationSaved==="true";
   applyDataManagementViewSwitches();
 }
 function applyDataManagementViewSwitches(){
-  refreshDataRawCsvPreview();
   const operationOn=$("dataOperationToggle")?.checked===true;
   document.querySelectorAll('[data-data-col="actions"]').forEach(cell=>{
     const settings=loadDataColumnSettings();
@@ -7122,7 +7057,6 @@ function applyDataManagementViewSwitches(){
   });
 }
 function saveDataManagementViewSwitches(){
-  localStorage.setItem(DATA_CSV_CONFIRM_KEY,String($("dataCsvConfirmToggle")?.checked===true));
   localStorage.setItem(DATA_OPERATION_VISIBLE_KEY,String($("dataOperationToggle")?.checked===true));
   applyDataManagementViewSwitches();
 }
@@ -8640,7 +8574,6 @@ loadDataManagementViewSwitches();
 applyDataColumnSettingsToTable();
 $("applyDataColumnSettingsBtn")?.addEventListener("click",applyDataColumnSettingsFromControls);
 $("resetDataColumnSettingsBtn")?.addEventListener("click",resetDataColumnSettings);
-$("dataCsvConfirmToggle")?.addEventListener("change",saveDataManagementViewSwitches);
 $("dataOperationToggle")?.addEventListener("change",()=>{
   if($("dataOperationToggle")?.checked){
     const settings=loadDataColumnSettings();
