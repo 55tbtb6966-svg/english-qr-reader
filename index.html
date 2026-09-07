@@ -703,19 +703,24 @@
       font-size:1.05rem;
       font-weight:700;
       list-style:none;
-      padding:2px 0;
+      padding:11px 14px;
+      display:flex;
+      align-items:center;
+      gap:7px;
     }
     .dataEditorDetails > summary::-webkit-details-marker{
       display:none;
     }
-    .dataEditorDetails > summary::after{
-      content:"＋";
-      float:right;
-      font-weight:700;
+    .dataEditorDetails > summary::before{
+      content:"▶";
+      flex:0 0 auto;
+      width:1em;
       color:#667085;
+      font-size:.85em;
+      line-height:1;
     }
-    .dataEditorDetails[open] > summary::after{
-      content:"－";
+    .dataEditorDetails[open] > summary::before{
+      content:"▼";
     }
     .dataEditorBody{
       margin-top:12px;
@@ -2919,6 +2924,26 @@ button.flashActionAccepted{
   color:#4a5668;
   user-select:none;
 }
+.readerDetailsShell .advancedSettings > summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.readerDetailsShell .advancedSettings > summary::-webkit-details-marker{
+  display:none;
+}
+.readerDetailsShell .advancedSettings > summary::before{
+  content:"▶";
+  flex:0 0 auto;
+  width:1em;
+  color:#667085;
+  font-size:.85em;
+  line-height:1;
+}
+.readerDetailsShell .advancedSettings[open] > summary::before{
+  content:"▼";
+}
 .readerDetailsShell .advancedSettingsBody{
   padding:4px 14px 14px;
 }
@@ -3907,7 +3932,7 @@ button.flashActionAccepted{
 
 
 
-/* v4.5.23 Data editor as detail panel / full CSV fields */
+/* v4.5.24 Data editor as detail panel / full CSV fields */
 .dataEditorDetails{
   margin-top:10px;
   border:1px solid #d8dee8 !important;
@@ -3959,7 +3984,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.23 / 更新 2026-09-07 19:56</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.24 / 更新 2026-09-07 19:45</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4713,7 +4738,7 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.23";
+const APP_VERSION="v4.5.24";
 const APP_UPDATED="2026-09-07 19:56";
 
 function outputDateTimeStamp(){
