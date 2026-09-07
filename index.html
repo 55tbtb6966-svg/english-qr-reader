@@ -3847,6 +3847,38 @@ button.flashActionAccepted{
   vertical-align:middle;
 }
 
+
+/* v4.5.19 Data management column layout settings */
+.dataColumnSettings{
+  margin-top:12px;
+  border:1px solid #d8dee8 !important;
+  background:#fbfcfe;
+}
+.dataColumnSettingGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px 12px;
+}
+.dataColumnSettingGrid label span{
+  display:block;
+  margin-bottom:5px;
+  font-size:.86rem;
+  color:#556176;
+  font-weight:700;
+}
+.dataColumnSettingGrid select{
+  width:100%;
+  box-sizing:border-box;
+}
+.dataColumnSettingActions{
+  margin-top:12px;
+}
+@media(max-width:700px){
+  .dataColumnSettingGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3862,7 +3894,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.18 / 更新 2026-09-07 15:48</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.19 / 更新 2026-09-07 18:34</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4136,6 +4168,31 @@ button.flashActionAccepted{
     </label>
   </div>
 </div>
+
+<details class="advancedSettings dataColumnSettings">
+  <summary>詳細設定（一覧の表示項目・順番）</summary>
+  <div class="advancedSettingsBody">
+    <p class="hint" style="margin-top:0;">1, 2, 3…で左からの表示順を指定します。「表示しない」を選んだ項目は一覧から隠れます。</p>
+    <div class="dataColumnSettingGrid" id="dataColumnSettingGrid">
+      <label><span>選択</span><select data-data-col-setting="select"></select></label>
+      <label><span>ID</span><select data-data-col-setting="id"></select></label>
+      <label><span>英文</span><select data-data-col-setting="english"></select></label>
+      <label><span>発音記号</span><select data-data-col-setting="ipa"></select></label>
+      <label><span>日本語</span><select data-data-col-setting="japanese"></select></label>
+      <label><span>日本語読み</span><select data-data-col-setting="japaneseRead"></select></label>
+      <label><span>読み方</span><select data-data-col-setting="mode"></select></label>
+      <label><span>英速</span><select data-data-col-setting="englishRate"></select></label>
+      <label><span>日速</span><select data-data-col-setting="japaneseRate"></select></label>
+      <label><span>回数</span><select data-data-col-setting="repeat"></select></label>
+      <label><span>操作</span><select data-data-col-setting="actions"></select></label>
+    </div>
+    <div class="row dataColumnSettingActions">
+      <button type="button" id="applyDataColumnSettingsBtn" class="secondary standardActionBtn">一覧に反映</button>
+      <button type="button" id="resetDataColumnSettingsBtn" class="secondary">初期値に戻す</button>
+    </div>
+  </div>
+</details>
+
 <div class="row">
 <button class="secondary" id="prevBtn">前のページ</button>
 <button class="secondary" id="nextBtn">次のページ</button>
@@ -4147,7 +4204,19 @@ button.flashActionAccepted{
 <p class="hint" id="pageStatus"></p>
 <div class="tableWrap">
 <table>
-<thead><tr><th>選択</th><th>ID</th><th>英文</th><th>発音記号</th><th>日本語</th><th>日本語読み</th><th>読み方</th><th>英速</th><th>日速</th><th>回数</th><th>操作</th></tr></thead>
+<thead><tr>
+<th data-data-col="select">選択</th>
+<th data-data-col="id">ID</th>
+<th data-data-col="english">英文</th>
+<th data-data-col="ipa">発音記号</th>
+<th data-data-col="japanese">日本語</th>
+<th data-data-col="japaneseRead">日本語読み</th>
+<th data-data-col="mode">読み方</th>
+<th data-data-col="englishRate">英速</th>
+<th data-data-col="japaneseRate">日速</th>
+<th data-data-col="repeat">回数</th>
+<th data-data-col="actions">操作</th>
+</tr></thead>
 <tbody id="recordBody"></tbody>
 </table>
 </div>
@@ -4567,8 +4636,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.18";
-const APP_UPDATED="2026-09-07 15:48";
+const APP_VERSION="v4.5.19";
+const APP_UPDATED="2026-09-07 18:34";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -6863,12 +6932,88 @@ function syncVisibleDataSelection(){
   });
 }
 
+
+const DATA_COLUMN_SETTING_KEY="dataManagementColumnLayoutV1";
+const DATA_COLUMN_KEYS=[
+  "select","id","english","ipa","japanese","japaneseRead","mode","englishRate","japaneseRate","repeat","actions"
+];
+const DATA_COLUMN_DEFAULTS={
+  select:1,id:2,english:3,ipa:4,japanese:5,japaneseRead:6,mode:7,englishRate:8,japaneseRate:9,repeat:10,actions:11
+};
+
+function loadDataColumnSettings(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(DATA_COLUMN_SETTING_KEY)||"{}");
+    const out={...DATA_COLUMN_DEFAULTS};
+    DATA_COLUMN_KEYS.forEach(k=>{
+      if(Object.prototype.hasOwnProperty.call(saved,k)){
+        const n=Number(saved[k]);
+        out[k]=Number.isFinite(n)?Math.max(0,Math.min(11,Math.round(n))):DATA_COLUMN_DEFAULTS[k];
+      }
+    });
+    return out;
+  }catch(e){
+    return {...DATA_COLUMN_DEFAULTS};
+  }
+}
+function saveDataColumnSettings(settings){
+  localStorage.setItem(DATA_COLUMN_SETTING_KEY,JSON.stringify(settings));
+}
+function populateDataColumnSettingControls(){
+  const settings=loadDataColumnSettings();
+  document.querySelectorAll("[data-data-col-setting]").forEach(sel=>{
+    const key=sel.dataset.dataColSetting;
+    sel.innerHTML='<option value="0">表示しない</option>'+
+      Array.from({length:11},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join("");
+    sel.value=String(settings[key]??DATA_COLUMN_DEFAULTS[key]??0);
+  });
+}
+function readDataColumnSettingControls(){
+  const out={};
+  document.querySelectorAll("[data-data-col-setting]").forEach(sel=>{
+    out[sel.dataset.dataColSetting]=Number(sel.value)||0;
+  });
+  return out;
+}
+function applyDataColumnSettingsToTable(settings=loadDataColumnSettings()){
+  const orderMap=new Map(DATA_COLUMN_KEYS.map((k,i)=>[k,{rank:Number(settings[k])||0,base:i}]));
+  const sortCells=cells=>cells.slice().sort((a,b)=>{
+    const ka=a.dataset.dataCol||"", kb=b.dataset.dataCol||"";
+    const aa=orderMap.get(ka)||{rank:0,base:999};
+    const bb=orderMap.get(kb)||{rank:0,base:999};
+    if(aa.rank===0 && bb.rank!==0)return 1;
+    if(bb.rank===0 && aa.rank!==0)return -1;
+    if(aa.rank!==bb.rank)return aa.rank-bb.rank;
+    return aa.base-bb.base;
+  });
+
+  document.querySelectorAll("#dataPanel table thead tr, #recordBody tr").forEach(row=>{
+    const cells=[...row.children].filter(el=>el.dataset?.dataCol);
+    sortCells(cells).forEach(cell=>{
+      const key=cell.dataset.dataCol;
+      cell.style.display=(Number(settings[key])||0)===0?"none":"";
+      row.appendChild(cell);
+    });
+  });
+}
+function applyDataColumnSettingsFromControls(){
+  const settings=readDataColumnSettingControls();
+  saveDataColumnSettings(settings);
+  applyDataColumnSettingsToTable(settings);
+}
+function resetDataColumnSettings(){
+  saveDataColumnSettings({...DATA_COLUMN_DEFAULTS});
+  populateDataColumnSettingControls();
+  applyDataColumnSettingsToTable({...DATA_COLUMN_DEFAULTS});
+}
+
 async function renderPage(){
   const all=await filteredAll("searchText"),size=Number($("pageSize").value),start=currentPage*size;
   const page=all.slice(start,start+size),body=$("recordBody");body.innerHTML="";
   page.forEach(r=>{
     const tr=document.createElement("tr");
     const sel=document.createElement("td"),cb=document.createElement("input");
+    sel.dataset.dataCol="select";
     cb.type="checkbox";
     cb.dataset.recordId=String(r.id||"");
     cb.checked=selectedIds.has(r.id);
@@ -6885,8 +7030,20 @@ async function renderPage(){
       }
     });
     sel.appendChild(cb);tr.appendChild(sel);
-    [r.id,r.english,r.ipa||"",r.japanese,r.japaneseRead||"",modeLabel(r.mode),r.englishRate,r.japaneseRate,r.repeat].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
+    const dataValues=[
+      ["id",r.id],
+      ["english",r.english],
+      ["ipa",r.ipa||""],
+      ["japanese",r.japanese],
+      ["japaneseRead",r.japaneseRead||""],
+      ["mode",modeLabel(r.mode)],
+      ["englishRate",r.englishRate],
+      ["japaneseRate",r.japaneseRate],
+      ["repeat",r.repeat]
+    ];
+    dataValues.forEach(([key,v])=>{const td=document.createElement("td");td.dataset.dataCol=key;td.textContent=v;tr.appendChild(td);});
     const act=document.createElement("td"),e=document.createElement("button"),d=document.createElement("button");
+    act.dataset.dataCol="actions";
     e.textContent="編集";e.className="smallBtn secondary";e.addEventListener("click",()=>editRecord(r.id));
     d.textContent="削除";d.className="smallBtn danger";d.style.marginLeft="6px";d.addEventListener("click",async()=>{
       if(confirm(r.id+"を削除しますか？")){
@@ -6898,6 +7055,7 @@ async function renderPage(){
     });
     act.append(e,d);tr.appendChild(act);body.appendChild(tr);
   });
+  applyDataColumnSettingsToTable();
   $("pageStatus").textContent=all.length?`${start+1}～${Math.min(start+size,all.length)} / ${all.length}件`:"0件";
   const prevDisabled=currentPage===0;
   const nextDisabled=start+size>=all.length;
@@ -8355,6 +8513,11 @@ async function executeDataSearch(){
   }
   return matched.length;
 }
+
+populateDataColumnSettingControls();
+applyDataColumnSettingsToTable();
+$("applyDataColumnSettingsBtn")?.addEventListener("click",applyDataColumnSettingsFromControls);
+$("resetDataColumnSettingsBtn")?.addEventListener("click",resetDataColumnSettings);
 
 $("dataSearchBtn")?.addEventListener("click",()=>{
   runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
