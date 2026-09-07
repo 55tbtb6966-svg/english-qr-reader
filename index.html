@@ -3956,7 +3956,7 @@ button.flashActionAccepted{
 
 
 /* v4.5.26 Reader tab detail triangle UI */
-/* v4.5.28 Reader -> Flashcard direct handoff / layout fix */
+/* v4.5.29 Reader -> Flashcard full-record audio handoff */
 .dataEditorDetails{
   margin-top:10px;
   border:1px solid #d8dee8 !important;
@@ -4008,7 +4008,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.28 / 更新 2026-09-07 23:18</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.29 / 更新 2026-09-08 03:42</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4765,7 +4765,7 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.28";
+const APP_VERSION="v4.5.29";
 const APP_UPDATED="2026-09-07 19:56";
 
 function outputDateTimeStamp(){
@@ -11559,7 +11559,29 @@ async function createFlashcardsFromStudyReader(){
     setStudyReaderStatus("フラッシュカードにできる表示中の項目がありません。");
     return 0;
   }
-  flashReaderSourceRecords=source.map(r=>({...r}));
+
+  // Reader rows are intentionally lightweight for document display.
+  // Re-load each original IndexedDB record here so flashcards inherit every
+  // playback field (Sound / Mode / EnglishSpeak / JapaneseSpeak / rates /
+  // Repeat / Gap etc.) exactly like cards created inside the Flashcard tab.
+  const fullSource=[];
+  for(const readerItem of source){
+    const original=await getReaderRecordById(readerItem.id);
+    if(original){
+      fullSource.push({
+        ...original,
+        section:readerItem.section||"",
+        order:readerItem.order,
+        missing:false
+      });
+    }
+  }
+  if(!fullSource.length){
+    setStudyReaderStatus("元データを取得できず、フラッシュカードを作成できませんでした。");
+    return 0;
+  }
+
+  flashReaderSourceRecords=fullSource.map(r=>({...r}));
   flashReaderSourceLabel=[studyReaderContext?.setTitle||"",studyReaderContext?.section||""].filter(Boolean).join(" / ")||"表示中の内容";
   flashSourceMode="reader";
   flashRecords=flashReaderSourceRecords.map(r=>({...r}));
