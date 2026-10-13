@@ -1,5 +1,5 @@
 
-const APP_VERSION="v4.5.30";
+const APP_VERSION="v4.5.31";
 const APP_UPDATED="2026-09-07 19:56";
 
 function outputDateTimeStamp(){
@@ -4310,6 +4310,7 @@ function getPreviewCardEditableItemsForPpt(){
       cardHeightPx: cardRect.height,
       border: null,
       qr: null,
+      imageSlot: null,
       texts: []
     };
 
@@ -4322,6 +4323,12 @@ function getPreviewCardEditableItemsForPpt(){
         width: (r.width / cardRect.width) * 100,
         height: (r.height / cardRect.height) * 100
       };
+    }
+
+    const stateForSlot=readMasterState();
+    const slot=stateForSlot.imageSlot||MASTER_DEFAULT_STATE.imageSlot;
+    if(slot.enabled==="on"){
+      item.imageSlot={left:slot.x-slot.w/2,top:slot.y-slot.h/2,width:slot.w,height:slot.h};
     }
 
     const qrEl = card.querySelector(".masterOutputInner .qrCodeWrap, .qrCodeWrap");
@@ -4586,6 +4593,25 @@ async function exportCurrentQrPageToPowerPoint(){
           }
         }
 
+        if(item.imageSlot){
+          slide.addShape(pptx.ShapeType.rect,{
+            x:x+cw*(item.imageSlot.left/100),
+            y:y+ch*(item.imageSlot.top/100),
+            w:cw*(item.imageSlot.width/100),
+            h:ch*(item.imageSlot.height/100),
+            line:{color:"7B8491",width:1,dashType:"dash"},
+            fill:{color:"FFFFFF",transparency:100}
+          });
+          slide.addText("画像挿入領域",{
+            x:x+cw*(item.imageSlot.left/100),
+            y:y+ch*(item.imageSlot.top/100),
+            w:cw*(item.imageSlot.width/100),
+            h:ch*(item.imageSlot.height/100),
+            fontFace:"Aptos",fontSize:7,color:"7B8491",margin:0,align:"center",valign:"mid",fit:"shrink"
+          });
+          objectCount+=2;
+        }
+
         item.texts.forEach(t=>{
           const fontPt=Math.max(4,Math.min(40,t.fontRatio*cw*72));
           slide.addText(String(t.text),{
@@ -4827,11 +4853,12 @@ function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,w
 }
 
 
-const MASTER_DEFAULT_VERSION="2026-10-13-layout-7";
+const MASTER_DEFAULT_VERSION="2026-10-13-layout-8";
 const MASTER_BORDER_PRESET_COLORS=["#b8bec7","#111827","#2563eb","#dc2626","#16a34a","#ea580c","#7c3aed"];
 const MASTER_DEFAULT_STATE={
   marginX:3,marginY:3,border:"on",borderColor:"#b8bec7",borderWidth:1,
   qr:{size:100,x:15,y:20},
+  imageSlot:{enabled:"off",x:80,y:22,w:24,h:26},
   id:{size:1,x:50,y:10,align:"center",autoFit:"on",w:35,h:10},
   english:{size:5,x:50,y:47,align:"center",autoFit:"on",w:90,h:25},
   ipa:{size:1.5,x:50,y:62.5,align:"center",autoFit:"on",w:90,h:10},
@@ -4845,6 +4872,31 @@ function normalizeMasterHexColor(v,fallback=MASTER_DEFAULT_STATE.borderColor){
   if(/^[0-9a-fA-F]{6}$/.test(raw)) return ("#"+raw).toLowerCase();
   return String(fallback||MASTER_DEFAULT_STATE.borderColor).toLowerCase();
 }
+function masterHexToRgb(hex){
+  const h=normalizeMasterHexColor(hex).slice(1);
+  return {r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};
+}
+function masterRgbToHex(r,g,b){
+  const clamp=n=>Math.max(0,Math.min(255,Math.round(Number(n)||0)));
+  return "#"+[clamp(r),clamp(g),clamp(b)].map(n=>n.toString(16).padStart(2,"0")).join("");
+}
+function masterColorFromRgbControls(){
+  const r=Number($("masterBorderR")?.value)||0,g=Number($("masterBorderG")?.value)||0,b=Number($("masterBorderB")?.value)||0;
+  const intensity=(Number($("masterBorderIntensity")?.value)||100)/100;
+  return masterRgbToHex(r*intensity,g*intensity,b*intensity);
+}
+function updateMasterRgbLabels(){
+  [["masterBorderR","masterBorderRValue",""] ,["masterBorderG","masterBorderGValue",""] ,["masterBorderB","masterBorderBValue",""] ,["masterBorderIntensity","masterBorderIntensityValue","%"]].forEach(([id,out,suffix])=>{if($(out))$(out).textContent=String($(id)?.value??"")+suffix;});
+}
+function setMasterRgbBaseFromColor(color,resetIntensity=true){
+  const rgb=masterHexToRgb(color);
+  if($("masterBorderR"))$("masterBorderR").value=rgb.r;
+  if($("masterBorderG"))$("masterBorderG").value=rgb.g;
+  if($("masterBorderB"))$("masterBorderB").value=rgb.b;
+  if(resetIntensity&&$("masterBorderIntensity"))$("masterBorderIntensity").value=100;
+  updateMasterRgbLabels();
+}
+
 function isMasterPresetColor(v){
   const color=normalizeMasterHexColor(v);
   return MASTER_BORDER_PRESET_COLORS.includes(color);
@@ -4869,6 +4921,7 @@ function syncMasterBorderColorControls(color,forceCustom=false){
   const select=$("masterBorderColor");
   if(picker) picker.value=normalized;
   if(hex) hex.value=normalized.toUpperCase();
+  setMasterRgbBaseFromColor(normalized,true);
   if(select){
     select.value=(!forceCustom && isMasterPresetColor(normalized)) ? normalized : "__custom__";
   }
@@ -4891,6 +4944,7 @@ function readMasterState(){
     borderColor:getMasterBorderColorControlValue(previous?.borderColor||MASTER_DEFAULT_STATE.borderColor),
     borderWidth:num("masterBorderWidth",Number(previous?.borderWidth)||MASTER_DEFAULT_STATE.borderWidth),
     qr:{size:num("masterMirror_settingQrSize",132),x:num("masterQrCenterX",50),y:num("masterQrCenterY",50)},
+    imageSlot:{enabled:$("masterImageSlotEnabled")?.value||previous?.imageSlot?.enabled||"off",x:num("masterImageSlotX",Number(previous?.imageSlot?.x)||80),y:num("masterImageSlotY",Number(previous?.imageSlot?.y)||22),w:num("masterImageSlotW",Number(previous?.imageSlot?.w)||24),h:num("masterImageSlotH",Number(previous?.imageSlot?.h)||26)},
     id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:num("masterIdWidth",prev("id","w",36)),h:num("masterIdHeight",prev("id","h",9))},
     english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:num("masterEnglishWidth",prev("english","w",55)),h:num("masterEnglishHeight",prev("english","h",13))},
     ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:num("masterIpaWidth",prev("ipa","w",55)),h:num("masterIpaHeight",prev("ipa","h",10))},
@@ -4905,6 +4959,7 @@ function applyMasterStateToControls(s){
   syncMasterBorderColorControls(s.borderColor||MASTER_DEFAULT_STATE.borderColor,!isMasterPresetColor(s.borderColor||MASTER_DEFAULT_STATE.borderColor));
   set("masterBorderWidth",s.borderWidth||MASTER_DEFAULT_STATE.borderWidth);
   set("masterMirror_settingQrSize",s.qr.size);set("masterQrCenterX",s.qr.x);set("masterQrCenterY",s.qr.y);
+  const slot=s.imageSlot||MASTER_DEFAULT_STATE.imageSlot;set("masterImageSlotEnabled",slot.enabled||"off");set("masterImageSlotX",slot.x);set("masterImageSlotY",slot.y);set("masterImageSlotW",slot.w);set("masterImageSlotH",slot.h);
   const map={id:"Id",english:"English",ipa:"Ipa",japanese:"Japanese",japaneseRead:"JapaneseRead"};
   const sizeIds={id:"masterMirror_settingIdSize",english:"masterMirror_settingEnglishSize",ipa:"masterMirror_settingIpaSize",japanese:"masterMirror_settingJapaneseSize",japaneseRead:"masterMirror_settingJapaneseReadSize"};
   for(const [k,suffix] of Object.entries(map)){
@@ -5382,13 +5437,25 @@ function updateMasterPreview(){
    attachMasterQrInteractions(wrap,card);
  }
 
+ const slotState=readMasterState().imageSlot||MASTER_DEFAULT_STATE.imageSlot;
+ if(slotState.enabled==="on"){
+   const guide=document.createElement("div");
+   guide.className="masterImageSlotGuide";
+   guide.textContent="画像挿入領域";
+   guide.style.left=(slotState.x-slotState.w/2)+"%";
+   guide.style.top=(slotState.y-slotState.h/2)+"%";
+   guide.style.width=slotState.w+"%";
+   guide.style.height=slotState.h+"%";
+   card.appendChild(guide);
+ }
+
  createMasterTextObject(card,src,".qrId","id","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize","masterIdWidth","masterIdHeight",20,12,36,9);
  createMasterTextObject(card,src,".qrEnglish","english","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize","masterEnglishWidth","masterEnglishHeight",32,24,55,13);
  createMasterTextObject(card,src,".qrIpa","ipa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize","masterIpaWidth","masterIpaHeight",32,38,55,10);
  createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize","masterJapaneseWidth","masterJapaneseHeight",32,55,55,12);
  createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize","masterJapaneseReadWidth","masterJapaneseReadHeight",32,70,55,12);
 }
-["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderWidth","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderR","masterBorderG","masterBorderB","masterBorderIntensity","masterBorderWidth","masterQrCenterX","masterQrCenterY","masterImageSlotEnabled","masterImageSlotX","masterImageSlotY","masterImageSlotW","masterImageSlotH","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
 const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
 
 $("masterBorderColor")?.addEventListener("change",()=>{
@@ -5417,11 +5484,21 @@ $("masterBorderColorCustomHex")?.addEventListener("change",()=>{
   syncMasterBorderColorControls($("masterBorderColorCustomHex")?.value||MASTER_DEFAULT_STATE.borderColor,true);
   updateMasterPreview();
 });
+["masterBorderR","masterBorderG","masterBorderB","masterBorderIntensity"].forEach(id=>$(id)?.addEventListener("input",()=>{
+  updateMasterRgbLabels();
+  const color=masterColorFromRgbControls();
+  if($("masterBorderColor"))$("masterBorderColor").value="__custom__";
+  if($("masterBorderColorCustomPicker"))$("masterBorderColorCustomPicker").value=color;
+  if($("masterBorderColorCustomHex"))$("masterBorderColorCustomHex").value=color.toUpperCase();
+  setMasterBorderCustomVisibility();
+  localStorage.setItem("masterCardCurrentState",JSON.stringify(readMasterState()));
+  updateMasterPreview();applyMasterLayoutToAllRendered();
+}));
 
 
 
 
-["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderWidth","masterQrCenterX","masterQrCenterY",
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderR","masterBorderG","masterBorderB","masterBorderIntensity","masterBorderWidth","masterQrCenterX","masterQrCenterY","masterImageSlotEnabled","masterImageSlotX","masterImageSlotY","masterImageSlotW","masterImageSlotH",
  "masterMirror_settingQrSize","masterMirror_settingIdSize","masterMirror_settingEnglishSize",
  "masterMirror_settingIpaSize","masterMirror_settingJapaneseSize","masterMirror_settingJapaneseReadSize",
  "masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop",
