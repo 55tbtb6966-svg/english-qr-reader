@@ -1,0 +1,6930 @@
+
+const APP_VERSION="v4.5.30";
+const APP_UPDATED="2026-09-07 19:56";
+
+function outputDateTimeStamp(){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+function outputBaseFileName(){
+  return `qr_cards_${outputDateTimeStamp()}`;
+}
+
+function updateVersionBadge(csvVersion=""){
+  const el=document.getElementById("appVersionBadge");
+  if(!el)return;
+  const csv=csvVersion?` / CSV ${csvVersion}`:"";
+  el.textContent=`App ${APP_VERSION} / 更新 ${APP_UPDATED}${csv}`;
+  el.title=el.textContent;
+}
+
+const DB_NAME = "EnglishQrReaderDB";
+const DB_VERSION = 4;
+const LEGACY_STORE = "records";
+const STORE_A = "records_A";
+const STORE_B = "records_B";
+const STORE_C = "records_C";
+const STORE_N = "records_N";
+const META = "meta";
+
+const COMMON_PROFILE_CONFIG={
+  N:{label:"Numbers",comment:"N:",fileBase:"Numbers"},
+  W:{label:"Words",comment:"W:",fileBase:"Words"},
+  P:{label:"Phrases",comment:"P:",fileBase:"Phrases"},
+  S:{label:"Sounds",comment:"S:",fileBase:"Sounds"}
+};
+function activeStoreName(){
+  return activeCsvProfile==="B"?STORE_B:
+         activeCsvProfile==="C"?STORE_C:
+         activeCsvProfile==="N"?STORE_N:
+         STORE_A;
+}
+const $ = id => document.getElementById(id);
+
+let db;
+let scanner = null;
+let currentRecord = null;
+let currentPage = 0;
+let selectedIds = new Set();
+let dataSelectionRevision=0;
+let qrSelectionRevision=-1;
+let flashSelectionRevision=-1;
+let resetSelectionOnNextDataOpen=false;
+
+function dataSelectionStorageKey(profile=activeCsvProfile){
+  return "dataManagementSelectedIdsV1_"+profile;
+}
+function saveDataManagementSelection(){
+  try{
+    localStorage.setItem(dataSelectionStorageKey(),JSON.stringify([...selectedIds].map(String)));
+  }catch(e){}
+}
+function loadDataManagementSelection(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(dataSelectionStorageKey())||"[]");
+    selectedIds=new Set(Array.isArray(raw)?raw.map(String):[]);
+  }catch(e){
+    selectedIds=new Set();
+  }
+}
+
+function resetDataManagementSelectionForNextRound(){
+  selectedIds.clear();
+  saveDataManagementSelection();
+  dataSelectionRevision++;
+  qrSelectionRevision=-1;
+  flashSelectionRevision=-1;
+  if($("qrSelectedStatus"))$("qrSelectedStatus").textContent="";
+  if($("flashSelectedStatus"))$("flashSelectedStatus").textContent="";
+}
+
+function latestDataManagementSelection(){
+  syncVisibleDataSelection();
+  saveDataManagementSelection();
+  return new Set([...selectedIds].map(String));
+}
+let speakingToken = 0;
+let scanInputMode="none";
+let hidBuffer="";
+let externalScannerArmed=false;
+let externalScannerStartedOnce=false;
+let speechUnlockedByScannerStart=false;
+let scanReadySpoken=false;
+let scannerTextEditing=false;
+let hidLastKeyAt=0;
+let qrScanLocked=false;
+let lastCameraScanText="";
+let lastCameraScanAt=0;
+let qrPageStart = 0;
+let qrPageSource = [];
+let qrPageSize = 10;
+
+const CSV_PROFILES={A:{label:"A"},B:{label:"B"},C:{label:"C"}};
+const ACTIVE_PROFILE_KEY="activeCsvProfileV2";
+let activeCsvProfile=localStorage.getItem(ACTIVE_PROFILE_KEY)||"A";
+if(!CSV_PROFILES[activeCsvProfile])activeCsvProfile="A";
+
+function activeProfileInfo(){return CSV_PROFILES[activeCsvProfile];}
+function csvFileNameMetaKey(profile=activeCsvProfile){
+  return "csv_filename_"+profile;
+}
+function csvFileNameLocalKey(profile=activeCsvProfile){
+  return "lastCsvFileName_"+profile;
+}
+async function saveCurrentCsvFileName(name,profile=activeCsvProfile){
+  const safe=String(name||"").trim();
+  if(!safe)return;
+  await putMeta(csvFileNameMetaKey(profile),safe);
+  localStorage.setItem(csvFileNameLocalKey(profile),safe);
+}
+async function refreshCurrentCsvFileName(){
+  const el=$("currentCsvFileName");
+  if(!el)return;
+
+  const profile=activeCsvProfile;
+  let name="";
+  try{name=String((await getMeta(csvFileNameMetaKey(profile)))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem(csvFileNameLocalKey(profile))||"").trim();
+
+  el.textContent=`${profile}：${name||"記録なし（CSVを一度再読込してください）"}`;
+  el.title=`CSV ${profile}：${name||"記録なし"}`;
+}
+
+async function getActiveProfileRecords(){return await getAllRecords();}
+
+async function refreshNumbersCsvFileName(){
+  const el=$("numbersCsvFileName");
+  if(!el)return;
+  let name="";
+  try{name=String((await getMeta("csv_filename_N"))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem("lastCsvFileName_N")||"").trim();
+  el.textContent=name||"記録なし（Numbers CSVを一度読み込んでください）";
+  el.title=name||"記録なし";
+}
+
+async function refreshNumbersSummary(){
+  const el=$("numbersRecordCount");
+  if(!el)return;
+  try{
+    const all=await getNumberProfileRecords();
+    el.textContent=String(all.length);
+  }catch{
+    el.textContent="取得エラー";
+  }
+}
+
+
+async function refreshExtraCommonCsvFileName(prefix){
+  const cfg=COMMON_PROFILE_CONFIG[prefix];
+  const id=prefix==="W"?"wordsCsvFileName":prefix==="P"?"phrasesCsvFileName":"soundsCsvFileName";
+  const el=$(id);
+  if(!cfg||!el)return;
+  let name="";
+  try{name=String((await getMeta("csv_filename_"+prefix))||"").trim();}catch(e){}
+  if(!name)name=String(localStorage.getItem("lastCsvFileName_"+prefix)||"").trim();
+  el.textContent=name||`記録なし（${cfg.label} CSVを一度読み込んでください）`;
+  el.title=name||"記録なし";
+}
+
+async function refreshExtraCommonSummary(prefix){
+  const id=prefix==="W"?"wordsRecordCount":prefix==="P"?"phrasesRecordCount":"soundsRecordCount";
+  const el=$(id);
+  if(!el)return;
+  try{
+    el.textContent=String((await getCommonProfileRecords(prefix)).length);
+  }catch{
+    el.textContent="取得エラー";
+  }
+}
+
+
+async function getAllCommonRecords(){
+  await ensureDb();
+  return await reqPromise(tx(STORE_N).getAll());
+}
+
+async function getCommonProfileRecords(prefix){
+  const p=String(prefix||"").toUpperCase();
+  const all=await getAllCommonRecords();
+  return all.filter(r=>commonPrefixForId(r.id)===p);
+}
+
+async function getNumberProfileRecords(){
+  return await getCommonProfileRecords("N");
+}
+
+async function getCommonSearchRecords(hasTerms=true){
+  const active=await getActiveProfileRecords();
+  if(!hasTerms)return active;
+
+  const common=await getAllCommonRecords();
+  const seen=new Set(active.map(r=>String(r.id||"")));
+  return active.concat(common.filter(r=>!seen.has(String(r.id||""))));
+}
+
+async function getRecordsForSelectedIds(ids){
+  const wanted=ids instanceof Set?ids:new Set(ids||[]);
+  if(!wanted.size)return [];
+
+  const source=await getCommonSearchRecords(true);
+
+  return source.filter(r=>wanted.has(String(r.id||"")));
+}
+
+async function putRecordToStore(record,storeName){
+  await ensureDb();
+  await reqPromise(tx(storeName,"readwrite").put(record));
+}
+
+async function deleteRecordFromStore(id,storeName){
+  await ensureDb();
+  await reqPromise(tx(storeName,"readwrite").delete(id));
+}
+
+
+
+function updateProfileUi(){
+  const sel=$("csvProfileSelect");
+  if(sel && sel.value!==activeCsvProfile)sel.value=activeCsvProfile;
+}
+async function switchDataProfile(profile){
+  if(!CSV_PROFILES[profile])return;
+
+  if(profile!==activeCsvProfile){
+    speakingToken++;
+    try{window.speechSynthesis?.cancel();}catch(e){}
+    currentRecord=null;
+    selectedIds.clear();
+    resetSelectionOnNextDataOpen=false;
+    dataSelectionRevision++;
+    qrSelectionRevision=-1;
+    flashSelectionRevision=-1;
+    currentPage=0;
+    dataSearchQuery="";
+    if($("searchText"))$("searchText").value="";
+    qrPageSource=[];
+    qrPageStart=0;
+    flashRecords=[];
+    flashIndex=0;
+    flashBackShown=false;
+
+    activeCsvProfile=profile;
+    localStorage.setItem(ACTIVE_PROFILE_KEY,profile);
+    loadDataManagementSelection();
+    if($("csvFile"))$("csvFile").value="";
+
+    if($("qrSheet"))$("qrSheet").innerHTML="";
+    if($("printQrSheet"))$("printQrSheet").innerHTML="";
+    if($("qrPageStatus"))$("qrPageStatus").textContent="";
+  updateQrPagerButtons();
+    if($("qrStatus"))$("qrStatus").textContent="";
+    if($("manualId"))$("manualId").value="";
+    if($("idBadge"))$("idBadge").textContent="ID：未選択";
+    if($("modeBadge"))$("modeBadge").textContent="読み方：未選択";
+    if($("english")){
+      $("english").classList.add("initialPrompt");
+      $("english").textContent="CSVを登録してQRコードを読み取ってください";
+    }
+    if($("ipaDisplay"))$("ipaDisplay").textContent="";
+    if($("japanese"))$("japanese").textContent="";
+    if($("japaneseReadDisplay"))$("japaneseReadDisplay").textContent="";
+    if($("scanStatus"))$("scanStatus").textContent="";
+    if($("flashTop"))$("flashTop").textContent="フラッシュカード";
+    if($("flashBottom")){$("flashBottom").textContent="";$("flashBottom").hidden=true;}
+    if($("flashId"))$("flashId").textContent="";
+    if($("flashStatus"))$("flashStatus").textContent="作成ボタンを押すとフラッシュカードを作成します。";
+  }
+
+  updateProfileUi();
+  refreshReaderSetForActiveProfile();
+  if($("editId")){
+    $("editId").placeholder="例：A000001 / N1 / W000001 / P000001 / S000001";
+  }
+  loadFlashCheckedIds();
+  await buildFlashCheckedMemo();
+  await refreshSummary();
+  await refreshCurrentCsvFileName();
+  updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
+  await renderPage();
+}
+function setStatus(el, msg, ok=true) {
+  el.textContent = msg;
+  el.className = "status " + (ok ? "ok" : "error");
+}
+function modeLabel(mode) {
+  return mode === "english" ? "英語のみ" : mode === "japanese" ? "日本語のみ" : "英語→日本語";
+}
+function openDb() {
+  return new Promise((resolve,reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d=e.target.result;
+      for(const storeName of [STORE_A,STORE_B,STORE_C,STORE_N]){
+        if(!d.objectStoreNames.contains(storeName)){
+          const st=d.createObjectStore(storeName,{keyPath:"id"});
+          st.createIndex("english","english",{unique:false});
+          st.createIndex("japanese","japanese",{unique:false});
+        }
+      }
+      if(!d.objectStoreNames.contains(META))d.createObjectStore(META,{keyPath:"key"});
+      if(d.objectStoreNames.contains(LEGACY_STORE)){
+        try{
+          const oldStore=e.target.transaction.objectStore(LEGACY_STORE);
+          const newStore=e.target.transaction.objectStore(STORE_A);
+          oldStore.openCursor().onsuccess=ev=>{
+            const c=ev.target.result;
+            if(c){
+              const r={...c.value};
+              if(/^[EC]\d{6}$/i.test(r.id))r.id="A"+r.id.slice(1);
+              newStore.put(r);
+              c.continue();
+            }
+          };
+        }catch(err){}
+      }
+    };
+    req.onsuccess=()=>{
+      db=req.result;
+      db.onversionchange=()=>{
+        try{db.close();}catch(e){}
+        db=null;
+      };
+      resolve(db);
+    };
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function ensureDb(){
+  if(db)return db;
+  return await openDb();
+}
+
+const RECORD_BACKUP_PREFIX="englishQrRecordBackupV1_";
+
+function backupKey(namespace){
+  return RECORD_BACKUP_PREFIX+namespace;
+}
+
+function saveRecordBackup(namespace,records){
+  try{
+    localStorage.setItem(
+      backupKey(namespace),
+      JSON.stringify(Array.isArray(records)?records:[])
+    );
+    return true;
+  }catch(e){
+    console.warn("localStorage backup failed",namespace,e);
+    return false;
+  }
+}
+
+function loadRecordBackup(namespace){
+  try{
+    const raw=localStorage.getItem(backupKey(namespace));
+    if(!raw)return [];
+    const parsed=JSON.parse(raw);
+    return Array.isArray(parsed)?parsed:[];
+  }catch(e){
+    console.warn("localStorage backup read failed",namespace,e);
+    return [];
+  }
+}
+
+async function snapshotNamespaceToBackup(namespace){
+  await ensureDb();
+  let records=[];
+  if(["A","B","C"].includes(namespace)){
+    const storeName=namespace==="A"?STORE_A:namespace==="B"?STORE_B:STORE_C;
+    records=await reqPromise(tx(storeName).getAll());
+  }else{
+    const all=await reqPromise(tx(STORE_N).getAll());
+    records=all.filter(r=>commonPrefixForId(r.id)===namespace);
+  }
+  return saveRecordBackup(namespace,records);
+}
+
+async function restoreNamespaceFromBackupIfEmpty(namespace){
+  await ensureDb();
+  const backup=loadRecordBackup(namespace);
+  if(!backup.length)return 0;
+
+  let storeName=STORE_N;
+  let existing=[];
+  if(["A","B","C"].includes(namespace)){
+    storeName=namespace==="A"?STORE_A:namespace==="B"?STORE_B:STORE_C;
+    existing=await reqPromise(tx(storeName).getAll());
+  }else{
+    const all=await reqPromise(tx(STORE_N).getAll());
+    existing=all.filter(r=>commonPrefixForId(r.id)===namespace);
+  }
+  if(existing.length)return 0;
+
+  const transaction=db.transaction(storeName,"readwrite");
+  const store=transaction.objectStore(storeName);
+  backup.forEach(r=>store.put(r));
+  await new Promise((resolve,reject)=>{
+    transaction.oncomplete=resolve;
+    transaction.onerror=()=>reject(transaction.error);
+    transaction.onabort=()=>reject(transaction.error||new Error("バックアップ復元が中断されました。"));
+  });
+  return backup.length;
+}
+
+async function restoreAllBackupsIfNeeded(){
+  let restored=0;
+  for(const ns of ["A","B","C","N","W","P","S"]){
+    try{restored+=await restoreNamespaceFromBackupIfEmpty(ns);}catch(e){
+      console.warn("backup restore failed",ns,e);
+    }
+  }
+  return restored;
+}
+
+
+
+function withTimeout(promise,ms,fallback){
+  return Promise.race([
+    Promise.resolve(promise).catch(()=>fallback),
+    new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))
+  ]);
+}
+
+async function requestPersistentStorage(){
+  try{
+    if(!navigator.storage?.persist)return false;
+    const already=await withTimeout(
+      navigator.storage.persisted ? navigator.storage.persisted() : false,
+      1200,
+      false
+    );
+    if(already)return true;
+    return await withTimeout(navigator.storage.persist(),1200,false);
+  }catch(e){
+    return false;
+  }
+}
+
+async function verifyStoreCount(storeName){
+  await ensureDb();
+  return await reqPromise(tx(storeName).count());
+}
+
+async function verifyImportedIds(storeName,records){
+  await ensureDb();
+  const check=records.slice(0,Math.min(records.length,5));
+  for(const r of check){
+    const saved=await reqPromise(tx(storeName).get(r.id));
+    if(!saved)return false;
+  }
+  return true;
+}
+
+async function verifyImportedIdsAfterCommit(storeName,records){
+  await new Promise(resolve=>setTimeout(resolve,0));
+  return await verifyImportedIds(storeName,records);
+}
+
+
+
+function tx(store, mode="readonly") { if(!db)throw new Error("IndexedDB is not initialized"); return db.transaction(store,mode).objectStore(store); }
+function reqPromise(req) { return new Promise((resolve,reject)=>{ req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
+async function putMeta(key,value) { await ensureDb(); await reqPromise(tx(META,"readwrite").put({key,value})); }
+async function getMeta(key) { await ensureDb(); const r=await reqPromise(tx(META).get(key)); return r?.value; }
+async function countRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).count()); }
+async function getRecord(id) { await ensureDb(); return await reqPromise(tx(activeStoreName()).get(id)); }
+async function getRecordForScan(id) {
+  await ensureDb();
+
+  if(isCommonRecordId(id)){
+    return await reqPromise(tx(STORE_N).get(id));
+  }
+
+  const m=String(id||"").match(/^([ABC])\d{6}$/);
+  if(m){
+    if(m[1]!==activeCsvProfile)return undefined;
+    const storeName=m[1]==="A"?STORE_A:m[1]==="B"?STORE_B:STORE_C;
+    return await reqPromise(tx(storeName).get(id));
+  }
+
+  return await reqPromise(tx(activeStoreName()).get(id));
+}
+async function putRecord(record) {
+  await ensureDb();
+  await reqPromise(tx(activeStoreName(),"readwrite").put(record));
+  await snapshotNamespaceToBackup(activeCsvProfile);
+}
+async function deleteRecord(id) {
+  await ensureDb();
+  await reqPromise(tx(activeStoreName(),"readwrite").delete(id));
+  await snapshotNamespaceToBackup(activeCsvProfile);
+}
+async function clearRecords() { await ensureDb(); await reqPromise(tx(activeStoreName(),"readwrite").clear()); }
+async function getAllRecords() { await ensureDb(); return await reqPromise(tx(activeStoreName()).getAll()); }
+
+
+function readCsvFileText(file){
+  if(!file)return Promise.reject(new Error("CSVファイルが選択されていません。"));
+
+  // FileReader is more reliable than Blob.text() on some iPhone/Safari/PWA paths.
+  return new Promise((resolve,reject)=>{
+    try{
+      const reader=new FileReader();
+      reader.onload=()=>{
+        let text=String(reader.result??"");
+        // Remove UTF-8 BOM if present; parseCsv/csvToRecords also tolerates it.
+        text=text.replace(/^\uFEFF/,"");
+        resolve(text);
+      };
+      reader.onerror=()=>reject(reader.error||new Error("CSVファイルを読み込めませんでした。"));
+      reader.onabort=()=>reject(new Error("CSVファイルの読み込みが中断されました。"));
+      reader.readAsText(file,"UTF-8");
+    }catch(e){
+      reject(e);
+    }
+  });
+}
+
+function parseCsv(text) {
+  const rows=[]; let row=[],cell="",quoted=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(quoted){
+      if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else quoted=false; }
+      else cell+=ch;
+    } else {
+      if(ch==='"') quoted=true;
+      else if(ch===','){row.push(cell);cell="";}
+      else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell="";}
+      else if(ch!=='\r') cell+=ch;
+    }
+  }
+  row.push(cell); if(row.some(v=>v!=="")) rows.push(row); return rows;
+}
+function csvToRecords(rows) {
+  if(rows.length<2) throw new Error("CSVにデータ行がありません。");
+  const h=rows[0].map(v=>String(v||"").replace(/^\uFEFF/,"").trim().toLowerCase());
+  const idx=names=>h.findIndex(x=>names.includes(x));
+  const iId=idx(["id"]), iEn=idx(["english","英語","英文"]), iIpa=idx(["ipa","phonetic","発音記号"]), iJa=idx(["japanese","日本語","和訳"]), iJaRead=idx(["japaneseread","japanese_read","日本語読み","読み"]);
+  const iEnSpeak=idx(["englishspeak","english_speak","英語読み上げ","英語読み上げ文"]);
+  const iJaSpeak=idx(["japanesespeak","japanese_speak","日本語読み上げ","日本語読み上げ文"]);
+  const iSound=idx(["sound","効果音","soundeffect","sound_effect"]);
+  const iMode=idx(["mode","読み方"]), iER=idx(["englishrate","english_rate","英語速度"]);
+  const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
+  const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
+  const iExplanation=idx(["explanation","解説","説明","note","notes"]);
+  if(iId<0||iEn<0) throw new Error("ID列とEnglish列が必要です。");
+  const out=[]; let version="";
+  for(let i=1;i<rows.length;i++){
+    const c=rows[i], id=String(c[iId]||"").trim(), english=String(c[iEn]||"").trim();
+    if(!id||!english) continue;
+    const modeRaw=String(iMode>=0?c[iMode]||"both":"both").trim().toLowerCase();
+    const mode=["english","japanese","both"].includes(modeRaw)?modeRaw:"both";
+    const rec={id,english,
+      englishSpeak:iEnSpeak>=0?String(c[iEnSpeak]||"").trim():"",
+      ipa:iIpa>=0?String(c[iIpa]||"").trim():"",
+      japanese:iJa>=0?String(c[iJa]||"").trim():"",
+      japaneseRead:iJaRead>=0?String(c[iJaRead]||"").trim():"",
+      japaneseSpeak:iJaSpeak>=0?String(c[iJaSpeak]||"").trim():"",
+      sound:iSound>=0?String(c[iSound]||"").trim().toLowerCase():"",
+      mode,englishRate:iER>=0?Number(c[iER])||1:1,japaneseRate:iJR>=0?Number(c[iJR])||1:1,
+      repeat:iRep>=0?Math.max(1,parseInt(c[iRep],10)||1):1,
+      gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
+      version:iVer>=0?String(c[iVer]||"").trim():"",
+      comment:iComment>=0?String(c[iComment]||"").trim():"",
+      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():""};
+    if(rec.version) version=rec.version;
+    out.push(rec);
+  }
+  return {records:out,version};
+}
+async function importCsv(replace) {
+  const file=$("csvFile").files[0];
+  if(!file){setStatus($("importStatus"),"CSVを選択してください。",false);return;}
+  const importProfile=activeCsvProfile;
+  const importStore=activeStoreName();
+  try{
+    setStatus($("importStatus"),`CSV ${importProfile}：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
+
+
+    if(importProfile!==activeCsvProfile){
+      setStatus($("importStatus"),"CSV切替後にもう一度読み込んでください。",false);
+      return;
+    }
+    await ensureDb();
+    if(replace) await clearRecords();
+    const transaction=db.transaction(importStore,"readwrite");
+    const store=transaction.objectStore(importStore);
+    parsed.records.forEach(r=>store.put(r));
+    await new Promise((resolve,reject)=>{
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
+    });
+
+    const verified=await verifyImportedIdsAfterCommit(importStore,parsed.records);
+    const savedCount=await verifyStoreCount(importStore);
+    if(!verified)throw new Error("CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
+
+    const backupOk=await snapshotNamespaceToBackup(importProfile);
+    if(parsed.version) await putMeta("version_"+importProfile,parsed.version);
+    await saveCurrentCsvFileName(file.name||"",importProfile);
+    await refreshCurrentCsvFileName();
+    setStatus(
+      $("importStatus"),
+      "CSV "+importProfile+"："+parsed.records.length+"件を"+(replace?"全置換":"追加・上書き")+
+      "しました。保存確認："+savedCount+"件"+(backupOk?" / iPhoneバックアップ済み":" / バックアップ容量不足の可能性")
+    );
+    if(replace)flashQrActionAccepted($("replaceImportBtn"));
+    currentPage=0; selectedIds.clear(); await refreshSummary(); await renderPage();
+  }catch(e){setStatus($("importStatus"),e.message||"読み込みに失敗しました。",false);}
+}
+
+async function importNumbersCsv(replace){
+  const file=$("numbersCsvFile")?.files?.[0];
+  if(!file){
+    setStatus($("numbersImportStatus"),"Numbers CSVを選択してください。",false);
+    return;
+  }
+
+  try{
+    setStatus($("numbersImportStatus"),`Numbers：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
+
+    for(const r of parsed.records){
+      const normalized=normalizeNumberId(r.id);
+      if(!normalized){
+        throw new Error("Numbers CSVのIDは N＋数字 にしてください（例：N1、N0.1、N2500）。");
+      }
+      r.id=normalized;
+      r.comment="N:";
+    }
+
+    await ensureDb();
+    if(replace)await reqPromise(tx(STORE_N,"readwrite").clear());
+
+    const transaction=db.transaction(STORE_N,"readwrite");
+    const store=transaction.objectStore(STORE_N);
+    parsed.records.forEach(r=>store.put(r));
+    await new Promise((resolve,reject)=>{
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
+    });
+
+    const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
+    if(!verified)throw new Error("Numbers CSVは読み込めましたが、iPhone内への保存確認に失敗しました。");
+
+    const backupOk=await snapshotNamespaceToBackup("N");
+    if(parsed.version)await putMeta("version_N",parsed.version);
+    await putMeta("csv_filename_N",file.name||"");
+    localStorage.setItem("lastCsvFileName_N",file.name||"");
+
+    setStatus(
+      $("numbersImportStatus"),
+      `Numbers：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。${backupOk?" iPhoneバックアップ済み":" バックアップ容量不足の可能性"}`
+    );
+
+    await refreshNumbersCsvFileName();
+    await refreshNumbersSummary();
+
+    // Refresh only if a common search is currently visible.
+    if(String(dataSearchQuery||"").trim())await renderPage();
+  }catch(e){
+    setStatus($("numbersImportStatus"),e.message||"Numbers CSVの読み込みに失敗しました。",false);
+  }
+}
+
+function commonCsvUi(prefix){
+  return prefix==="W"
+    ? {input:"wordsCsvFile",status:"wordsImportStatus"}
+    : prefix==="P"
+      ? {input:"phrasesCsvFile",status:"phrasesImportStatus"}
+      : {input:"soundsCsvFile",status:"soundsImportStatus"};
+}
+
+async function clearCommonPrefixRecords(prefix){
+  await ensureDb();
+  const all=await reqPromise(tx(STORE_N).getAll());
+  const ids=all.filter(r=>commonPrefixForId(r.id)===prefix).map(r=>r.id);
+  if(!ids.length)return;
+
+  const transaction=db.transaction(STORE_N,"readwrite");
+  const store=transaction.objectStore(STORE_N);
+  ids.forEach(id=>store.delete(id));
+  await new Promise((resolve,reject)=>{
+    transaction.oncomplete=resolve;
+    transaction.onerror=()=>reject(transaction.error);
+  });
+}
+
+async function importExtraCommonCsv(prefix,replace){
+  const cfg=COMMON_PROFILE_CONFIG[prefix];
+  const ui=commonCsvUi(prefix);
+  const file=$(ui.input)?.files?.[0];
+  if(!file){
+    setStatus($(ui.status),`${cfg.label} CSVを選択してください。`,false);
+    return;
+  }
+
+  try{
+    setStatus($(ui.status),`${cfg.label}：${file.name||"選択ファイル"} を読み込み中…`);
+    const parsed=csvToRecords(parseCsv(await readCsvFileText(file)));
+    if(!parsed.records.length)throw new Error("CSVに読み込めるデータ行がありません。");
+
+    for(const r of parsed.records){
+      const normalized=normalizeCommonFixedId(r.id,prefix);
+      if(!normalized){
+        throw new Error(`${cfg.label} CSVのIDは ${prefix}＋6桁 にしてください（例：${prefix}000001）。`);
+      }
+      r.id=normalized;
+      r.comment=cfg.comment;
+    }
+
+    await ensureDb();
+
+    if(replace){
+      await clearCommonPrefixRecords(prefix);
+    }
+
+    const transaction=db.transaction(STORE_N,"readwrite");
+    const store=transaction.objectStore(STORE_N);
+    parsed.records.forEach(r=>store.put(r));
+    await new Promise((resolve,reject)=>{
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB保存が中断されました。"));
+    });
+
+    const verified=await verifyImportedIdsAfterCommit(STORE_N,parsed.records);
+    if(!verified)throw new Error(`${cfg.label} CSVは読み込めましたが、iPhone内への保存確認に失敗しました。`);
+
+    const backupOk=await snapshotNamespaceToBackup(prefix);
+    if(parsed.version)await putMeta("version_"+prefix,parsed.version);
+    await putMeta("csv_filename_"+prefix,file.name||"");
+    localStorage.setItem("lastCsvFileName_"+prefix,file.name||"");
+
+    setStatus($(ui.status),`${cfg.label}：${parsed.records.length}件を${replace?"全置換":"追加・上書き"}しました。${backupOk?" iPhoneバックアップ済み":" バックアップ容量不足の可能性"}`);
+    await refreshExtraCommonCsvFileName(prefix);
+    await refreshExtraCommonSummary(prefix);
+    if(String(dataSearchQuery||"").trim())await renderPage();
+  }catch(e){
+    setStatus($(ui.status),e?.message||`${cfg.label} CSVの読み込みに失敗しました。`,false);
+  }
+}
+
+async function exportExtraCommonCsv(prefix){
+  const cfg=COMMON_PROFILE_CONFIG[prefix];
+  const all=(await getCommonProfileRecords(prefix)).slice().sort(compareRecordIds);
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  all.forEach(r=>lines.push([
+    r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",cfg.comment,r.explanation||""
+  ].map(csvEscape).join(",")));
+  const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=cfg.fileBase+".csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+
+async function exportNumbersCsv(){
+  const all=(await getNumberProfileRecords())
+    .slice()
+    .sort(compareRecordIds);
+
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  all.forEach(r=>lines.push([
+    r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"","N:",r.explanation||""
+  ].map(csvEscape).join(",")));
+
+  const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="Numbers.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+async function exportCsv(){
+  const all=(await getActiveProfileRecords()).sort((a,b)=>a.id.localeCompare(b.id));
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  all.forEach(r=>lines.push([
+    r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||"",r.explanation||""
+  ].map(csvEscape).join(",")));
+  const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`words_${activeCsvProfile}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+async function refreshSummary(){
+  try{
+    $("recordCount").textContent=(await getActiveProfileRecords()).length;
+  }catch{
+    $("recordCount").textContent="取得エラー";
+  }
+
+  try{
+    $("dataVersion").textContent=(await getMeta("version_"+activeCsvProfile))||"未設定";
+  }catch{
+    $("dataVersion").textContent="取得エラー";
+  }
+
+  try{
+    if(navigator.storage?.estimate){
+      const e=await navigator.storage.estimate();
+      const used=((e.usage||0)/1024/1024).toFixed(1);
+      const quota=((e.quota||0)/1024/1024).toFixed(0);
+      $("storageUsage").textContent=used+" MB / 約"+quota+" MB";
+    }else{
+      $("storageUsage").textContent="取得不可";
+    }
+  }catch{
+    $("storageUsage").textContent="取得不可";
+  }
+}
+function englishVoice(){
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="en-US"||v.lang.startsWith("en"));
+  const selected=$("englishVoiceSelect")?.value||localStorage.getItem("selectedEnglishVoice")||"";
+  return voices.find(v=>v.name===selected)||
+         voices.find(v=>v.lang==="en-US")||
+         voices[0]||
+         null;
+}
+function japaneseVoice(){
+  const voices=speechSynthesis.getVoices().filter(x=>x.lang==="ja-JP"||x.lang.startsWith("ja"));
+  const selected=$("japaneseVoiceSelect")?.value||localStorage.getItem("selectedJapaneseVoice")||"";
+  return voices.find(v=>v.name===selected)||voices[0]||null;
+}
+function loadEnglishVoices(){
+  const select=$("englishVoiceSelect");
+  if(!select)return;
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="en-US"||v.lang.startsWith("en"));
+  const saved=localStorage.getItem("selectedEnglishVoice")||select.value;
+  select.innerHTML="";
+  voices.forEach(v=>{
+    const o=document.createElement("option");
+    o.value=v.name;
+    o.textContent=v.name+" ("+v.lang+")";
+    select.appendChild(o);
+  });
+  if(saved&&voices.some(v=>v.name===saved))select.value=saved;
+  else{
+    const us=voices.find(v=>v.lang==="en-US");
+    if(us)select.value=us.name;
+  }
+}
+
+function loadJapaneseVoices(){
+  const select=$("japaneseVoiceSelect");
+  if(!select)return;
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang==="ja-JP"||v.lang.startsWith("ja"));
+  const old=localStorage.getItem("selectedJapaneseVoice")||select.value;
+  select.innerHTML="";
+  voices.forEach(v=>{
+    const o=document.createElement("option");
+    o.value=v.name;o.textContent=v.name+" ("+v.lang+")";
+    select.appendChild(o);
+  });
+  if(old&&voices.some(v=>v.name===old))select.value=old;
+}
+
+const SPEECH_WARMUP_KEY="speechWarmupEnabledV1";
+const SPEECH_WARMUP_IDLE_MS=60000;
+let lastSpeechActivityAt=0;
+let speechWarmupStale=true;
+
+function speechWarmupEnabled(){
+  const el=$("settingSoftWordStart");
+  if(el)return el.checked!==false;
+  const saved=localStorage.getItem(SPEECH_WARMUP_KEY);
+  if(saved!==null)return saved!=="false";
+  return getSizeSettings().softWordStart!==false;
+}
+
+function loadSpeechWarmupSetting(){
+  const el=$("settingSoftWordStart");
+  if(!el)return;
+  const saved=localStorage.getItem(SPEECH_WARMUP_KEY);
+  if(saved===null){
+    el.checked=getSizeSettings().softWordStart!==false;
+    localStorage.setItem(SPEECH_WARMUP_KEY,String(el.checked));
+  }else{
+    el.checked=saved!=="false";
+  }
+  el.addEventListener("change",()=>{
+    localStorage.setItem(SPEECH_WARMUP_KEY,String(el.checked));
+    if(el.checked)speechWarmupStale=true;
+  });
+}
+
+async function maybeWarmupSpeechEngine(token,lang="en-US"){
+  if(!speechWarmupEnabled())return;
+  if(!("speechSynthesis" in window))return;
+  if(token!==speakingToken)return;
+
+  const now=Date.now();
+  const idle=now-lastSpeechActivityAt;
+  if(!speechWarmupStale && lastSpeechActivityAt>0 && idle<SPEECH_WARMUP_IDLE_MS)return;
+
+  await new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      resolve();
+    };
+    try{
+      const u=new SpeechSynthesisUtterance("ready");
+      u.lang=lang.startsWith("ja")?"ja-JP":"en-US";
+      u.rate=2;
+      // Practically inaudible, but non-zero so WebKit still initializes the audio path.
+      u.volume=0.001;
+      const v=u.lang.startsWith("ja")?japaneseVoice():englishVoice();
+      if(v)u.voice=v;
+      u.onend=finish;
+      u.onerror=finish;
+      speechSynthesis.speak(u);
+      setTimeout(finish,900);
+    }catch(e){
+      finish();
+    }
+  });
+
+  if(token!==speakingToken)return;
+  lastSpeechActivityAt=Date.now();
+  speechWarmupStale=false;
+  // Give Safari a short moment to keep the newly opened TTS/audio path active.
+  await new Promise(r=>setTimeout(r,260));
+  try{window.speechSynthesis?.resume();}catch(e){}
+}
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    speechWarmupStale=true;
+  }
+});
+window.addEventListener("pageshow",()=>{
+  speechWarmupStale=true;
+});
+
+async function speakText(text,lang,rate){
+  if(!text)return;
+
+  const tokenAtStart=speakingToken;
+  await maybeWarmupSpeechEngine(tokenAtStart,lang);
+  if(tokenAtStart!==speakingToken)return;
+
+  try{window.speechSynthesis?.resume();}catch(e){}
+  await new Promise(r=>setTimeout(r,180));
+  if(tokenAtStart!==speakingToken)return;
+
+  await new Promise(resolve=>{
+    let finished=false;
+    let watchdog=null;
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      if(watchdog)clearTimeout(watchdog);
+      lastSpeechActivityAt=Date.now();
+      resolve();
+    };
+
+    try{
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang=lang;
+      u.rate=rate;
+      u.volume=1.0;
+
+      const v=lang.startsWith("ja")?japaneseVoice():englishVoice();
+      if(v)u.voice=v;
+
+      u.onstart=()=>{
+        lastSpeechActivityAt=Date.now();
+        speechWarmupStale=false;
+      };
+      u.onend=()=>{
+        speechWarmupStale=false;
+        finish();
+      };
+      u.onerror=finish;
+
+      // Clear any stale pending utterance just before the real speech.
+      try{
+        if(speechSynthesis.speaking || speechSynthesis.pending){
+          speechSynthesis.cancel();
+        }
+      }catch(e){}
+
+      setTimeout(()=>{
+        if(tokenAtStart!==speakingToken){
+          finish();
+          return;
+        }
+        try{speechSynthesis.resume();}catch(e){}
+        try{
+          speechSynthesis.speak(u);
+        }catch(e){
+          finish();
+          return;
+        }
+
+        // Safari sometimes fails to emit onend/onerror. Never leave the
+        // playback button waiting forever.
+        watchdog=setTimeout(()=>{
+          if(!finished){
+            try{speechSynthesis.cancel();}catch(e){}
+            finish();
+          }
+        },10000);
+      },220);
+    }catch(e){
+      finish();
+    }
+  });
+}
+
+
+
+
+let pauseAudioContext=null;
+
+async function keepAudioAliveForPause(ms,token){
+  if(ms<=0)return;
+
+  let ctx=null,osc=null,gain=null,resumeTimer=null;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){
+      if(!pauseAudioContext || pauseAudioContext.state==="closed"){
+        pauseAudioContext=new AC();
+      }
+      ctx=pauseAudioContext;
+      if(ctx.state==="suspended"){
+        try{await ctx.resume();}catch(e){}
+      }
+
+      // Keep the iPhone audio session active during the silent pause.
+      osc=ctx.createOscillator();
+      gain=ctx.createGain();
+      osc.frequency.value=120;
+      gain.gain.value=0.000001;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+    }
+
+    resumeTimer=setInterval(()=>{
+      try{window.speechSynthesis?.resume();}catch(e){}
+      try{
+        if(ctx && ctx.state==="suspended")ctx.resume();
+      }catch(e){}
+    },250);
+
+    const started=performance.now();
+    while(performance.now()-started<ms){
+      if(token!==speakingToken)break;
+      await new Promise(r=>setTimeout(r,100));
+    }
+  }finally{
+    if(resumeTimer)clearInterval(resumeTimer);
+    try{if(osc)osc.stop();}catch(e){}
+    try{if(osc)osc.disconnect();}catch(e){}
+    try{if(gain)gain.disconnect();}catch(e){}
+  }
+}
+
+
+const VARIABLE_PAUSE_KEY="variablePauseSecondsV1";
+
+function getVariablePauseSeconds(){
+  // Always read the value currently visible in the settings field first.
+  // This makes camera / external scanner / preview playback all use the
+  // latest value immediately, even before focus leaves the input.
+  const el=$("settingVariablePauseSeconds");
+  if(el){
+    const live=Number(el.value);
+    if(Number.isFinite(live)){
+      return Math.max(0,Math.min(30,live));
+    }
+  }
+  const raw=localStorage.getItem(VARIABLE_PAUSE_KEY);
+  const n=Number(raw===null?"2":raw);
+  return Number.isFinite(n)?Math.max(0,Math.min(30,n)):2;
+}
+
+function loadVariablePauseSetting(){
+  const el=$("settingVariablePauseSeconds");
+  if(!el)return;
+  el.value=String(getVariablePauseSeconds());
+  const save=()=>{
+    const n=Number(el.value);
+    const v=Number.isFinite(n)?Math.max(0,Math.min(30,n)):2;
+    el.value=String(v);
+    localStorage.setItem(VARIABLE_PAUSE_KEY,String(v));
+  };
+  // Reflect changes immediately, even before focus leaves the field.
+  el.addEventListener("input",save);
+  el.addEventListener("change",save);
+  el.addEventListener("blur",save);
+}
+
+async function speakScript(text,lang,rate,token){
+  if(token!==speakingToken)return;
+
+  const raw=String(text||"").replace(/\r\n?/g,"\n").replace(/\n+/g," ").trim();
+  if(!raw)return;
+
+  // {pause2} = fixed 2 sec, {pause5} = fixed 5 sec,
+  // {pause} = user-adjustable pause from 読み上げ設定.
+  const rePause=/\{pause(?:\s*([0-9]+(?:\.[0-9]+)?))?\}/gi;
+  let last=0;
+  let m;
+
+  while((m=rePause.exec(raw))!==null){
+    if(token!==speakingToken)return;
+
+    const before=raw.slice(last,m.index).trim();
+    if(before){
+      await speakText(before,lang,rate);
+      if(token!==speakingToken)return;
+    }
+
+    const sec=(m[1]!==undefined && m[1]!=="")
+      ? Math.max(0,Math.min(30,Number(m[1])||0))
+      : getVariablePauseSeconds();
+    if(sec>0){
+      await keepAudioAliveForPause(sec*1000,token);
+      if(token!==speakingToken)return;
+      try{window.speechSynthesis?.resume();}catch(e){}
+    }
+
+    last=rePause.lastIndex;
+  }
+
+  const rest=raw.slice(last).trim();
+  if(rest && token===speakingToken){
+    await speakText(rest,lang,rate);
+  }
+}
+
+
+function soundAudioContext(){
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC)return null;
+  if(!pauseAudioContext || pauseAudioContext.state==="closed"){
+    try{pauseAudioContext=new AC();}catch(e){return null;}
+  }
+  return pauseAudioContext;
+}
+
+async function ensureSoundAudioReady(){
+  const ctx=soundAudioContext();
+  if(!ctx)return null;
+  if(ctx.state==="suspended"){
+    try{await ctx.resume();}catch(e){}
+  }
+  return ctx;
+}
+
+function toneAt(ctx,start,freq,duration,volume=0.16,type="sine",endFreq=null){
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,start);
+  if(endFreq)osc.frequency.exponentialRampToValueAtTime(Math.max(20,endFreq),start+duration);
+  gain.gain.setValueAtTime(0.0001,start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.001,volume),start+0.015);
+  gain.gain.setValueAtTime(Math.max(0.001,volume),Math.max(start+0.02,start+duration-0.06));
+  gain.gain.exponentialRampToValueAtTime(0.0001,start+duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start+duration+0.02);
+}
+
+function noiseBurst(ctx,start,duration,volume=0.10){
+  const len=Math.max(1,Math.floor(ctx.sampleRate*duration));
+  const buffer=ctx.createBuffer(1,len,ctx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*(1-i/len);
+  const src=ctx.createBufferSource();
+  const gain=ctx.createGain();
+  src.buffer=buffer;
+  gain.gain.setValueAtTime(0.0001,start);
+  gain.gain.linearRampToValueAtTime(volume,start+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001,start+duration);
+  src.connect(gain);gain.connect(ctx.destination);
+  src.start(start);src.stop(start+duration+0.02);
+}
+
+
+
+
+
+
+
+const EMBEDDED_EFFECT_DATA_URI={
+  correct:"data:audio/mpeg;base64,//vkQAAACsVFSf1jAACuKJk+rGgAFZljW5m3gAOiN+urN4AAtyEhIiIkm22lGJuXE1b4ba278aLUG1aA9sgEAW8cEEhL1ogHOpxKt9WxTR9UT0U4GS/V3I6mMNtba/P16fv7zp5W7bOHcnK8bl9uvDbOHIhzF92HrvcegYe1+X63K3/h+47bvxunp6enzwp6enz1UpLFeMSzmfcKSxXjEssbz7hhukw/ef6/////DDm8MP/8MMN0ljhcH1A+/XUCEEMMCQ5wx//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8IYkJERFX/9xRkbhrva+5cvegAEOry/ahhmQGEFRnG4PGYMHBgm5RkxMCCDEAl0gESYsKwYwYkDC2hyiyytCWkXC2tuPP/Xjb/uWxNYjXKKJv/D9uVtbTEWI/FC1td673HtQ3D9vOvK43G7denjcbl9vv50nK9P2pGJZNuRDl7POpKJyu7EOWM89UljcYlnM8/ww/DDef4UljdJSc/8KSxukpDgPxGf+UDBQ5KOBAnFIkgMhIBWlWqr725ythFKtFk4CIyxYA6TM7TwQIL3awIwSWrwUXMBCRxK9GlSeZuHgP67W06WI8J7Sjr4js7G/jk7iwo0E/cVrjo4yAE8x1YOMeZ8kpFtC9kFKvCjYw50VeNPNISrLs0WsR9Pmtcavnf3SmJI0CJe72mc69v/r5vfUCIq7UjRKQbPlGeTla3+PU7Y1tfX1///++pW9M3iSv3CHHmqeDSj3//oqvqVZBRLSKSabbqqM/oVtaZGmuBisR/RvoaaremVEyBAxQGGCIwUHbATSSXzEXaae2Bn7fvU9iYUPMps9YFbtWbdXVqrZh+N08XXfLalBYlOFWU6lMDOIZwsXhxTdFOjxaSvF0C21eCpVTR6/hL9cscbM6j9xqzbjDpPdMw7S85nvv71z5RAzsPxF7tWMV8+byrayw/HPPlSch/K9A7iRilzkUPsfdeVRrHKtuUrRjUu5/P5/////v1GKtt/KF+20eNdavH3afz9frLtam7Wtb//////////////////////vB8Tl//5GV//vkQAAADeBL1n9qQAir6frN7eQBUrFFVe1qbap6qSp1vc21ljISVEVpNJbbWFvREmDT7IQYDMJtEi0Ms5d1+Ja/wMiETqJEVLpRLpAQwAJyPmSzFFQ0mQMkmVEiMjY+tFGYOYpMhkqQEmwJ4iyK0jYdRP1o3kofU+9B6qnrSUR55GtFSzVp1FJka2Nkpiijep16l1syCSWjSSWXSZD9RcRs64vSdGEUiVr3dZn/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////7SRLcrdbttzcGlVmDS9gJgAmYxMmrhAMA12uLZlLIQUghE8sM5LIYBd1wS8Kop7lDKYZpSA2bs1Ncy0ynf9/8a0M1X1djtTlWH31jA+Y/OPMq0aUWgOdxs839yiuX+dl2WOdnL8st77Zguk5ljzUpit74jS1uUtrGzCrXYzLZbl38st83cq4V6WzhrLLdWtlLr92q3Gjud/2wy3Xd2v1ulmOwhZL92daV97yYzDiJoaK0mk2/7atObm3Z32CSsKQxbWstzMolL2yBekwCTzcYuZ4CEFFM8KnNZrln/xxy76jfPw/v8l+WEIxqVk0ZhIADJS4m15HCpu9apKFvstRYLevY6zC5k0XooJpUEElLUpNZLu6TqPJrU6cvpppGrT9aaaLObpOmVUaaKRBDdBRKHkFLOqc0BGfRliUvTSk0e0LntJbjUSaNu2gZoLYWsO+wSHzClENBxUJXTNRKVp7GMehsYNLdtJu9uDAVTTusfxmgYGSLHf5d9W7m8v3+L9dmGK8+iMwdCUABwlw3Qc8wpwh6XeZFrpG84W1LRWqtmGaRW6Z1VJmNDIuJopJmYw3ppKNC2y0lsdYzRQRWkaIKQMTxknSc1M6zGQQ+ixgbGCjVZxNAzURk6Ef7LuJL8ol//vkQAAADwBNVntSk2qKCbqta3RtUwV9V41Sjbpnqap1ulG1hnEjZEV7fb//1HIBuNAk7mW0eSMWou4OqW1DgAOArhPrH45RDiyRNk3MUTgaM19UUxJjGhQHAssFNk8ljELbAKmTyPpipW2nD9q0UikbVIqm62UO1mUs66NkUVoVG60y2tNJRm6TqdmrQdMxQW01putaBxRlTZBRNJVnBDypf2T8ubd5qLTCrcb/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8pKckqUZl2zZYNoFPSNzYsYRAU5x0G0e1Zla+DFdAx4EYfTsomrc4HAyME/hu7rEv3Ju///6qvf5/8wajjHmv97UR5iBUYANTIkjWjKQed++Wvak9m00mUVdCvsdNbIMmmZkKim63Qucd0NkjNNnXRWtNecTMnsyyaUm5gkedHdN9n0nax56CwVFrhKaTlc1exaw+DXrLTZcCGBGWUXcOXRV+nJAFagiQmxiUkqYfCW1JJl1I6BECvqUmLWgyWgsUukmO5PURMwGXAtGJNB2ymPT1qao/7KLB+9d1NG0hSUksspGy3Qe6KZ0ro1mCL6kD6BrbNjqaDqRSUb1InTrnTE1I0xWZnjEqKLaZeNT580JgsMm6K3nXUtTPMaDIKUfc9h7SVG1EYld/loOu3Zl2DWXSMAkgzCSfV3FoS9zHQGp4PYDTI8SomlFkISZZSdNGmAUBJNn8PabqxG6RTE5JoLWOJATeA1aJM0dj7DrC7l61WJa9TSw6n16Dj0q591IpF4prKCa0jNMfxh6zQmdMsIH2UpSTmyaRgsyQUkXjFmQM01nUzMxTTkwYNTUikmcMDBnObD6+ea5Q5YM//vkQAAADq1OVftZi2qXayq/brJtUoVtTa3KbaprqKo1utG1iIETU0V7ttt/2iw7KV2xhuM0KRhpk9Lf01WaesUlfephb5zUBUfKuv/IuxIsN/jrNslfmOfceuJzcs51SywWAgoQAoqRtF2YLQnDWZFtlOpplT0LKrJZbMpOtTmaq1pO503WpmUkgYoPZV00kalpJIu1FNbmjMdspmWTZo/+GUNpHXBVZIX/JP83//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////vCkJIiIqUj2/7MozbaLKGwtEHMAMAoyuOXS2GlkgGo0Aoqk0w5RganwUAAXXPLWpZwG6SHqTDqp9VEUpWLYy6hbSwEtAAYmTi1KiXjidqz04Wt7Ocf6CCzpCLWedXczZBFRskkN0e1oHz6zYxLqZ9OzJOkj3SZziemZlxBkVso8zF4uMzpqWtBj6KlspdaLH1HgpfoyM3E3hApUzcTttrAG3WFbLEG7tEKt0siMNTvxiRS8BaQd5qcKaLGY1ysaoly5gFixCH/UMa/WgoWWicJ1SalERSKoPQWnZaKxujAWtBJ1T9NaCCZYWmy0D55BaY71KdM3MKTGJ9FRfc0lkrIaNBkXdFKpTqpJ0noulRTnUUlIug1Aoon0mRVPpziNaqTpJKosqeaOHLJy28IDcTAiVu2WnNsZdF9GRr4AucDmBVRi1+9NNzAwchwDheRAdAs8nUSkCYYIoYoIVLDR0fxENuYCC6yMGNMFTIg5sMgFNhCO08oO6H0RdBTSkSymTus47LRZ2NEDpLqU0/RUaLPmxoX0lHh/HqfOIopl0uptZbGDJJqekbqRSVWjWVHRRSQYpHjA0N1VrQL1YHD3nlSK2hnLPbq//vkQAAADttNVHtRi2qLSkqtbnJs0xV9VezKbapxr6q9qlG1eGEBQjRW5HbbWZNcaypbEGHwADeQlAZg31/k3QLCvZRZRpB+iCqVjMCDK6t7Czmr1qGURcl+xCnQkADyXFsibusbzJXLe7OyC1mTL6bvTJzUy1K6SOjRKJsnuk5fSupSkkVMilQqRfRU60nerUs8UTKDRZV6PxCpOwlabn/X//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////IySikiUk5bFhXXdVhrsLvawYa8AsYEQUwan1Vf4LgQrM0MBfkVSLoARwzJtvOBdBL8Pz9eOi4q3RZZDimEHABqXFoLXHyHAM+8sFpdmrQ+79DSovQpuaslRYfJ90GTTrNkFupM3WZKZA4a1IsauaILOom7oOiZUScLKCiwpGzudLqwsEYL9sa+HSBsTAibmixJrf/+vvOmVighl8YCsA3wshl2dSrLwyAFSZRZTqELDENy4fLyJwEmMu2JtdNqbJCz0zpki1EihiGpATGTyNSUwGDzpl27pmB5bIKPvdAj3TUaJpJOiaIukimtRGpmRmx9kUDGpM2em6KSSC2sZIKWYGqjF0TqZ2kks6mjPJnkEWKabn0ElmbIGSaS6nQutBbrWdmaGATU0NEa1t/2YTTqsGjDfzhZsj0DgJhUzNSl4gkgBRsiohqKimBAuMmhe6IWPki6Ph7H5wWlAjx0Iuth2l0EwgDEMiSNbrQDwt84e605xbsks3ZCxTSTTpKTrQM0kzV1xfmxkZupaZw6tNN3Y+keMzI8ZmCazJI8XykpJaRqmtaKBeTKbIpoH1IMs6YrP3OrRUZKd3U6lu26zNcw//vkQAAADM9S1fszk2iHCcqPanRtVmUzX+1h7asfKau9p721nJAUczVo9b9/nFYk7ypn4c7FDMr0YQ8FLTR1mQFLB9lui6RZBM5mp6LrC4cqurxam/HIoEig9RioZ8C7G6FR5ZQKuyy0ktFdTI0jRbVpGru5SoJ3nnpOnoILLNaFSKDoJnJ9jd00VspFVNSaBvdNE5LrmiClugmmkmpdk2OxzBZTEBZKTtP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8QoAKERmQ0pLavaw7Cpoy1p9TB9RdynYuiWy6rHAKyBYybmKTE0BgYGlGr6KYNnR7b4en+sc52FtZKod5gJvAYhETQdBSxeCNUOelg1qrTqQspdks5rU9k0jiC0loIRu1KSZa7Gak7T7mtdk61WM1KnVUUlIIHVnTqcLEBwcus3TQ4SRafva9MxCSkZqnpLbcxiC6y0EhTTzzHiwKhJjEqzqgkCoUXcJAPY7cJtRibtSaR5UlM7Ehvwdn3ef629duYnH3V27ii5jGsZBRbbFizihHAk0s0K1pLYoS5qVLpxTxlBBf6j4pR48iP94iMcf+mfuBV/t5Dj3eahsbmwPVG1Ks3E0EDAAYQdJHAf6UV8+Y8CJTTBFV8jJmSCh7Qxv1fOwMlX7Jl/HgPJsx0ZYQH5tCL8P//P39uo4ZSAWEyMqJSWxqsvl6wCE01dMz5cC9ysFRy1uZr1ICFGQCEwsxlGTdkT74TpCIu46cdWF2h2rf0yckeBMc5Y0MRIk5vC4F3PsWxhOBFptDSwR2BtUbatohPxmSt8P7UeMjxwY2d5EY2f+Bm9IFYc9Icd+oIrGc6rbJo7YtnIjQqwBWHWdg/EWlE+r1e7Pw6JmMtiyc75OIYhiRE3HQd4hYh6qG4OBlLeWBfJ2j1IaCoU6jiq9ngKyJDZ9sb+ShEfDf/55j4DJ48//vkQAAADhNJVvtYe2imierfbw9tUrFJVa1iTap1KSq1rEW1hhIDITNG25HJpOwthrgQ0lqcooIo6sNptWSgAjG4cbZml+RwitvBTrGF6pdWslNrmWX/UrPVVs1q82LOcau7NjKU0hzQFdlsK1WxGaHGrI7g0jfOaw/qR9G3mLb5riP6/GP7b/tbda+HFzRiYwoDnFo+hJ6sWs+IUb29dWxa759uV7FxCtZ8BQ0DQmHtZjB0ua3sKuuR////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8KJiJCJGEi43K4DK2AuhGhADm+FBhViDgd/4FcUxINib+EoIpadxoWWdVfcmHqUt2ky9kPN//fya//5UMuIvP1TxnGGpfg+knrEFZrG4Mbro13s0be8xINaMSHKJ9XT7eXsBb9faFv5zmz59d69g3r5FcxhSRrUfSK71e5wxM2rbrFxCV07Eh0ZSmiqW5DmZuQ6dhZdPma8LdYugrHooK6rFN/suJsvoQQCkckul+Yy4DP27RMcFHCggi+NA3raC7wqKqVSEby6VTnMMqqm7LXO/WOqFW2rzX/EpxPfneRMdIgmpafHWPf3WNYWSrqSMxtJM5qlMBzFuenlqRNk1olMdzoIGqvrez1qZ0TM0AWk0WaorTRQOoHnPrd3UltUixsfM1FRSkDBFk2nETdSjU5om2+7bgwK9286kB34UUCCW2nZfmZMAZG9ThiI8e6SZbmGqx0KrC1oGiLGhUhEyNkAo1+W14sKKK2eXM4aWk32Pf1BF5Ij8uR8QwCLWZVjdahSarJ4zEUDVKC9SCQed59buRhONZbXRdbsUxbnzVVq7JOedzqrsUy0Aty0WTVFE3RYxSZ3QTd1OtaLuiYJm6bnnMFS6tFkTB0qi6YIXNgNDmP97Kpmjm7AQ//vkQAAADxw+VWtRiuqOacq/bw1tUaFHVezhraJ0Kaq1rMWz/JCASrbd0uzuLmdtYGMqDA/eQpSJPBbsvSA/l0zBJi3oB+I71qTDUSBmSarFIT4beWTUUg9aIekD6WlNN/QWcEnfoSySXdSkiB56jSU+mUS46klI066D3Z57rUFjToKaUU2RG80vs1Vp4iQwgOknIxusSRYEuewPlvcIuAP3z///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////94AhIRERTSmt2X23CNtFlKRxz4mhIJqdbb0wGOhcpxC6SglGOgXphvS+EOyvcOd7KRCCDtf/y+Uqb/+dRDKU8peXKWn/NGEcAn3avIoPyd0z0qJPQRQWcPOpahpHInZ61rpIJUqbGq2lZoAE0fQsxiuiQFaC0VtX7IoVIIrQ3TrqNrZ2Ppepreq5hTgB3PkQAgggaLJZtd8tKMuU1KCCqeValilGTxtbYgZBE9fZwuO87jN7OVovY28Hfr+bDnTnf/UovLD/n3FAOkLTXcruVHkqmozBzJ6TKJ7osmbHnjEdI8u9F1HHNBtRa3qpOlrUtVA6UQDZNXapk1kQxrP37qUtB6J9NkUVH3RPnDVjBSLpJs9RsLoCGSbfSxEYJIABKSclscFaboN+9BCVNjQAngJtEINY8MFoItMkscP6ZWx3L9P8koiPc+3buAgvvP/4zZVJvnwAnm0O9A31nXh7tRPoDngXxuy7pC/Isu7npwsOk1bos6lJFoQKaVIovUqpN1OjWpOYjyFoKKRix48bmZSHkuGpu9S0zE4YLLilIrTWs3dc9OGqDGFZuiio1U6J2QMqzk/5+reo//vkQAAADyJTVXt4a2qLKSrNbm1tUuV9W41BrbpWKKqxvMm3hhIDABJXJLrdlb3ldZq0XUEA56YMYFBM9brTw8HztwkRFs2id/ulgpDIeYfzEt7nr/+eli7Mu/QpbjT7VjuMmkHNKYiUL7pHSyrZMwH9amqruktRgXWZ3ZSKWpNFa2VtWaArR9bspTskR9JHX6aVlOggggt2QatroGalrXemaqGG9qjAKOW/8i9///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8sookhx37fsYsuEtWjZKC3wwa4FhaUtSrCQNCK4AkwXWQAJjIDrFPFOBx3Wt3DGxt4/EYJ34/BY2H3ceGMy8KpqzJQgIThfuM4cDLdBcqJNrUkkVOqcHwctlJmm6aak1IMkyTKnR4ArTrfUnMiXVvVRbTVUzKQMjAxTUu89nEcvSCPx7N+LNq1mNY2lFEpOq+/UxcpcqY0RISBx4ZLiIgWcvauDisLpAKwfRMTcMgp0QwmRE0rVKQYCSXrI1hceopkXBFJp1MZ81U4ZW1KPrFqXLIpVDU5gaNWkztk4Zb00Edbu7JJnjVzd9jULqyBRNUJqXCeJUubJny+mgx1SS05vL7mzF6jSSTL541RUpbqMTA2RdTKRoorQTSr3ut3Zbm0KMEEEEirNT3uo6LxREqihhKOFbgWEIAaExcABcjrGJwRfPamS0/eWbXWnlH1PnV1VWLIe/+33wTo7+nqRDdLcD/Vik3+RFZYCsmibWcoh5kV3eWCaWg2tLaZFgUdN07qZGqy6DOmtlokiLlW6KJ9A1QTGko2d3Wpnnzjn61o0DA2ozijE3TWzM61TAY7inki3bjm+92U//vkQAAADrJPVftPQ2qLKgq9by1tUvWBWY1N7bKLsCq9qj20iAIjETRbLtrtl8Q21hhcoT3PqWBL5XEMPPAhgyUsuhAxU7N88LauF6g01v4wuS5sttfwOcG/5SDAgHsmcNMnTC8hIAKnCIeKBWR0XVoIdQOeZtI+JCz9/E/X738V3kA2iXtaphoUXW7qPm4aZp12dl+qtmiHG+aK7P5X9HKqlpsQz///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////LLJKKcct2y2ZG1xpcYRPPPGDIYAOeE9GLQ4KlE5EiHxllOwBi3O6VkQ/Igs948mlkyLn/2M7XX/++CwY1Zt3N6sSrLLUw6AtqvcyDLarOF+pmfa1R0bnrZLa1S1sk29ZQHMp0V2QTJ5oyjVF0VTq3fdS13Pn1pVM6klMmigibq/89GrJ+Iu2pIQxthJRJTqvr1nLldKDY0KETlGiocGjDwM6ayFk9PdCUybMBdronAtoTQ2exwLeTd60S+wydrDCB2TxvWZGf5gdqK/fzrxlwqb0rNNiy63iubxfq1s2b2Sm9Zi7lpbFN1rnH1Nb4mVv3rF4e91RtNfW97zXd9etqXtWPWWWaPi0Z9d5mSWW98voHjZp9VzrNsV+7fz619S/48OHAhISAETbv3/YA0dmS85ocInWhDQMbWJKMiXKAXMfiAGLMAiuDnhEAOpWTwY6HpXNSWLIAoo91D6h0nF0K+CyViB1JF/8vKmEDXn1/uc9C85z8TYkZvv33NmuLeRMnRXEDGLQ6b1q2s5pulfbCaVNZ5nc8eHmOgXGazr2tBtqeuHusb8W1dbpLfVo2qV3X+9tQPv6x859X3r7W3SfX+q5xEl2//vkQAAADsNIVftYW2qRikq/b01tUx1rW43h7bpkp6qpvT2zeAIDEURpdttvmiyx/1oUI4AOslRcKwkxHmtCI9czXaq+w0lp9L28yZ1J3DD/6hVh3f7gG62n87MJFhibUs/GTU27cSVnANXHFrpH+N83aL0lv+5/shK+f43fba+r4pqUVxPOpdbOrjiHPp0tq2aJhgOQK3DRcMB/az/fTzW7S7I//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+8AQmRCJlx27fM+jjQ14TaCA4QjGVkacWiLsZUZIdP05JgYI8thShzTMubbGrKNFMe4XvLU8//3AcpXv/++ElFhtNBH6rwN2orUmDmT6kxZDzfu6RfXZNn3sqLzVdkXdBnOsgpzZSjQsMlIppL00kTmtGplLrZSdkkHWgxgmtzSgZpoGK2pOabQg0avb+d3a0YjYUUSk///9kikp1g1KX2OdHTBRUoHYAwg0wUXltYYM3224SPeV1P25n//2ZDk7w33KUYM35+oIYOJLl0z2pM3ta61ZMk019+u5FvUD5+KMWNxd4xD/tnt0HWt78+8xJ9bfwLbjxJXOTbqDSSvxJTdkFvNveF4eM+eJjcLeo9YOLXrNF9sU+Hz6tYNK3+PfOa59//4PgHUhyhXxFVSmnLbGx1KVW6ZFQo4c3MBpRINjzQI6aSRqcNzBmcSHwwmmmb3nYSz8oSXuXMayEqe//+Hay9O/71JuBgOLNZy05cCc/ZuWY/K//V2o191pu32+3vWNV3q1s0SStrT73ema+kfe7a3eHPaRGPbwnGNuLvVEtG+t5gb83hW1jX3rflpauoM18XrHxCt2oSQ3366PF2550aO//vkQAAADwFNVmMyW26RKmq/bw1tURk5Ve49DaqGryq9vL21kBCJSdVVUzJ/WxKV3CUE3YhV9cNazCDWKg+kArgjQzDrEUVSFwDuHvrKBAktOX47FWJQWcF3HzCo+zcnGtCNf95nfxU8zFfdb++DPruphaOaiLYx8OekdueF7t1qqMOdXFQ3lkS+O22yXMp0MlxtqTq6d38n5zzDdXr+P///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w4kJiIEcbU23zIWVs8YHSCoia2VFiPEheA1+wKJLL3WxYJS+WKJx3f4MaboRpsYVuvrEHtyw7qAsmh8/UkTsRaypv3lO/nkkAhW66xI+rTZTKWmyqrmQt6q0V0GtUspKQRUkmTCx0UkElJObJmzKsmupFSLKp1pouShddlJKpOZJnlIMzubOYWeTtIDXM6b7j2IFDQARFlu//+XPIG2bNaXSBwgYOM7K5t3HkFg3ObIONqc6iSQqyAonht7+cSjzzj6widmPqvPgJMh2Yes2zjgtgMDKdXY8QRGdRa54KeBxfxSvRghglfb0r2MsYOYiCYdbGiEabJb721oDA6xw68v+aaKlyHiVZ2+7W6JZGgwU/O394ZRCeTgdaAITEREm5Lt/miRhryuaZG054QMSZxKLT3b1Yhl5A5j/Bb4aOolDW3x7yLqGJA4cyzjxgGyLn8948WOfz6AqjEw24rhi/GPftnlIwS3H/3Y9zGvf7rjUb4p4+dfNc0bzGnzX5zfdvApaS1c3pu7c4w4uWqD9PJ4yx6RaQd2j5iati2q+j/EauH9Ka3Dvb5vfG9WtvP9/je7emMf0+PnX8B9Q//vkQAAADw9KVXsyW2qRCiqvay1tUb15WY09DbpsLyrxvD23hgEzADNZJd9tlyxqDWfUJYKFZxw8SnZW8rnhitHdCHSigJGSKVYm8nR6rrUFrD2yw42FY3BmhgMrbZJtREGdxXsT+7o/y9/Utt/s7MSY2p23zvmFoZLaY9kMquaa2zqCKEXP1E0vFVW1zd74YcxeRMv87KR97Xla1rGNLvf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8sAiYiIom3dtsy5pkBqPSscIGaWiQgbVo7u6uszD1x4ABOg0ZE2QMm13bRU/mH95ft5mCVrf/8htMe/+0DxNC5R/cs/9ZyMYKd/YXUF3QXWZuzLXSQXqIo8F2Q01tSSRU6K3QTMi4eNlKpLdlnCjQd2QP3Y+ktFUxSQW1NBBkVoqSUuynTOkcOGqOl2A2xJWY3ISESnK/79mEbijb0SpwmknuuO6+MOGPGSCnAXQdcQZJz5pDCGoe5Xvl7IFlN/+/yg9fZ8CvnLaD8bj5mhFKEMA1xQ2XJNZx44eO0JgdcTSRMUgI60lxtZ8cjN+NFh4VWQSCC6ICdHlW1nG0NMk8aoqOEtHEPdoo9WIcUuYFDBHlUJHS8VU//tTczCyfilcJJJBRVVW2WNUS351PofMxhaEpZfbK3qBKxMQ6YxlOZGo1Na/KKKHDX8t17WKPNn//TMptJnvM5hRdceNJ9Z73v7ujDU+Qio/x9ZSKApXP/9qUp7Z+P8eyB1XdL4vWu7Vq3V3m1bTN26a3i9IL/zKvN6ZzaPn5gZ3retZiTwfe+/vOcWiavukSHT6rXP3TV6apiaFbVNz+v88SU//vkQAAAD2JgVmMzW2yKygqvbyttUcmBWY1hbbJaKSq9vDW1sBCJTdX9WrpvYCUfmiQE4oEqFvXZ9+TCZrzQDoB2mLQyaKRwGgCbN6ssiFTdS6JMuN7jcF+MN1V0l8F9D2JJ9tnljLVZKCkTJgd+YfvOJoNOvi5qo2NirlrKnlA46vY9nyeo+put3Pum90VVS+ZuZllbotmvVVt6qO7b3DntnvmNizqYd///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4YCAhESKNy/bZlDhvEtuDCoJmBJQgoBIGlK42cmApMtjpLqr3JeTyd5ktp6ihfv3fiTbN9ey/F47C/v/6if7ffd+7fpv7IZIUwDG/7oC1TUzvu4a5LZcPZJBEmNzpRWdCHuf06X3RAHKqupb8rtXir4Wll3pOP/TonqJma+Y4z+/dPDfc/uPuYg4oZCSiU5X/ft3ir9tYl4gBHaFhYkt6b05QjMZTAzpXldRyVcv8au5L54c1hUTkw3z/oMnu/9QY6K9re95WZ3/OHjoR+/aotEw1t06oq3R3LJvGvP7XVE3yrxV1pQ5B212oauJTWjoU1HvftOLk1h+FJekTXW5zmZ69ObfOk88bGqDah+zuWRLoVqJ7tnEJvRaBICESMnG7t/mZWWhOpPpCHVAIpSCwhBDNmtGOGDrTYMmTHpFg167w2ytfJM7u8dTIXNJu4/lAkWVh7/LifsY3a/chovzRZqDKz9EkBa9aSdTKZ7KfW5kLd0luqzoo0ajyCk0Eo+OyLGijNNi4XSQUgxmo3OooLRLljJBMyQUpmTWjN2Wddqbm59JEyUhxl9Wom+UMyd0//vkQAAADz9QVftNQ2qLq3qtakttUV1/WY1RDbJ1L+qxuL22iAIkATRpb/9vnkYk5KxplDkdU+FzDNKlO45CDx4DvAQG4dhhDJlhQj+YLZmWA0zV+brE52GYoCUUrItXG0Dwe3TXSlLLGzdXLDDJehs3MwIIjbV0Xd3FwlLHxfEUkek7UZEx/CTdSr/UrJ0OhtPtZaSt2e2UMfCw/rV8PUv9P//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4RZIKLku22Zm/jsrDREdGHNdmJ1CYxQxkzvmrGubGgHUDmKgipRXWLSH/D3k6LKCyVvHKRFLc4GogsCy1OFUtdxLxcDljvmSCNZ2tjvmKbe39+YiCviIP7GNl3L7k7FwYcKOfTpZdHIWhjIexr98zHDX+xrGrP3W9jTtWu+XyzfLnXVPe2I36Hih9iQkslt1f37PojACt8QFSJwzSKw0AfR12mBYRTTIIUYuFQssSQ4apB6A54wPOhpJbp5MuOLkoVBMK60reLOIQJ3dexrHwKkWzj8g3pOI5YSiJ3Nyt3UOlenesQ7wp5OZMnErJxpEqIMixlKJ2fpEEwsFxFYg9mdRaw/seOFiCKWH9xtX1uly63pGdWVGCUQSlaqpW1XcCMTjAjAzjSQMMxb0FAZwm4g6BZvEAQ44mIQirQxNgYPDlF0CqbAAgl2esa6hOvLBMhcVRvUbI93bsmcI3vWc76YVdsTWrAhx821C1nGLeuG1UYpnetXzErXvdRpM7xa7E7zuBubdL0w2wc4z7agw7TfEeNnP+s7ne6xmNaLBtJH3d7byQKX//194196/vn61T7r4Q//vkQAAADy9S12tyQ26QClq/aw1tUbFhWYzFDbpip+q9vD21tKLJTabjabbO39ZcummSNOGFEGVEKj0PYj3YpwISG1mgrJGrZQrYkBVNVOCEyHkYbi4U2j8SItqTKWpN4sRUEMPr7Z4Zt14b6ql45iIXEycc/FP1Vd3XbY/H5NJRViwbs+oSoWXce8D7OG2SdOY/W9SOcg5FYVvIIc2W/uoJ0TfY///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+0CQmZEZuW7b/NE1KlyyoUFnwRCPCPbWeNYYIb1ozSqydjua8G+13BaSqpEzmsOVVOKLu/+KT7Ov/5IyAeD2Ma3Gpf7SVUMcHM/dJIW7uhUkjZSNJH2ZAXkGfVUgpkaKnTQZ3UfQdAxOJnFOkS63UxqZuxi6rqTn3om+y2dA3UsuOg5oipnWYSH/ma/T/u6YfISUSk7/79pMBQGviCxxY3JSoar20/D5oSN0wBmB+NBGIuc66IocoCY9RZDk0dbk+sR8rH4XAQdJFU8k7QI7EghFrWMGj4KsqIiKaGuluoMoWJbWFdG2qWaniBqSRNrYnFIMMDhRY2DRwuIqHkl20CKNiVFg+cWk1BkHF0Q1EkKTmVpa2u7dQfiq+vejxEsBAQgJk5bv/8wZpEBsAiYwGG0H5BRhwLTKwO2YMW19qo5+olhvWKh75FDea1uaWDy5r9OFZYb//Hhgkdpo/3dmFd9mnR6j81/9QF2eUOBjMLFaaxj7+Z808VMNvxnFfreIVa6hbrLvOOun8GLG3FeYxNlmgwPEjRZvjMG13stc1tGltvVMy43iB4uokGeOU9LOcw/W+zPZw//vkQAAAD9xW1ft0Q2qEKcq8bitt0eF5WazJDbo0qCqxqC23iCQ1EUV7tv//2APe+S9pCmEfaCmBprL77XZlMfdAEkRGHSADan43hSQzNBJNgt4Pr5MmwsnYpCkBUqCajqXdKQEf7qC7SSnW+Fpczur2WAvEwyQY98rME1Guhh/5ZaJUKOrnUoprXvaLua1RK1XujLpSNr6HNF/G4yXkwEdtdan/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9wEEkktNVTRY0/qpqVNI40VFY8WB4myWPDJtTdC/g7oxwwU8ckUMG0spJzoZGT1LEvMhAbkoDTB23I51EycR9m0LV/5SvUcLOb07uLv+JYHYv+jrtsW9jOKfbEiHdvTfSlw0hVbl1aTrm3udy+Frck3PNra1lnATQESOLczALF0H5y7Y5YSkSk03G0211Oq+DCYKKjI5IOJj3bx4t4XI3SAG0C6FcO4NY46hQw+BP6qdAPEadh+Piyl0VB+g0qa3NzysYJQ+AcDeqI9iSrIbThLsyY4U97UaEVrCLNXasljmml2ne6pXG4oggCpJVqLqpkpbwSYQ1kxQxDzsgcdEoHJUDjCoMhRr3A2aiP1ik9KZiMC0YJIBKaqqmuOHATY5ISkTWwAJzD4aO7utNCo+W3AnDIQ9sYiS1CQBuhWpybH0AGlXiyCfD0WaRgSgrSK1GJIfVkKgRfhukQJY9DqomHyx87Jm4oxEFtbXbUzzlGQdS3MmHWZ2yqzWCw1YWqxnSuaUfV1KS0HtsScWVSaeqY1lmtWZRZG3H056UzuiHEg4//vkQAAADy1QVXtTQ2qDiTrNae1tUl1LW6xl7bqALqtxvD23iBEDATQ5dt9vlg3VgdWCXqCA+qkCRE4Dll9APlSgJuCzTcRkLkOVikycGLrnRor2l9EgN6iAJMlWkzTLJYM4x5lB422uImvZB9MNpB9Y0TXUJKPze8VzXKJFkM5bcjHS3R79bgYNVkrFVz4g46niGqYQVQxGZhsbhI5++FbYWl3/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////6SqKcdu///X1IYPcyRq9H/AsdG2aDbWXCMUAe6wY4rNjRtTelELoDXt77wF1//g5nhdrftTUIlpmtizr5eQJgS7smjPEmNrOtRvdrskjTRbnSB1rpstz7pIOkpB2oFKqddSCS0L00ELaC0aR6dRRTMlqP5idJHRDM3doSsZiaqOeY01YSWS223HG23NU2iLMpkhce8kiCh029a1gUC5HyCNx6jhs1zsZrRf9i395ugkHd7/6W+/2Gs/gGj5vu8Oc1ibCnZqe9vvP9s7+vv4rbUsXDVFrrRS91qFAvqssDeLV28g0pGarPs6h7tK93a1qy6vbe/DmiWhwLV761o1/u19z2zBYaeBeFTM2ZW3vqBTMuWCbwwCQoolJV//7hvxHWESUsCxh6aYNAET0wtw2nCQVFKEV2/un9alhy6o/BRWPv7ykquavd82+OcA//6KgSIV6Q/uaq8vp1hDybX1jX3CSk31ie1t+msXrm1K33Q1d63bcsuswbz/FtZZLxoVmZ888HNINsWfVu2x3KR9W8Saz+1oG40Z8t1pC3W0m6wa6jQKSWteWu971/f1rTWsapj2m0vUI//vkQAAADy89VuN4au6IiiqtbwttUiF9Ve1hbapxr6q1vD20kKKJSf/9W2TGIM7lCCM5UiEZ8ybF14dDJ2Z8v6TPsKNwTd51ukri3//M1n93n+o9uGeb3sOo33qRPu9OiQF11sggpHSoIKQZFFar1ziOtS3dTILeiy3Zl3m7oVakDs1IqW3jATtOiPc6eaaxjXO37JLxVGu8QnNf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+EECm3bdttmQs3ZYxOkUzOjDhWoEhqZWvHwoA364g6PPsL4fvfM4OZ2TKz3jyPNBtY7/TWLbxa/WRAltuT+93IX1rjNwfQ0+bhxgWtzjXVLL4i++L2lCb4m90xHfarYXY6Lk3PXEy61GvlrOq3RxF8uni+mO3xMq1G+IhtpaCJf6CHoLaeSEe3DgQoAmr7f///uO0lwmQ1hwKeBMInClkobaKExG/WEHCI2K+XL33BiTOYEsfhjZL4c739yvjta+5mtGVds7yt2sX7pKBi2qbKOdbTaVu3tuJZXV3rUQ67ny+kGuRz0y05UKXvhZjVba96Bqsuy2ufVTNvmHtjiU6R2uS22kguxu58W1k+9luvfUPi6a9RzH8IZ7BFApNW3//9nkpgpTuaIA80pAJawIFGsLehgkBMsgIYm9eUehmv+mqNHWd38ebR+vfr8HKpHx5+tjCW03SZ6pZ79Zp4w1db1fd2Znp9XcN+0Gn3R/SmMYpIbd77+8XruaLCtLDpTdvaG5MsTV/ttvh+4/U9dw6+W+70j/V4m86e53vEa+tWxG1qbHzf0vTO9T23i+sX+/q9ra/kok//vkQAAAD/tPVftTQ2qI6IrPbo1dUNlBVY09DbozJ6qlrK23mAIEEURrt///1gYlG14V0OBzDpIgJgFyJSIBHp2YBPgpRMcgZJI2WJeURgbMoPjXbPOQFuQEaFLT3ocoYmmt+7aZoZVPcETHCVMvcnXa3cjDLWWTVHlqmT7u6vmpGU9IN7eEph9RDK/RNExdz8u1EDqN3mjou9TONUQ0y7Ef//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////NCZGJIjS7///sOmGJrIzQQHFDohfA6AWQzp/ws+TpHAk6GOWPYqKZ9h7DiRyNjRYNkr6I1UyU2WAmQCIovtJppnC6mJoO1WyCzhTu5xmrsplMyF3mY8trrdBJNRtc6aLRSUfRN3SSZ3WiySlIzVSbWqc8BcPQxTjR4cQg5neb13VXCPQoZThsP5AQiCld/VLkeZvV1UqaR+yIcGKDkEYLvM0peeQD+BKRx7JKT7RjSfWvjynJHpTwkVQlWKRMxDa/39a7oH7DAvfY6jIE7B80nDDFkrk0go1RQySREHOnJvGMgWXqmpRlDj4pEPqeRh1Zqno9WIQ9mu7+6iaSmMmkq0hhgyKnNe3/HHby8N6Mm8WFdquqYzWjLOqUVCH1TmVGC/wYDPUvdPCRygwchcCLsLfy53bYWyjUFL9Sdmlbp7n/k4GUG4d/N8isLuudzk31nrXC99VzkdzoheKriF4Y47TkXmIMGuc0mPOIpWl1DWMZUtI/U1dOts2zOQkzk2dbodFVbm0dYw7J1i1yeUceKC2/Pbm1FWpfevugU//vkQAAAD/pH1fszQ2iWClq/ayttD8E9VY3IzboiqSqxuiG3pwIDETRbt///lhndfRmdQlDOGYKulBEc9xATBSUIIZhzUhQxBFIpChigNlTqdAZQ0qdZNx02UkOQPKTNZl2rLIWtLjeYQd4tcTMRfxFI1oJrvlLSJiNRscpN27rQ73l6Jtoin5Y2ruR6Xb5KQCAVjD44MBsBFqKR8Wvpr////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+XEhMSNUm2//+X4zuGFzygVGnNTGLok4VZEOOaCQE5VMOEe5tMJcKpjpyHDKCOfh9CuqQ5a/T9UkGb/80ECJOVL+7k787IKR+v69U9Tmyet8ow63S9zL5YMYfPua6WupFVS2tlGlV5Qni9tbkkKl+99VubDHy+ph7ahGqnfze155p5VTteEwU7Vp////////////////+QkIBN3/1Sy3lgdzZcmCJiAiRVe5LsZiVSHOuCDRY0BZ4nFdEMvitB5UrTC39NWfJBxPTPUHsGdKyTqyFaJIU/fFnSVDKQ5qHQQrX/eH0x/jTrRrPfKzKLktvPdSpl29F5Ove3e1ca3bH+0fb7+bU72RPa0wxCe7X3lgX/cw1wEEBItX1TCsIGaDTJonIBBUqRYljjBIdGAu/HwmxH2oUAIueZQf4VwPC1VQNqn74tJTJWplg0CE6klROJ/XCcCH/iEKsh1GhplMs5HFBURLqocJBDHvM3Moj3lecWo1LFWLHKKLVFo5kw0nSc92Qfu0ytjC765kYvUDi6Ryc5Bk5szr8ct7lv0//vkQAAAD/tYVXstQ2qKqkqvbmptUClBVY3EzbpDL6o1vJm1hgETECRrdv9vntZ1BLVKEsEDMZU1Vjl7QWdGFhWti1BFNA0j6tJYVo7ijXSgG4fXSk6M+pQVhDSa9O9D4sKV1OQXYgyg02DXGpN63WYysI50P1PEKiaMyu639rcE2jQg6aVaiY0Wr9jz5sZRCXNnXL1alcvUxxWtU3lNysF8g+wV//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////DAQCIkZq27bbK3s0fFjEfIAwyRBEFmhu/7VpUIBqpDYAHQVuTgoQdZipZFxGAkqFJ0gyMl4ziRGdYSIJOkaJLQJfR3KBq27IQkjNNGlzaGtafuyCedvzbOZJCBLqxx7mGqh6m0Yk23Pc/U493WqI1H71u2ebITKGVMixTwUF5Q343///////////+QkIhJ1/1SjmpMyeiTDCQoVPSIPj7XWAmUm78xIGkFGRDURS91CuEOGTetMwFjNKqZTkpfFID2aputaWWySATL7fJVTM7Gt5dXPN92z7TreHtvsbk1kx0DDUyzSktoIbay8k1C8Py4/Kbtape3fNd1S/zyi0IXDRMb/r307+6GtQOvJCBSss222zMYU5LBoyj8CzcYjwx7WWpa4JhYnFYaMbgXOnW7MNm8tvSo8zvDtujlKdMC91+L3aev8s7KsyWfc/+7a/O5oIJt/qNMEIRbOhWa6Gm67vjsWOny3a1IQgcp4OwU6XNKRzMpdTmY5n3Ud6Mit0/eXtObz22ZnxWG1CGtWZO/YyH3fsT7x3bPL4UP//vkQAAAD8RPVXsvQ2qGamqta0htUWF9Wa09DbpIqap1ui21mAEEEEVLt/9/ldspZUvGaIBzcaCwZNPAcpcA5DIVYA3Iy5fCbe9C/MCD/z5Tvj6zrcS6Zx85ipuvxiufTVCAnaql8VONk9ND0mbWFqp3Ey9MOmYjupmdatLnSzNlkyIONXh0KLaoWFi6obMJH1dpMuMH2bFx1T6ngPKSu/uk/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8Esluy3f7/LIpZIwmPFQaFkhgDo27R3cF3AMshcADsplGbS3M7nqWMiHifd59mmQ38e/t0a8Af/bttLLHL9V7GuPYGamYkdiiDaQTv0pTQmVPuxYQJ1G0nLd093S8xjfdGlFQiDlWWGuktbVEtCZb01u1MyPZzQcNjmFH5U1BgAwOvVo2W7YSUSm03G221FX8f9iEvEQA5wcCDCaO0e/TEVODvQoVlxTFNj1KttK6/zjBBP/+xUXHxiGbqq+cbxNlxxzBKEV1ZSzRsSqbwqrwyv8zKBV+7lIUpReYLEWzS3LKUkumIehcVRz0Gi7qKkTBECorSW7GKg84YeaUVl/SkSbTNdNSacNfXbUsWuNWlGy/BGAqNW///5c0COuzSfVIdMCmOLRNrDoCztwgwik1IBgzwKRCfEvGoUkzglRNAwG9dYgt6haDIY98shn4c5jXlpn6B0MR3ba2pny+IQupinepcsb2zUGLZg82EmFiOmkhEnZmzx04fRdCbNOKPrHs7KNLs4pqzWn7Ug848pJ155qe46fh7di+rdSA3z8mxd0rr9//vkQAAAD+VCVuNTWu6B7ArcbmhtkVFZWay9bbpLK2sxvSG3tKKJTf/9WsI8zkq3SkdCHlTktQiJROH3XA+FHtEN2Ki4tQ7LS0OsiXZQXNnqk0CPlPWdDF2yvmPbomXUd06WtfKzL6X5Yp8Xvi2t6hjLhrX26GOc5vMsjdV9xLZrfPcLw16PfBjtFdmt373HngVWW3UZFMZMUP////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////yFFEpp/+rUflEFvFMkIcaSbha8Fk562TsnMIE4XKQDfgp0+TIrYwRlcPxEOTo0BSvsO9EcjUWQkcmmP1mBqqIViwpURMqUdHdGrVMREHW/q9iAWi7IhXCLLo27D5omhkzFNd3NPzc1e3NtxPDW03fz/trOvPVt2jcbSy3EbX0vVY6bCUiU4242m2u58oYZHEBkk+VhXpZUOM3cg2YIpXBw3wf6B9LHckTgzbECGPCf/2eTrjP7WXVUa16az7Y9VQNVXKstFLlQ46s53Mv2W5l/R99TFO6ZNREX/unqZcWUpDUz1IH3nqXSRc6jQ0bazClZFRE2t55Vl8yZMXe5Nuw/TuXOWL7GwgERmyUWkKJJSd/9+9rlv4oHDAhBTrTAA/CwEYZvHAqVRiCxyKyvBmD32cM3xUfYNn3l6sqLv7/bSbrl8/CSkAlVl6dx1cn99ONMCs+lXBDjGRq32qZrYc87gy7vLNcqsJRXFHQ0jSS5sdAzFRxAmOY8RmtJphwkZBooYge5godWwguOLmRFsRhdnNTC8tZrIa5Ndp8zi840//vkQAAAD9JQVuttM26IKmrcbwZtz4VhV409Dbp1rys1vLG2tKSRTbbjbTawbgu8rbTIynACw4tByA3RxoBMaU434dRboBBmLXHeXRadZwnMlySld1E8dpGdVSbqSdTFE2cr9ou8l2yd2+zRX9fm7/Hv0UlpNpqKu1GmqCBpNFnzs7V9fu77uvbd4xJ3eJ8ahER0IykKMbvthXjkkKR0skGX///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////kKKJSf/9+qlQxJosqGAk3Q2C9oGKDME1nBC5LS04IaRjsNEeGZ19hn6oN7w5HWCWcudyZ5TO539UKwJWDK/lhnJ95n9X//77e91mZ11/jxe9nAyVvDb9pr/9Pu5DXM61nXsmcpJOy61y0tg/au9Us1qgvJsgb1fEL5jkbpjeuwj+tJRSTlCLAdgISKb//q1+ruetkFCh0M8fFTxQYjkNMOBPigruhrzDtOP/rMI1dbx7iZ3vX9MysH11+ZYz9Zzq191hfnTDlJa5dWl+nSFmpdB2HnEXTtcl0v8cVk1Q5p94fyB6ernRZfbxDj7KgqLloFeohNIVKbq5jWNXUmAbMxpgiQqkKKJSSbjbbblvlBbSI+MBRwRyYO0DVgm4yplxiBBIpoGQD0V6jZzX77VIioRz9cuLty/X7fuldfnfoYwTA50nfr5apSrLA3rDXXKxOX/e+Vubuzle/JpWEsXtWmyz/RrXauHDGtPNsuYcvRPxmVlsV2lSisFXWlhVq3WaZZ5o+ptL9ly7FzEDtFn0WRPuQ7XKd3V+t73mj3T/bMEqU//vkQAAAD+xgVXtPM2iGzArcbohtkUlRWazEzbo1KqsxuaG3iBEDIUVrt/9vl8ahLUp1iQmnL5lDB4KBupgX8O1hdDWqXwr8/B7KRU+mN7H5jfxV5djv+vphx+7/+mNtSO3Gv2eHd93bNb5j5OP8+YN1v9uX3d+b4ZszdRt9j7bUfG7bb2S2M/1sfknemQTuaLLmqd/NZiG9u/dp3/9oaMaJ898Q///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5SiiU0//frxeZeqm1KhOOPGzHS8rTk3IAekBGcCx4Gq4chMUOSyTsO8XAIFZSqxS3pjKqGgrMwwYJKkd0zRDu5cf6fmojWU01Sxyk1zCLhWqOWXl5+2q4iOYsczoyMPdHFD3PxzkFTFislGJdDC1LyD5UYNstWQXafMU+Y+Jem19q/itt5UUsJLJTjjjjbbE3xjzP6AqnkjQjnKOXocRXBlPT2AQQnExEDJ0kRyyGFdW6g1WzoIrIMWhyEWcfI1KSKlO2KmCwAzmd912x7XU75pCCdus6udtkucLFv0EsLvmkXgSyJuJOnRE6cbwgyb3Aw3xRCYRwtqoumkeYIhviSy4JSGebvV6T2U2u8WU8JC6pCiiUk///rwtxhlcwOiZoaEYjki0CxhajihCK58sAJUC4DcSsY4ydYlY1BRWqdYn1uoSxIbdpiEUGLmGaFprRBxJn9clKcvREXlJED+qbixh+ckcr0SM2M3PHCosOzLgNnrC611Y1jJEQlCBqGDBnItMEqOGickYY0d24eMONFKOPaLobDGbaWFvGhGcQ//vkQAAAD/tSVutvM26E6hq8bwhtkVFnVa09DbI0MCrlvJm2tSKJTjbjaTa2Yo66xJekQcMAiBlT5uOpSmGg8h0IsMy53KDHynWZN3ru+VZv79WvUPXzBSUfGfu2be0uwZsPjtuS1o1PjP2dnd+7Ml4/j0/33+043uNx9Z4z/56ects77eM7zOXiGJYl413fotCCmsimSkbi2RA2PuKYxyH///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ISCSk6v6pc0HNPahPKaj3IIqNYuTNH8MhInkmQr8fDffxiVTHKELyf3WGWdZm9/8vxjdmQ93vaqT3/V/8N/V3ZYmqrvqjm3QdevdmsOdG1UUCyq9LxN2Ye/CyRLoUOF7Z6HRC1DOtPFcnloRytJdGNvdG9fJsN0U4LskiaCocSvab////kBBATbbjaSTDHGbioldJQRp05Uqr3lbeycWIUfBhkTsv5YJK4GQxJbOs1gE4dX3vDBZObpdtP415rXz93EAch4sD8Ocgo54eO42zWjodUlr+24lOGqtm1JLl3EOqOPFrGN3DC6Ew9u82Nd1OFYpib7SUZTkhpPPQglhfLo1SoIX4iP1We3HEjmKh71Va7/6to8cgNmEFkg4KFoMkwUzp7sdhswY5l8dHM4LwTckWPLijzGFR/zPKZWle1v/cmmdbLf1U9iYfOXc1ake45zsGrWq22Ty9MTZowpvLv7TTsSFO8s+POZEUufb1ZWyVWJ+cl+nevpeVm1k5msWqJ27fE6Yq4PzfMldjM2sK75haeLtGWavns67Uo//vkQAAAD/pSVXtSQ2qOqkqvbiZtUKltV6zIzboiKOq9qKG1qQEDACVb//9vlKoEcRneCwZxQBYUkRuPuzAg0SsVwhk6oXa1M5Jlol6qolPUiYFZiLrMGMyuNpFaCkXXETB4W6tZyqtlMltxypF6TLSmYn6aDv7m9njVVMRvaopJ5jqba76u7qVVIGEm9bHqeM3imieT+9cJbk+02aTLOv///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+JIhIRNDdu/2+ZK0+EtDnVdjYkDGcSq0y2GvAOGU1XAdwXZoKGHNMUFigxlBA+t1CCPqGssgtnWQMPEgeamfs7U05n9LOWuoyGq4yfmsz/waMusaPklUz/Yb58+IGVLbn/f3+z7seGbG5b5B1Qb7j21ma7xXL7j8dGC/x+Qd628+///////////////////ICUSm23G0k2Rv6/TKaybp+JAQEnrX3SyY0g79cCGgs5oMaLjRUmHdIeS79wyw6bpyNYii0qx1n2SWqgpI1zwcRPIZ0jtOdtd3nXowyuWaXbQEvGdmee+RFbt67Rc3uV/TVjyuphzc/+Ib4o6fPl3lshsz6JtrmHtdutnde8rGScuryYQYbQIiYihk9v//8xqy4StseHCZkDgOEE8dD902umJUxWmAoAfjwpMSiZqWH9J8VLXcSZ+sZctEGZlLC24fafWiY6VNSH31XMsQ6DliVarpbqf4QK2kNA4WEVS1lB+9w8VY4OTDclyGoYr3Y2KENYh6UfEI3Jo2S0MSBjIZA+ZaScWG/1f6N6+6HTA//vkQAAAD/xNVeMxQ2ySqcqvbkNtT61FVY1MzboyLeqxvCG2sBCBTn/9UyVrT/sorpuHwqCGitGA5W5ReLDIBaBVHhyBmzqUVoOeSS0WYuDNmiaLpkw5E1skiK+yKD6DftQUipZlMcse0nzwMIuoa4ib4k8q+OVTq/9pt64qqvlF6pI57J4Lkx5dbRbtVdamrkeEwqbBwrlqBkXTMKjf//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////eAITECM3rv9/nnZrL1qW1bDdgkxCAHppRdl7EjGBB7qgRoaUU8xekISCtxUnrY6KUau5BT5OrdBMLxKFSKkTSf4NCyLKoKzaqbUSasqFXwQQcUxWAqkqzrWyGUyKHRaW2rBM8H0KiVxYWsrEogd+jBq5BUsgcsbU45IDKH7ZwIOEf//////////////////////8oIQBU//ql8aZyj9ivI8YclnEQqhXW65bndwJQKSxuIO6AtRMk4Yskx0g5bdWRaSCSK4u2RW6az2DG5wS2+fzV20N59JV6L3DZGNpY+PqsLfZe373bmV3SeJT3THrwY2n7vQ+RrwXve+714rWhpd0+zTSx5r/eP4j7ezLwKtwEEBJ3f1TPYed1kVUdAjTR8kvBISoV/yciI5NkQkbza+W2yzwRmXi/2OV6zMM/w3/1mFVZFlnUzT9cz//+3v4W3EWLIVXwoQOMLQlGeLWZNamuVBJB0Kyz08uPmT3q6kfQpTorPQ9IHHWSphDqOeRCVI5GjZqUKlDWNLk/FIpj7kbu/tNxXT91QyTcP//vkQAAAD/xTVutRQ26Oivq/beNtUAVJVY09Dbo3L6qxqCG3sKSJbjbjabbjvTBTM5glDmlYDO5TqHGhzghBdqARwXYbibhBQ46Im8iokjUEFC4FL1lmW9pZJCiqpt5R4hBHex/ePlNn4Gb/2XPfltP1NzcLfEaxN7dETzK3Yyro61SxOvVzBTTlXCjU2pZQg4ggbk0ICoKi3a5jFoz4SSzWm/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////hxMSEURrt///1bIffRc8oFQU28uMF1ggkcBT82YoCwuwSoHhcmBcqbqJ+PkF5nFKQx5X+/k/6OHzq5dRU7/1JvCkdgnLcyCAI5If2f6I+fwOwWSebQzhag0U6zKIBWoUOQ3DaiDMo43JLQUbD5mSmngorZopDTmSdXDTQYVuRhvf//////////////////lJKATV/9U1WWxpMGXLFCbg5UFnjoLWpxQD3ECuFjs3y4NVLiOrR9f4+jT18ezBdU5rqzUldb+tX1q62G2u0csQahSZgaTEEKgoYNtSFixNNKeR17mRF1ZYyLiGJVDEmJQdA6qW3mFccz9vtDkWTtU/7utFsRZKAhTm1xPHYNWso4CSQUX/6tpVVrSetZHU9RwG/AXYFATBoYMqwhyqF+w8LiVFBBAzDZRmxUNVQhjeNElyDrRScTYFVNlIJFfS0Y19yiyIp8C5sXTGjSlimF2GkExYIiqyPtnRXq7jcSow9keRzVoy8jhy8nLN3aTzU00DUzRjKqrw+pswlkolWVbQ9idS1RatBHEjLEDhwI//vkQAAAD/lTVWMTG26RCkrcamZt0I05VY1gzbodMCrxqY22kACASV/dUwx3nRYVQlURKkVcRseB/m2IRYUIRuU0BESfZFQoQhw86qyGVWRNjUnmWtAbhrRTZFzN9jDiCUzVlQE+XU+b5tEM7BMFGsMWofEkQZd2RVKgvQhTktG0ZXQMgJKwIJrnEOsYwsaDbkjGMub0Oc1Ljbcmqv092H///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8hJRLSv/v1txiG2wUJAINERLxE6RNxozhiI/duhDUoqEdCoIIqEYEOExaqoQ9CqgM8gSCC7hogtqSedNnv+p9/s24+OjjZlPht1Xid3lI32eHebvP27nvjZj72RjUlIdA/RRInRlHIdiHb5tHCrowauaIbfc4/ESUGu9amtUCYvOT6Lpgf////////////////YSECnP/6pPZ4HkZvLFNwmkBhZM4bpKn1IQv5gio+OWOCw+rhxiS5Ibwx5nclPMqXK1Efpd5ZcapZyywuZ48nFzAad38wkRjQXKoysVJ/qnizfaZUReY+PNYduH9lpTzdh3/ndx6eoh5/NSmUrKvCteE0NaYsuU0lgVSDZW2nfFssm8325CSiUnd/VrpanAq1p1DI8YExdkbkkABgkeCiiXTYFMgpMuCRi5V0BAYQEEeoXSLI7V9EWthvo3UHCOqQ1obB1qIae6A20UKQIiM3ruPGyDAYRIZkaoIZQ1M+BzpuSAhlYhbytJhDYsK1V6CaCARBHLQkzzjKWRRGqGEO3jGHVkFwdhVCgtBYs//vkQAAAD/xRVWMxG26G6lrcbiZt0TmBVa1MzbIuLKqxvJm3kBCASd/dUvOGYaXjWJATieFfyiWAHYZoIBuVgIQNKYYwZc6kmJeUBb1brJ92e5QSLymxni3SU70fJyAd2645NBPbbEqViBURHo6KDxiikJWpYQs8mMObMaUtTFmsQyBIGfVjpiTJTNRQtzQTaFBiOIIUMc7Rlv56Nx2pGf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lKKJSd//+o5g7CqdAShJh5cCc0WPYIXoyUwEJkNoMUBXGglo601LD/joFvSpuYDAV5aceXQTcNGFTQqeVP+f5/3/P2C9nZ9SU+Xj/H9uPh5jfzJLllaQu6SUVi5y2vzsmW+bZxUOk1kzYL0WynW7rTkpuk9oqwlmLqC/Ww1OPKEX88kp////YCEAmk5G0k2Ss6f9dFdYA7Q8Ytp81lLILBIXGgCdiAJiXFxzZQwRhEL7DKN2N2RRSoDlDFQJo2TNDV+q3IJnSqUUNiRKszaai2roQyBvh61oLt8f5B68OO2KnIlFaElYy11pedn14jxTm1RkkGfWzKOuWY0o2Yn1JI7WO22SdLsVUMmR8OU16nSchIIKSf/qmhs1kbBJetwO7QBcobw2tzASAJ+gEHyXWLstvu/my1pyjPf33bFuf/7bleadjrfF5FBWFTuFSzrMTlU7dYykmLkhWkothohIRrozGKA0mOKwtFURKd7ZRWwe/MXes2Yss4rnxRiEb55Wua3icONaHw6Lx4NZGVfMI0dv7bDPWc72i64N/o//vkQAAAD/tgVetSM2yJ66rMaoZt0QGBV6zgzbIqL6rxrBm3kBKJSabjaSbPLkAryqqLG3Jks1EeG1mw8ZIdPUgBsAvBuRYVoZVC+WMJa11DltqUTqSbH0pmPSLLZkFw5ico6Y2eWhmwzzLulTbDoaumwZze98t7yHauz1rxqTU9U3jXNn+NdmeezRmFHlW37tM9orlfPnhsfoxLZVbGZb5vO52Rd11///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ISUSkn/6tO1/njYRHywQMCdBmMM/p7pcy4MJUUcAimBQQXxIBylOoO4fFXrrGR9EdbDMs1EY8OCZa6vO2fb7bkeZ7oRZqdR2l3nfuuMb3mbdu9P89NveNunW+09b+XbZj7z3nN+YYfT78fu8eG7TlxfKn/IlrqqQyL+V26RmdW/////////////+0EIluNuNpNsvmWsJH4LLPU4c5Ik4+4rygbeiqhe5E20vtgEk3i47WX61+PNxC/zDepjWH8/sTv/l3W9/2NNQJVl9r1nyWz1XaY3dbWy8I3D5MmNsv4W1bMbEXzbrGQu6n3jXuN28PsW7qfLKSLJpu4hA0DIp1k2tI/dOmNbNjMSy992yVl9XOlJKJSV/9WwyekLUrCc4HhAw+N00Oa0YiYITL5wMGV6n1FmYTH8eZyW+//5QOtTfzHkUtu1jzlchG0LmXNao+sxuf/7nu50x2R8Ltpc6fTyhbBOFc3ygd8vtZxx2RKCBPUWqNU/OaHxp2VnZbbr39f47M96XZIrbvbRRtdumsrc5WXuTUPXfx7F6rI//vkQAAAD/tSVWNTG26DC8rMayNt0RmBV6xIzbJDsCqxvSG2kBCASd/9U1WHY003JeJ1Axgg5MzeOHZgeMz10IJkXQFNJ9Fli0keVFpqWxMNXUX2N3QojPmqbst3qYu5zzpiRR5I51wZsZrWJpQIcwlxbWxxC0GJCqxoHOYsMQVabgBorKqwU4xJbkCIaPbHhoRtfHlSGDc5TNq2e7fPW3////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ISUS2//6taUtfpgM0OCzPFDALCNMm+1t0BUJTR0R6pc5P0wSkvVyQVRutv8cJlXU7lj+UNXoZ//zKodjG9rm7XxWWd38vzJRzd0a2krElOC7CLaFIqq58aI7ITt+ZxJCpJaZrlYehKZqam7TNtyaOCSLYFIaKbIzUq7Lx3HWLn////9oIRLbTkbSbR4Z04aPFdJw6VBmCuMFxN2j6yEU4CBBdzQgoZfJnGUIONjU0cvsmTLlStNYp4wTI2ZTmir1DJQt3MWTUyD/adnLvG9XRtxOaXrwpunHUn9xmyoLqqVNeY35T4vGfagzC2hnkt5I7czFnJQp9PDFJdM84+fuvczFM8LVyeuuLVk2W4CCCk7/6tucIftiFtPQ1gPMCmBo+etv5GofYmwRJElcYVnZjVsddRrbFOZ4c0j73/57Y8HS3v9lQKtzVv88efdjh03qhMiOJHMWTxkjhLssM8sSNQxwiJVyKZ6Ywx4okcmlk3eZO1qdac733YwpJEO0apEG3NuqpcgeyqfSXBrulzN2evMC0UOPWnazqZSCz3//vkQAAAD/pTVusyM26F6mrdboZt0S1zU4zgzbo1sCqlvRm2tRKJbbkjabbMpJOMmnVBh+8lqHlpK/cNmInL6wFIDemFoHLOpMM8akI3YchN0clFGzGZxEmyWQPLqVpO+gR1ohpZm7F5s20RO/zreP61/m/tnZtm27f5VfpL2E/8QYegSrg6nnNq3fmV7T8fpFUmZjRNRVGDdO0yWaDzriAmeMK//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+0oopJpuNptrFWe6rTqVLY2MRCuUzCkWe9zJJ6+BjAAU1DsFCivnahTjEYmkyQpZXcuJkrsmOkQJaix5/BPT9f1tf7ka8lvqDfL+zu2qabW15ynl/15UdnO+nThy2wp32GpA4GcnNl5Dn3SaGsnOntFQZZWNlM51GIVfybULPYQpBjg03//xgEgJr/+qWmzGCmx0BVFGTirktKKN++gXesXCGUOZs+lnb+LS34g7//8KGxbv56p+y3WVS5UoqvOZ1LNxpOhx6i2ZV1FwT3a3QxbPKCnllWkQcrD6AoeIYpj6d3dO09MWkxmxjPB7JxcxviNXSJZRUtBFJ5KMev9oDtZ0fb19x+8a8t2/3Ok+BmvFVuv/q2iZww0uUEICZqSGBxQKjEjGLURcKKvEFLQkKqzrX68isrrU8+X//3W8sd5+EPWJJ3n3GEIw6z/eVnbaY6iu8ej6xWFFxUpQ+IoZ7vUbTCOdNOZLMYprP+vWPunZlMZ/Lso+9zcZnMytbSzoI0gbFwVDz79H+qMVrnVkpzBmubuRtdAtJ/hbYgW//vkQAAAD/paVmtPK26EqiqvaoNtUTltV6zgzbo4sCt1rBm21RKJbbkjaSauXGhSnqNWAnEkDYeKRxlzxiqm7gF8CIjrRBIWeiV5Z/9tq/fxerbdigZq1Hcjc53WsbncVYoSGXZyHYr0sJGoqsxJyqSOq5qsiWPOc6LMZnnRmqPIZLby3JdxNWQzFiTnRD+iIQmN3M6Czs7LRXiR1ew1TH///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+JEhMBM0u3//+aE012ly0yqp6AgNdDZxNxc0lTdp5QAayAsYJ8Vgaxk6xTTg3u5wbqqlSVOlm8wDJBbVKekmptdhJ0j4AsTGho+zaaS4XMEJIpylUH3DOpgsJGdXZzQYWZNApROiYEAEdnlJFoAKeyLm55YIMpB+NZPV21Rxk/Y7i3///8hJRLcckbSbXxfiLcpkhKMtUKwDajPJcy4yrJdKRVqJOTC3Qrc1EHim987rrgc5zC/JOx3PCrMMyr02GWee7ScpoljJ3kXqNvd3fbHfH7s+blNdZ2lf2mds8b0ZnzV3W79zH3z3ud/Zfl9QFWi4tGBjzZImHgHN5qKBFCk1OzvMNENe/HKNmVkTqylFkpxxyRttbMaeFRShKgYxy8w60nCrYVsbYRALVktOUpn27NwrY5Q41pvdctZ3WXWv/uoYvyrLD44n9d/f/2/uZXys3+U12YxgUjD4YiVqhyPPVdvBNnNLejGyGO23dE3M2aNc4Osjbv9VPezX3Ya5dLEk8a9MMLy6R2D3MrtmVffz/jN+9XPaf3/zXlI//vkQAAAD+VeVmszG26E68qvaohtUS15W608zbpDMCs1qhm21JKJbjbjaSaV8NvwkXSKVgvZBcnQZhKnZNdWQ1waRIOgKFHeitRkRgk7oLScZ+y1umiYbKKRba9moBkwIbJ2nninbfUyPkC07Zj+nmqsGJPOmZWwyU7H26eUBUqWcIjtfKjTNqZLEQlPyc0M4y6HMwxlyob5CHFq//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////xBEJgKI1+/+/y6IGhLQp1iw3XMP9GtLGGaP6ineoQQvwwSZFsghgapCnDcHHrdhUEeonlItWWA7w37LrQyinwF9L+YIhj7mISHZmv/eJE8WsDSnS03lbvi5tbknLrWJs4y5SjZ+CoUbLvkliLBbj5GwqEVRdFIo09Dvv6qPi+YqOUzJFi7SiyXI5LI22rK+sAL5rEAE3hwVikymCGcRQIWSLY+RV6cDTg2rBoK3/5yut6+ssuW/NddiQdvnE2sIwRUOPJGnk6GJ9JrjKxZZPG+lwghKNtkp6hBInWlnkIe2SpogiqXeFKaqR0g07irreZkS1bhLGQtGInbRx3s1zjF1HZnz4j8vNZ/m4zrZ+MpJRKbUccbbXltylk0BILAhAq9UfbS3HsIhMuiYBi0ERsnBWRqmJpJMcwTN63SGT61jpJuaopkwQ4RdV3WguNnmkmLOytfM/ar9VvCieGXAE8iVRZ9SiOu5LBTghJfKpdReMayqPlKlHIu7oqPpk4yLP1MgSI2NezI9aotM1LvVaFCHbLxsnMtFOZdvjZaTxRo//vkQAAAD/pBVetUMu6DykqtbmZtEU2BVa08zbI5r6r1qiG3sBCITjbjaSScjLptpFdZBuhpBHV7kySoANOG8Xg/AYUahNrSQSI0N6TmqpFWtcoOpqBgeHz73b6dRxQ9zTX1zUnyqO2pXT/93rvFK7sW1TFtDz33Mbv3eTG379Lmu70ZKwDAPuGV7KzTYFCbRdBv3frA111fin9///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8oolyb7///LTexx2IS9TA2IFMCjQw/ZG1GUGBgkHTwAggq4qC0ivlFJYuzowrrnSAJ2yMSPG6kzg1xDmUtds7/IzPjtD7TeWemeHzYnI3q+dpfGUxrR1YRr7V25dmmbhOkygNDGRokznZmXnnvETvxJE+ZlmY8vdpOObQ7cGzsyoqaF5AQiE4242km3J9IBYFVWCOWPHa7J6dVrWzRI4HmAcUC53LG91bzZUVZYs0JJu75xh/XOPey+zZx9YxRJOCR6Tn/toKhNOwiUDdZ8qN6R3ykXMPQvGzDXQx5MvUrjayXbx3Ly3o+caa2bRz4kOPqNMVZ5KIOdSH5M5qpudr3zsTO9FvEaVMtkOuU+dICUSm1G20m1yvnJWNXUnjTmQQ7Dz6O6uXLCh2NwYCUIMZHTQiaZssc0VuMk9lnCI+xEjpWSRSWG7GEikqctEfI7eNmvhKghTKeFe6jq7NgRcZbMOzkWGa3KeWuGY2etGHjt3fR1VmWxyVAfhYae5BQqwqUUMD5TTWrGFCw0OoDouJlqdkhWq3ZRseNZR6Q//vkQAAAD/JTVutPM26Fa+rMaoZt0P19V600zbpBrqrxqaG3tJKRcjkjibaq8GwYz+oQgTKhBxCRI4Df1yDKwJZwkRWbZ0Itu7iYZiZ+KdJU/+IO8avWAfNMXtjVr01bSCPbGWXOy9Y2vlv41vP2kgOatWG6zf/v/87Q/zNLufT5M6ldKo+a+IFYyWLeNriOjMd06ONlyJLHS0r7F24x9ZN/pGf/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5SSiU5//XqKYvIyuog2bsIXsKSSy2jvAIjmUoASiBQgT4rA+jJM4H8H2OxTLaH2aitjGXU0nYMlPLZlOn//Z/js721Q1V2L+b6+2+P6vWp2bYbL1X1/lVmb7/q+2959e4dy9bISgolTM17RRmXiFprMNdAFJCQVKksn59u2ZrvdzEsa2MR6ElEttSRtNtUsDQM2tpOUHkCypFjYXRQCKMbvArwhXB7JAyqFwuihpYz3ykMzImqZkcF01dBbrSPoq7nDPHu1xD5ufdyo7NJR/Oacpbzmrd4eWdUZutE353lybSDbZxJiZMaRBlw56zbHocxRIY89C9N5i0ZEUlclVWbBeuxWx1zOT8ajGiUpJASiU3f/fsmYLATDaywJviAAqC4JR9m8MmJP0tKAKUKtK4rwpAyWgITC4Rsq0ER261yg5eVQPhuRUKWx/Xdjw30/cj1qzijiKrhN5tY4SxOeQKu7vo6kXRircJVUNQkkR1LMKPYYPGPI4XHiqGDfk9EWhZChlCIKyWOVVNBocwurFnwPqh7tvVj7G3F3nJhwY//vkQAAAD/xf1esvM2yIamrdbyZt0LlFVa09Dbo5rSpxuSG3kBCJTbbjaSbPKkFs8rp+GEuFFis+C5Ku4EVS6qDvVOES5a+FeyGrimPdEQqf6l3C+6es3vamcWRYhZwXOLXOwr09bUS7/NdsycKvJ2HbHyfe/v439/SdvG7bsztrZtu8luzx4KZu2tkzGVEeMrp4n3QifM7OzyGNuYr7Om28k/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lKKJbbkjbbajs0/7SK5AAGiDoUqBYCut+04wwAi0ySwsl1Db8avbWXOwdr/+5E8ua1y3uP65c46KhF+9lzHXbaJBYhrndyLzJefnx8bKfc+P9pvsl/l0zl+bSOpy81je8Lox7aoPQhAHr1WxCFRW8+J5HLJGQcY9ParfmaLil+4GrSNss6H///oSES223G0klJyuQNvYc4pfDsIiDTLB4JMqjhOYOE89HIXubGSAopU/03tIRIe8bi979ahNjjb4v/4Kq4AmSS69EHi6vYmklEWzqIiksxIEQ0+6HjUmxlHUNixkt9FvNpbQNk2h8ToeSo89u4H2qo7Wsisiqt3Iq0DEHGhAToW5/PtXb9OSyAggFO/+qVw98hYtZWkbaAmBzgkMPo1PMeJoRTgO8NDNBdkqigmISj0PNbILFeQfPkNSH6ZoGwngQLdaSZrmrQaJqWoiyyiyCyLWxm4tCSRDuIlMFauhjEigvaSLW6oLDirSCVHOopCEj1U9JKk8aOxqxc7rCv7qHqq52zjYgYMMVhVttb6vn3GTWZQolk//vkQAAAD/xIVPstM2qJiirdagZt0N1ZUe09DaowKSpxnBm3hxEjITVtt99tmFujACnckKh4IYKvzIrDQ5QdBjnYiahniwM11ByBPjeutg/mdepjiLZEPLW9mXmfi6l6QzsuGyveRH+7MP8Tjy0kNx9mdrff34U+u2bty01cPJde22M3PlU93jLgwUd+gGBsxoUg1/8X/xPw0kL///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////kKKJbjbjaba+qeCm5zBCFMysMPYFrC+GnRExwmR6DGgVjwm0QudUoMcJpFqSLCtWroqcs3qEgJZdWvkEnxGnZ5eYnX8bkvF3jt8/1px/P+7L9n7xt1eU7zl3WpFmAZG9g87oIJSlFJm5KnTqKxjy2QeSCcXDkAQphTtagCXApfhtEP/////////4kRExFEe///f5gD3QpdFtTAJYkkAaOQAwasRQoRfFkGtookJvvBRJwi6XzvpDf+Yj+Rtre9D0c653rFPwsDQgm1iUEc86VNHpapNKantO8NA3lJVJvNl0ZbsQZ3s92o0aKmWPKMo23NvlHgfQ45EZynZB9OscuMZeDJJ54uYGgRcMIK91ilGOkBAJP/+qaXArBlIzy6R/hd5TQwhhTKDBcnKxUg2224PPvuDOoEt8/9X1/yevdvcv2o5bx1UJSRv/yzsZ7hgn989v/UiEMFvic1UQEnnLtE9ZAnAl5iC2tJSELXpFAwJkrB0vsueRY2dVnwLQ2IMRcOpVayU6liBNFprHfGRc6TZjIn5kOjhIhl1KUY//vkQAAAD/lS1eMNG2yMCkqtZkNtUIGBVa08zbIysCq1t6G2tJCITf/9UqkwB/UqpkdQe4heRMyORpxzgWfqBAJSTILuiEnLBfdb1JM7stpMd6io+im9lL7eCTT8wbVGMKlIidWHDldVMWEEIrRkMIaEVgVVFITVZCzM68Axihjdq2A9yTUxKzVXlsNHVCVqGrFaRFUi0NCn//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5JYLd33//+ZTCn1Z9JSqUSqhfsbdaIxBmZYdu1AKwH0NxTigk6xI2vpRAQ9Wx4xWX1LmAlw01u6md4w749IiM2CQ2axCDIRHkUTWGFVCcaCFABUBosGV4Miku2LDMKJ0cQA7JkAg9FjgIx0ZSBOUpUkiOshChFmcDZPC2rM9p5R///////////////yAhAJtuRtJNecNxBneC8zkiC25QcgC0/AJBYaGUgOVby17jBQtLfOfdFw8azfGX/1ftRjxYF6RJbTiE0F4zPuFokqAdo+y31+XN3ePVt4yYZB9yI++adkSmbvjVlXtfvrsMQbUObrYmzoFf5e+cqVxj3fuWWqMHQ2a1lfP2uC83I5NbluEhEJNtxtJNuFM+TZ6JdY1jA2BRpmlWtwMMPIesqMbWzeLhb7Lils/0zAEfdX1mkmHl85gH8KukWLX472IihllMMMVD7uKKKfPGnrKKSs+rpuhLEGEQOQg86Lc6K4kVW5TFpsq6ph5w4c81KvJonYlKis++jWSCZm3u1tlJs55e6nlEkYfbrApRwfj8s//vkQAAAD/lYVusvQ26L6kq8aeNtkJlpW6zAzbIvrGt1p5m31JLJbjkjabbEeuUymsmSAwCoiTIzDoNdEBO+IeR2zBOqBnBMGNpv8/KsvmmpYMPVvTLW5f5pfdE9cNlI0fQ6lqpjd9nqqWWRkq5m175a/4mNK4om3cmnOm5kcQPG1UqLRcWqsKqPl8cirZDxRtVoPubqZR2q61HGlpYzdIIG/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8pIRCT//qmnOq7StsqHBplCQW0oRx9qzBTOn4FzGmgcG+qMakE4hLfxvw2ee2M+PqPvO5DfKbW8/P/uMswUhQE0oM3hyqPYYgPVWuJ1BxOupIkaRliUN2uZ7inehScgZhNW401gkY3s41ZNtRhDlDxxqn0Bp1J18oF/////////////////////////lKLJcsksjbbdPgNSiuh4fzox+yW0vxyiwNldBrkRjkDSZFAMvCyTJFqBgZmCSZ90Uz6K6JGoLSs6MgdYGaBPWeb426TOvpIPznl7R0bTzJTMv7MVkBz3IXuTj4jrXGPz0FaniUfV3wJslGKT9dNki6f5S55E6j3mTZvfvd9eYmv0jeBlLlKLJTkkkjbaj8QddMCnVUPQRMdPFqbI0+WdBiyFYhSw8GbfXmMY+jb970eAYIGs6pB288XMQHejtaz8brDkqxGvTdk008S5tpM+kHROImFZcoDZMZjh71uSvshOATMeMfWLibUexF96UX0j1nQ/YrU7xaUXwJ53SWcaYYfd5JtL6cS++Mw54UVcmgBI//vkQAAAD/lf1mtRQ2yRKbq8aeNtkKlBW6w8zboaKat1ppm31KKJTjjjaSa62WO6sNZVWPmPGYrN68CzYjB3q4JcSdAXhmiyw/5DRbLs6ZWWipnMlnk6Kyyy9XLp0GhomnuaSmZWqUaKtqa+uoo+u6XlfMhuE3pqlXzOy01uu7v+VspyaeIdXlYXaJn6iPa7uXiJeo9ZUb1zMrTpLFv//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9gJRKT//qk+HmglsVVO42pMuoRi1F26w0aUI9mYbJD6K1C9YyHe1xs/2sGm6zv5gePv4oILE1f7tTFNc7pd1PXIWNnKxAJlA3a+OGruFZ0FIRsHOE6HHUzRRSxlMl6Lwz5NDXp2oZCJSMEA3GpASGQyPi5KsB+aaH/////////////////////////////////tJLJccksjbas8RfRn8wShMZiA5QObh15EvL/S4Cq0YRow8XJaj0p//GOm1NZtD8bGrXUrh6Zxf6TLMhBGy0uemcxBh66jISmyriSPMgvCRyZbRarMp4YniyMx7rqSLpd8i7zEWXJe732jyoT1mhRaPLLYzlrhPcWSAOwNFk80ABHadx3AaUopFuOSSNtsKttgVvmEOZ1TwgxDz562vyU1DV5+F0M7A4Bg13DgE7GxNdjMcp/rWssd6YGkUFqTsm+TTR7l9uapuTZCLs+2Fa95VIG0DbdoGvmMSP5z3ipRwuNPH1R1pqvdKbovt7SCFEzmtdNCpxE0PS+X4C9o8kZFnIUtUnHcx+gjxFki//vkQAAAD/tSVetTM26AzArNbaNtkYFvV6xkzbo+Lit1vCG3tJCJSbbjaSStkDOs0C+10bILdSzm71InXZrAlQXEsh47bxdHBstSSSJpJ00qC2RqolrWz0fSokeySZ+FOStsdLK9V8jPRRs1EW1w8szs/t2qYzG6rhOZ2MdCs3HzLi/9JvTPj7GZHr6+tlWz/aVVTX3fv3KrVcGf//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////IUUSk3HG0k2dtNfZlNMgybkPASoQqpWLtgApNSdAwA9Q/F1N1BiQINlMYBdFdNNi0+k7l0RN7athFNURx4xJSsYh8IE6RM3SuE4EP1P97pvkoZe5EWoSoKSEay5xGN9U6atpvmLPRg/ZmrUjbq5wzj+dFlkbQYKX///////////8hIRScckbTbaM/kNtgoSoolmOIXFXxg9emdQK1DSlto8oyz5A7+RnXM88oavZf2pMZ1cu8qxyBe61ndq2NumUcs9TRi+zvm7LwfG57rejeRffIbUaRWVbYzN5bD6aYkxzlopHppiEzws+wdMU8oxq5ZNLSFG4BVSJQgkkXQyV4u8/l09k7c/d1pbjsKSlFEt2SSRttpMnjLcK5ABGcDorFCwxADjOWQj9W4VCSj4s1C13Fr8IgXmH2sx4c5hlnqpdjONTm24Keyxyv7/Ww+WjnXxVWZc8fRcQYI9SlnDFsUDx2dSoF9BWxgXQxGJtUHKsrBNXk0wwYejWLoitF25oxKaT6HGGj4H2rFUxKUXaO61UrdqzLdT2djC3E4//vkQAAAD/tRU/tyM2qUK2rNaeNt0LFNU6xQzboKp6q1l423eBITETNJttrdV508AL/li6wOLA0sXtx/9qX5WQblg9TcZ0XMcZYvSwSe+OSlutaihUuUCq7oqTQeojHGNXbMTa2zkd+St47TBud9i9q9fT7m63Mx2fadCXq4ycr1/783G7uvHqkddsPOmqw1UMzt6dFKv70wY+u5vnRgsj////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////KSUSlHHG0m14Rpiq3rKtwaDMCmGtCwEDQ8YA5IsAUQeNlGrMfJQ7Ve7b3kft8Z8+rLrddVKhU43vf1yASPJqh1SNVTlIzDHRTafmC4cJXjnn4iETkZmgrd73YzylluKr2jWO4tdRZDAjcOhCBDYbBBTWnk6GGcRvq5BbsL4v3////////////////////////////7CSiU2m42kklTVbsorHiCZ68VYNMlD3PIj5UjoNVIslQxg2kDxsMwOIYbqskPpNDRNES+9FEjHalQsT5PERhVlE9k1jUXiDlvVttGTTzl4Ud0prvsI4IkxHVyfGukkbJxB4ej2ZWQg26Ripd5qMiJr6xtxrX9JOjrRiR3QhW79k3GlTDJWJAQgEm242kku5yX0UrqEoJlvGGiTmN0bkyUBDzvifjV2MlDoHsXxaTe/jLcbD7Nq7+2v0pkU5b1j31jIFHBgJmDNxiIGxBHGDGDcOpyE1BJoBQyQVwlEQIgLNxPD514h4MWYKEIElLpIW7ggkjjGHPIWM2+YYWLHgR01B8XyovL9/7A//vkQAAAD/xQVPtTG2qEq4qvakZtULGBVazAzbJJMCp1vBm2eRIUEjVd999tmEVXLXRmnodQKjopxcgqfTD+uAtMFjmgphTMVRakSFuylm55lsXkkCKKdTHD9SS1b2BoTqkIzTz3ud0RFbjdjMd4/ThmvDU2z9SfGJLYdMofxY8kYUTjUoKuyVyzsQW5l0bVWaPIM5kUkThgv/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////aiEDAERt//9vmf4PO3lpppSMGYo8pghiGJEIo6oQ2UZEBinqAno1K1esYR59Rg5DHZJAVgb73Utr00Z///tFRMsu4Z58Qqb7SzpXblz3zcpLftszffp8uVtmZ7v1P+9LMcztx2NNRhSmOLlNWV6hcxOKrfk/+H+3H3K5T8wwX////////YCWSnG3G0k2hug/rSqqix2nrDp40E65xej6YBaB0w6hmTqUh5ARkkUlOYieSuznK1k+mrUW10XXUgi9atHkiZVKh46SRbxnZ9y/4fGYuG+0nphz9D3jT0XYi/fMM2oRpt+VuS2l5OOkUs5puMMYCbctn99TK1/aDxO5428z5LMkTWUhL2dGSCAlG3G0kmoO9AbVINKo8IS8dnV232OVgcFTlOKFSjwTcdurrbc5bUxy5higBt4Z5a78/llvGXOfhjzuWWVEVNHVnolMSYmiXerNmnjr0sELLMZBpY7SWpKo90J6DvALlOBmfHAtIHOURWc5zyUZJ5hE4y6YV3RLejxWpu9E0NQDNp2x0XaGVvZ8/ZTVV1U91s//vkQAAAD/paVmsyM26LC6rNagNt0F1hU408zbo6LCs1rBm3lJTJbjcjaTbRZS7jK6RMs4wEG3NwrtqmzZuBPiwsUmMF05RLJpUgqL691rlqlUZummtep8im3e968TH52vc+s7w0Wk2NkT2yLp8Z7fe330+N8s/Gv9t22x9mItmfaQNcMfTOkxr8VCElyZkyki9tO9+9n75YqNOUWEc//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+ZEolONyNpJsajUVTiokxx8UVLYk7bmv2GQIFr1gsQB8wvhzTMyTFmk+SB1VzIXMZVMitRdqXFfGEp6akUiboamSOx/GVjpAIgTbYcNMqIlC1mI1JYViwo0JIDj0qBkUOcKSiEzbNi8R/9ORiSlq4ta0OVubiwruMiU6KgwRBk////////////////lBLATn/9U0iFOsuXJeJygwgFrflcMSBHG/gK8RGxptkl9rhvQF7avUv7rX3uFCV2rRctc+K2pu/ZD06FYV/yoTey/dIGI+bfoVBrlFYIdVIqVF7aZBrrzNmK2rjE85/rqO08pVVeo6xxX2zNFso1qVu+zZ+5pCsb6/rPj9RuDC+GU60pJRLckkcbbZ22rlJyzRAHMcMAi0bBrLcl3BUNlQEnoa21tbve6Z5ax/Xeyl9pZv88K2pVh9Xib89hj+O8cYl6bOy92qQ23+S05OIFBUFZ8OMSjpRISQJMgx6RD7Ak3KMK7cIIJ5ZNJ/mJGw93YGa6LmEWIoQLMmzjpq93IJOxIALY7av1d/spHgSH5EM0g//vkQAAAD/xSVusPM26Fa4rNakZt0Dl1Va08zbpVK6s1rCW3tJLJcjkjbba2nEf9mFdJQ1Dflb83Zf4v9YuhjlLtEnFSuI8Fo+d6w93rWKw+w3xqOkYH3P/E7e42L8Y7df/ZqeM3d9Zvd3a9j/PIlePurzLWxJsjvu7dbUbUQFYfZbwZr0Ynm8y81jfMshB0xtuvEJrpz8dHMkMw3U1C//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lJKJUjjjaTbIZe66YFOmgAuJghROTUXks8k/ZqAPoFgNxIyKJJqGSIgfZbWE81p2M1lG6Sxdmnu3MSbDtqq2MuchqJfzbO9t6k/NteZn573lrc7tf8a0SbTzHam+tlerefXRaLyiSWu9AfPeoICpd9pJSB+PGvfyXd2f+PZm58t///////KSGAo25G0k2Z5WFNqVW4Hk0XlP12ltbQQ92FBh9EJutO9s0U/+DCpWmNwqSXrvbbNmBSDLD1rAA5I0+r56P2qaCXiSb/e31tg5368y9tOcbtb27adbS188lWaWVR+1vs3Xy/BSeJWXLo3/HrSj7qGM93ca7a5jUGlst1a/d1EUY+FKSUk5ZJHG214SpnLDqo6ANWHFJw1mZ+zt5kwHujIFuP1o1kruoKubMasLxv38ck9rX1Pv4XJRlvPJfL28s0t3mtfwtt86Z6dyvN+JenPvwWaWT9ZKbc0VIJxLt0szIVLyPryXWl6WTSePyyLrpPUa607x81ewgskPrF7bTbWVzmrWVTbqBy9R2pv3Yy8nZr7NSMiUYW//vkQAAAD/lfVesPM26Ai+q9aoNt0J1JU628zbpdL6r1rCW3sJKJTjkjaSa5X/gpu8wSpAsCCTbbft/CrLDpokXo2Idc9qgLP3TNmuLj4rBxDvSWnpS33fPkcThIc8JzLTM/szpUybPR/jJ2/+f/bNfab8NllXjoH/sllw9oVmXR5t5rfvWlVeT/GPq2y993GaVL7ER6b/HvMcxuxLf4ZCSn/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8gIJScbkbSSZ1HX0YHUUXNmWIfCsWLQ7C0pZQhGaHymBABtM0mEy0pNFTFo8pqdRuumoio2KTJoOhGdgvI6pimykQ3YmaOJBKqhsizo9SEWRIhpRhIgaPUJjpEBiKTPKSwmdZNDechLTcwTopqVMF0y0+eXCtT9qf421///////+4UUSpG420kmwVZU5tpmoayGANSkKjjR8Gj9W4HwQ7opZza6fQx1iJW2sz5zukH0k1uVSRGTTdFvHq2Zy61t3skCPNnHHL2FmtjVHJV3Z256O5rpGaQJXlJllt6uvJu0xEq9OL/0wKRVsYjUHQ8ZdM9W6KN/Slas5OS2YU1iwIDWXKTqy9kJJJUjkjabaZctcpwZUkac4QVeAYodBtrpKDt1xE1EvBjErq3tQ1Vk2r2+cff95YZ9rxS1jf9uje9q8vd5t1tLrsTnO+s6Ucls3tSuX9ylGfj7yKjUMf5RjvzfU9n6m+EIo9ppZAHkKBJWzbkB8q7pFByEk2rWtM+omRFYmVyGFwZXRojZhCh9UmzkHQymZKet2VyjJRuU//vkQAAAD/tTVHsvM2qNamrtaeNt0J1XWay8zboorqq1rBm3mBEDIUV9v9ttWnNYcFo0lKpghXGYiIyOWm2MxyRYECjdTpXettrdDrfWqMGdV1XFLYt9N01NW170iNam30lS2zezWuM1sbs7ZT6i3xmh299jPXbc/OK5xbZsb3P9NK9nWyMg8u4sdDSlt3z7LZDOucaMTWZ8kahbmPZqH3dJ//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////aUWS5ZJJG22zPPBbRrpUAGUQg2oPQG6LqbZGzWRKBVaO45Zcdrw6iWxqVcW9K/WJNZvc+K4pv51T1kUxaTUIbUyIwzDEAwGJDpWRAj0RE5HCwSCZsMHteAmYKITV27BVEOKWExqlCmEHHUz2pIHDi3GGxyIYQlHCbGyVX45xDP6pA///////////////5US03LJI4221Wu3jB5YieJ5JFEVDwSJ2TZHkPRpIzmfFt8KR8edr4j4tNvMfL6Dres0gbq43zu1V1Uwi1ZLPfb9rv/MesTMsFoDYgHNP05RFJ8dE819RYwEUdgOSipZOZvvEdFbLijdpBrShkS+4qglSmPfPKd2dGZ+0b2ICt7zdcDLADLhJQCkckbSTbJahCn5xT5HXCCQ+8Q4O88KG9msSCgb4bgXt/cYlVvf9z1e53veXa8dp8tU71UdqxUyu6wPOHSdfww3d2NRxaCRTxMdSaObom4DnkaxHDvJVqP3YSSjDHJ1DQ9fNf0SrDsZsufhXSh4P74diMbrqhVpshPzf2uNac7xpVo4zNacxGY//vkQAAAD/lSVusLM26IK2rNZkZt0Ul9W608zbopKSs1t6G3tJLSckkjjbbXHvkindYkCaDDoytkcgCEldJP4sGjIFf8nSR3zL3XtezqYZ09jmxDqOxHndy/fb+V4VvZvMZXRMubj2UxxY5HCqx43SzU2qvZ3LmYsxGRcNUtZ8VpbOvUlNqv8mXOfUzzqubk2ikyENHhrp1Y2hfwE2kP/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8hJRLkckbTba+12CGj0BULMBYQ1k9rPH0hJMbP1ATgT4mJeQQ2qIcgSdBdis11JOsoJs6ZSK6Ka0lGqCE58TrISU0XE5l+I2bpsU0zlfWd9yUqVmb/bs37HN836UigTO06NTsz2T87btCeeTpRLKkKlMlR9DyzV0eQV8rJmNRv9miZT8AH2x//tKLTkstsjbiqTqO+wyusAdoWQPUSbjBKAx4CQdJkKi9EKpfteWnG96gvY08SFDpH39t14ESnvS8N7Bad0Pi8L3OHi1yTybNLStk2RQ1Fmmtgqz5umdNWXEwbTKgtie1WHEZ5WF32ztt4lEpMqjEcW+4ezkefFezjdpL6+xGjVmoQXhTo3CDNuIJDZCiiXLJJI22vmRTbOKdNA5ATFJEWLY8wSoAgai80gsNpE7sZs3zKp5imoZ22xe2viXW8NsdaxXWdXtj4skf7zj8YgUeiyGoQ3s2lImbYWgsRDyzBHPJ2FmazbRJV0RDdx1nG0tMIC0aswg5i1H8n5iQTAjyXI01FgawvksKwhzJMIWPd8FARKFFQo//vkQAAAD/leVesvM26GairdbeZt0LV1T+01DapDL2q1pqW2kBSScjkjaSbc7VCz6qso6zxnVn9O5sNmU7L+B/lbtqYsU+oevf2zjP1ne4FJ63vBpa+bbltENOh3up22Tvl2dWovFO9y0PueFO/M1te/Ta8//b837nX+fxdb/mbDf7Daso+slpfIh5aPms81r43MqXZ+1rl7d9Zvq6hH/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8hSRLkkkkbbcCPQC2KZHQQ00vGYVR+Nsdh8KA9vEF2Q3cBDqRawauHz94Py+LUzTMS38ss98WprWOrXeG2Md9lxD6YkSnCONz3nC+pJssnzHMM74VETLkbt2k9jZcyYTRAm1K1IVB0IYuCjVsnRvMJ9Rxx96Y0ptptPfxfDwd+aN53tRP//96AhMRR33//22ZDbdhd+mNnRbGCkoRTbOYECoyFYgUpGcftzpkXS6pSDIoGGgpJTUEWeedl0jFyDZGj7uGSg9uD3QUySyHexkpRg5cHxeYKingi1gfrzkPMli5CDpeTR8JVr3YfobVMyk28dNPS25uSMYYqyPeYJH21rO19IlzrUXjzRgZRMSUAnHJG0m2HS2CGt4KPnDTGCjiwqC1NXyFQEi2A1SDIh9HSYu13UMM17qPT6Fi6aniggeutRaUZnlPKUJVSKabGuuUHTZgsq5Rd+BcnvaSgrNTJ1akpxcxmYC4bQJXkfDaUclmdV6UfDwuNTlBBKRO0SoW01CUs0RGTM1EeSIx4+1Nm4+45sJrwjGVR1nWdS//vkQAAAD4JTVPsIQ2qEi6q9YYtt0cmBSeetDaJkMCl89D20ehIURXd///9vmEV2wKlrLZFutqx+bg6hIByC0AiOQQBxrUWp+18KlQkOizT42Fd+l3nvE1tzMQYUMuagbHbKMVU1pBqbJ171Ay7upsbaKGRPOrVk1kOPGVUjbbX4ft0IfZomnlyJhOD730GyV7uKsj4Wz38X/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+UkpJyOSNpJpvw4xJhNZO0ayu1KOJvLQjAYRaBE/cQmXbUtiu89byrTt269mJ/tiqo2K9+btcnTzmRUtu1GK2xGuacjDUt1RmrBeTLinsQh7mOubi3tqcKQ7z3FMiGJ3Eztt1am66c9jH/vumXutyj2W607UeravVvbn6On6c9sp0eeGiXlhFDJVa7a220XIuB9F2XZYS2jKIptWVUFRH4p+YliXqq0m6FmIoTqwx/Zuy1VU4NmsXPwYKMho5xiQypVTUxNVLtwx9rCCCFao5YiS6KRyEF5Dx1uBBBlliR8WawaHTFi0NdRFPZKOhu0FD7PFIiD6gelnjIF0Do6e9B4rDzuXmMtMc8yc4//////p//qalEEVFZrt9ZdS0OMf5+vzFISRoa0NUoUBsZ2wNhanCpkYhhyG5alkGjNTyYLTCnp3rKJd+DCtVVtT+FWBGzHkeZg+SsmrQL1fWxX0uuSsrrEu5NYpT4/vuloustpt5g4tjX1HmpabG9Y+NYjffzjLXZmkjbozxNZame9p5Z5Y2I7xixfcOtIVf/8y0iYrWe2d3jbjb/////p//vkQAAADx9fUWnrQ2iES+pNPYttE011P6ehDaJlLyh1hiW0b6cJUkksjbZVvc8tpsIoLVJEfTGXrhSX0U+1xU0691nGG1N4e5FJ0RKsJtdERAuI6qgN7IMGGRJo0xeYvZlF7jlEmkCrj5mRxo+2hLGXZbsNyBOxit7VytG0zXcxSQOSlW0ZBR6+6ONmauLpttVm7SaSZelfq6X6oweA///7/Rp/333JA1X//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////uUlJS222xywqrT2jmEphlEOrfm/jibHhfq/16nbWz9dN3Yfp0FaVnYXGPv7d61Yerz9tS+k2Ph0PdMoXM/0/qaGO/hrW276re7u6ckR75jPOfcqwsyF+UYPrMZnWw60liRSx88xZdFt06GoKOUZFS/ZbYbP12y5q7Wqi8b//////7pZNc8RYDcbcbSaJoYx7mvUug6UkseE3mrvIignioj3bC1KkKsKSsb25NLS5DZI56xeEogNtI+jDxSb+7Z6R0fbFYYvg0q2kh1su8dTy1vCyKFJRdjXe0GQOD4VYXUyYNmDRdIQaImghieRV3saKi5oxhwdUSHsjzmt4pT4tFImJtpsu2PIf/cnTa8lQC+3IGirmreOIHgAkm4dsHlm4S0nLJLI3GzttbGNx6H5KgoP3byXZf2PIziSv9+Jk7EVGr0Brdm97M7rtKw8o69N17i6FmTaS9tyUk15SV743BNtz53BDiJu4RYlBZd+zm36puM71Jl5yVRXevV6ys1kmJLxhd5BO01du2JppyTRvPyTtGzUnETlzEWR+W3UMn9y4L/Jz3Z66gEGP/9nktfqZKurjtCSfsWo//vkQAAADzJgUGnrM2iJauotPeZtEoV7Q6etDaJfr6g095m0SqCATjbjaSRROo+XhdgGsu6xjNS5akCguowuk6KzhookdmWNlx59OOt9+11dJxNbEAZ1cjuO7nQtslo3la86RqtS+L28jnVJ7U6e1ZSvbM8yl8ryhU/41SzUv4x0Haf2g6XxsKd91NmK7K189Qpnp/2nf33vGZmyVt+pWz7FId/RrtaWbiYr1Ghb////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////28SinI5JI3GQFN6iSl2QsHc0Yn6X1goFrUCPm9Y9VmuPbDFv2xeTep9ariPHzrWMaos7Kz/MrWN1N52myCJnOvFafK4wpycSWc0TJ38TcIwncdi09hi1S8x/cfs1M17QhILX6i5U5+c8m+lVy0VH3jM2RvLeDIfJAyJACGQF///bd6/9qm5ZHoEkbbhLlkkkcjG+ifrB6izB9rF5HEkO6AsaZBMY9pNNntRewzfsSZyxVNj2cHXqv7uHp7EzKSRmDxHGTaklknXqIgyxqGzewnIXHNSDnWYRxssbuNi9qMeEoamaPSDbUWcJjxHE7nMyjBg9HHNJkkiHjRBgbZYhB2o8V1WOcesM66zEbMpOcO//+ro9bJxXQXvfLV04jSpKJTjkjjbY5JP3hMx/A+hQQI1ywx8ECibXsWvVd2VMbGIWG+l5PSXTnuFi97XvExNfexKmIKqz+ZPT6CDqLbUtcgVTFmsu6AnPbEDub9aLPfKWanTqUyBNNT6ZIRhGjZeukfaZTGVhJuanGHnGyXqiOnyBnHuUROh6zG35Xey9hvR13Kgd/2f7rrvVHE2dweDqSk3bHVC4//vkQAAAD7lbUHHoG2iA6zo9PQNtEh19QaeszaJMMCi09iG0OGESASI7/6omOxcDGYC8h2GCt5pY2PkRgYuDErGXPx5rd2ti9mUxFVV28T45kVIararAxDrTWU2RgZBw0euYINEkM1hExCaGyB4JHQ57+cDUhAUnbHNjL6ajAghltVSb6rF1FggeqLqT8PhUahlpIOq/XX//uF9OyzkkvLEKbzTF///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////JiU05JLZHIx9Pbxmo2TwdkQ8txXq5ODUiEkLqUa98KMg22scfFqPiHcqnPeYYtaL70uCBJ6ujQGVjQqw2jlBxyNxTiLRLY/DwpztiALkCRkMSIEAIl0goEGcGph2QRAzEb5FmTqokSIUwlDLrqRkTOCUo4PEwWPM//////vijumptEolSOSSNtjsc4mY5ZJFhPLO+PuaoVlsGPnYPseacz3W1VaFWoQUSqcPPVqH3kb+HRx8hGmMxZTEAkXKrx5NPLo+Gf7nTYkiypPrbe0TzEZMWhKijstelHTG5WQmSSR7LnDD2fTDYuGgw3mwhmN1XEXnePlcrJIZGlNHqeUFvrp7d3+vf2ZsQR9zWDywusYwapCGlLbbbZJCjo7tU9ESMtA+lyA7yD6ntpZQ0dMfHfvXKppDkXXhaqxWFjp+lqW4SGakWbMRZS7ErMXB7jmGIKqUgcHKUUbUjzouoeYCN6GNS0aww8cMFoNEIThwwrDsfAoVdopY42BIWRjTC7Uy0hYEEgwTLmmno1rboaOTKWw8VHGJUzJEFp/b//9X95DmNZbsW//vkQAAADzFRUPnrG2iDSuodPQNtErmBP6egzaJysCfo9KG0WHECESNG5HE2hvGQcI3KEKG2uGnf2hE+RRPsR6vVceY+5Pn2U+1IZz7nsZL3nac7iYosxuB8gQcUx0sfW0AZVDCwQQBFlsICFb5/huGVpCPaBV1YWQUDEMEdQ7gZDmtc0HIhMBolKC2chLugyjT+QBszBdCAGXUJP6ev/Ffxt45mNOU0oUp2GV//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////x8lktxuRttopTL3RKGURQJNlxV4YG+Bp6CGatqWMHu6Ixqxjoaa8tg+R1o5JdsY4pbcyCIkiE7rXRZUm6KX4KaIghwjh7DI0EoAGIgQOSKgpQGiJIDIHXHHRjBkKd1USEMX4cqhSlDPe4Xkx3FkBM8FEtHCT+nev/Ff13+dd0tUp2IlpMlEtxtxttogbD6wi6l8Hsjr5yY02zQZhA/lkGNDwhso8Iyj5i28Y/UDnQpDSbaM02DodBkK6EGcwk+TG3jy07ctXtNCwmgo3ljTyCSKNYnpp4NY4+JBNlG0C5TJHhYUckpIweSIlzbiBTVBFQ91DzPeEtPua+xEKfXeaXhG283mtRj/2++7V0Rz+hJ2j1mdLhEF3kgMWlV6bjabRsYxAubJ0AdUvLNkOOa7IdgVXpSiFELx9Ss46o3NWUtfG0Or0hhdrCazhSrlxw8s00swYZUoNGDKtDWOc2WW7aSrkuC3tyT1FR8HG21fJ5xw891EJgairggEqHlOfRRwhk2cMG3Z9EQUmSKMpR3FnB+X9SrRSGK0zcH0sxdD3KdiH/INNd92q/v1E0XUKnWLMqpGAk15I//vkQAAADmRWUGHrM2h8a/otMQNtFSY5PYeszeKmxCf09KG9iCNJTf/90YhYr0/JKNCbDK5obviwhpQP70HHWxbdjlGPj7Tp9Rb+I6d79q1POF0tCFrmy8+GptUWxLcjJ8lfacpzcxvbHNcPe1jYiZlimDFzjyUTc7DjYlC+6vkVm396yl1qUblvWZn6FOY0sB5QuJ2hIF/+nVs+xjFp7czirIgQ5WWCoQ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////jZLSckkkjbYBw93+4fSSGe74NPkDB9mHOWwgHnXKywP0VbSOle9Ro5NkH1IsMmBaerjPa4RB0QKgKOikBGUjmqLTQiX9qQSHQaUKjJGRyMqDZImQooBgnO15aEP3vuxs4otVuhEuJqz6R0ulcnzoJW//6vq/70Pt7tlKhIVAUAm7/6oqprx5i2R0UYlKcn2uLjkmxyuSDNLt7zzEGd/R/NqYmcL2n3LWpH0zbtcy6k9jWOIQsjYOjhwvTqJJ0+WdKzCkhjES9WrrOh0zrsJx3QOV7VRuT10gmnmtZ5zB2cycxZz2aliCcsmeZtoIFMdFuUf5ONvNx4RMjWou3z92/z///9v/////mfG/b7//v/7/t/2/jP9xvU78Z8+X/33G//je0LkCqQSU23I2m0UKqmmelUqzMLWXOTX1sHnJlkvGBEhN3kpqwfKf1NHC12GlyRWU2LZjOLaRjV7VlkoqHjTyoOR7qiBSWSDUqTy4j0WENixTFpQ2Magr7jiFx1CEHZImNbqxe7sRzxg4Rmw8FVFhey8XsTB6fI48XCTukOuKuSJpCiX6SUNhHMZeVrn+v/7///+uu/vTv/1n50/4+q+4Ttb65r3n8eitsS4T8g//vkQAAADtdbUHnoM2iEbAovPGZtEkGBQeegzaKqQ6ew9Bm9SJISIjM23G0mh63Egxfy4oWul2VmNykZzQ4NUej0Ol4y5G0NkZElyMHHUlEpHNcMZTmO5UJHete8qMzbnKSZKtf/DiOX7Njqf5WI+VUCT9fGNau30/z/y/FOnMHzpqA4xpsuCxDIpHZXhikaxzyFXl18Prdbtsoh8RCoQEv9m//+rlqDfbcy5dL01f///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////mcCJmZokkkjcY+Gqa7MTtmLI8sx9lhv3GgJKsDh1zTUIgYCYYa1icxgiC2P9Dwc/nGKdmQ9lrRZfPcpJs+3cViLbKZ8u4bZ8qbwxRbU6bvsI4lWtNN7Yq53G8VEpkKk8DGCzFwOuySeZCZRR8x/O1uX3+00ZO7Df9nN////Vq6ef2el+ozghMhNEkkcbbF1vE2S5iZRlpXdNE8c+GR2Hc7o0XUdi4isJmJHB/CXuQp2SqRxOqfKZb9Nw7bnep+XptmWxnJppF1AGas8o4rTzV9qhyj0DtxFFmbVk2oyjC8gx7592m0vmgS5wh6NVFNpuIozc0kzX5+1RsLmkM8EkXlKNzrf2Ve3+u7cYfem/RxhIslYHe9ilaUkm3X/VCvaIPlqO8xAcT6Jaw9VNhKK2NMQ8XLF1LHihlr3a8Vdj/c8RFRBtDKLImLZ5dCVkVli66EKy62A4ymWYvAoK1Gd9smnLGFVtRxipNRIwID0kTjDi0PeUNPapSiJqdpM9CG9jYrTz5xSMwYOqNucutl7LtopjlGullQ1x+3b///e3/b/9+3//+f//99892/z5ms+7/v+9mxszHx/2KiBRxVOcudw//vkQAAADfVgT2HoQ2qWaynsPMZtVUo1OceYzepxryew8xm0R4BASTVSyMBpgVPApXIjPzuqj1wltRV6jeT+0bO5UfTxdXEVFkJ+t1yfDwO7ph7X21u83Uq9S0K8Jdqowc9O3m8T6uhjLNVRi1M8LTcT90tXQjoyDJSKCUxTBY1kRxNQw/qR5lXVDYGKUw10uaVKjnxsfzn/f2v3+Lfb6/iK++//NR3Z8kKu8sd0m2WEySVx6xGf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5NBJJSqqWRZ1RHs3lBBKpA03zdzwOmLzNcrVbW2VN1ef2azxdM8Zc+GIVp7VSHTi00rYxeKSUu39lF5Wu3SZWtFbvdsvZbEGQuruVZj29pJy1mcs+MKxrwPhWYWVslvIyiMII3CJiZai4U9Tj45cafaqQE/+Vctzv/7X7/XWZ/2w6+7+21JHA0/NBLvLHfX1oTJA7HnEdJoASEBIqplUfRYByHCchOH5Unm/YegKXwPjOi4Oa3yC9QLVNivsqrVahd62NM1sT0fd43veWp4Nz/FmlQKKuW1Dp36iNpCqIZc4gRcAtlSiRbGQPcgmcY90cpFGJPPWBFsE3acFpYm9H21W7MVsyYdWnbeQW/lojC2fZQ8vut6363x//+7Pnb/v/nb7/9iP8b+82uzdvWv5f/PXZ6ifHxsho1ucrM+usukVawCTbd/9UP0ccOGqi3JuMlIF8mdNhGkSNRMvOtXuBJfuBWmnGJRp5Zph5709pt1WXnxvv8o3JDYRJD3MMApn9J9NZysovEINOtoKRIubSFmIvYelPYQmS3L1NF7GF27HVqJ1k2oehtoH4xn8VXKgxKyhRy6m98wzQbHPxDovSqOizPr3G4Ec9lI5SQyPEtAiLExqrBQBsDhhJN7xo//vkQAAADblfT/HoM2iH6woNPMZtFd4hO4ehDeq4RCcw8xm9IoIRESM7+qod72PUlrC8P027/TNNwkaSKpYM3OSLqh0RMmJWULyhlj0ptZLIszXttFzW9sVra7OV/fjv9ls7HZc883EsrNtM5C8cQ/Z2h6iGeCrnQMrbNxJaZRdP8ZZRWacujLe8jZVzJ7NHh6Q+NN+L/7p4yr/VNq3ZNStdLV2SyLIbF1oe80dmiH///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5WJTSbbcbTaKCFN3Aw7Hu0Ypo75YoFrMvM85HfzEK428LbGt4uTvM1PL2rI0qSphPKyGTuvc2X9t3svKwj3Zmy5d7yDvhbUDREXDZ2ga50IJWUYajQKcgyKhSQdcpO2VdEjYoOdpprIGRKKGIW1fqkowKip8VHjQ8Zq/9/6au7X0osmbkPvJZB/kElJ391ReSmIOT4r0IXKQNfdefvwD1IMgclEDSnSaimltmFh1zUDMPlssXOOOGnNJwvzw8FTbsJJOZaGEDix48XNFFEBxp8nE44IB44Qy3HOo8oselwPJH3xxS2QOF1LONQzlx57CcmLPUaEKwKDixEFDGcWdZW7fMqXi2HKSVdQ4s0jTsgeUOIr4+Z++ufSqq/mP/n+K57vvqLr/r+F7n9eIievq+4K8+Ihs6VIaQWSkqqlkvZwh0KLWXQ0XHbDZg3kUrSRNpkqvr6yiiJp1ZJBO07KZRquC3Rp6o/3dOajD0kUwxhy03pH66BOkUz8QXKXgSoIM8E+4Zz8cO5llaamXfuyKtxImbrGuCFRw6daREmnniUE9ADi8hDbIMM7pGAZiEbvakHtJ/FlHe6nrxGP3r4////73GZn/f//X2v2z/7uP8bYz02T+0/fn85rNfzv9jWO4fUh82Hg//vkQAAADeVeT+HjM2iTi8n8PGZtFHn/OYeYzeqfMGdw9Jm8SRESSd/dUPZwvPrLkbDv7Zkx9uNQ8Z/KosMnLEBJhXBlKpBYMMHQ3qKmnnx5m2+vrZ/75VqsQkm5p+1Lu7TnfKymjNy9abtHxGlparKmbQdH+O/EnW7f0zz5UKLapyrdoK+de62TsXlNTVMbhFkg96G0XI3+hUWUgdau5piLuaxr0HUGySXES///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+T0kkm7+qogLM4dHl+elCtwcaZ7aDjMC0QjUTAbqEE1NzwaCg7YmE5q/JSzXlJSWMSovWoqSqmE9gxn/Zz0n1brx0LIo3BTFMpG8Pt1BybbGZpKsroo71RuKcikiddqvpXrsjJlp0ahTqeipn09FM9QmhMbjTlsbzYPejROoz9fxMoqpS17QBEsTMDb0HUGyoDCKS6NBZKTaqVR61LeJUsMQqoEByon/UD6jcRZq5nPSS/vlUllTR5pI9VWSh4hXIs6GTLwe55LbnrMW555p0ugXCc3CdYWv20zc38Iu7rMRKcw1rwKaozmUf7ujLLou2MZKWfk0KS6FI8+ceN3MSQZXfUsater+mQ+/lmIb5/aP/+3b/c/dvnbPj/Psd9/767vu3HyG85VNle0zu3LxSx7KUdmyJ8RiT0Wkm7+qofFvk+ldHSKWlhvXWoofmyqh1hJtVprKqCDv8V2o4mihKdtNLv0i+9apHVkc8wSjocosCByYMvV3ApUK0zqv6gRNW54oMsgXzVBJIFvcNwWQdpBEjD6inBiaS9PO0nwfScFAR9LlMgIpOMZIBuW6ibkMpKJXWbzoHE09aIOo5LSeKq1eQ2MuTsU1w7GE6TZxxwkDRBhcKDWh6FrgKHi4qI9Y//vkQAAADcqMT3HjK3qMi0n+PGNtFKI1OYeYzerExidw8xm9FoETISImqlkmNRYEkbqKcT4WLR52S8OmC6Z0o0BLiSTi8WHTEjEdtVTIhalW4lu6u48RHDnoRmu4kcadkFSq0hyqNIUrsphxBM8jRw1UoZHlV1MiCwlGOcggDkU7C4iEGqImKUgkQhRAVLAhnVClYriCOpiLIjMRGYpE1/XNTZrtf3f139Hqttm2nZOyrRWpdt2QednsMIPstr//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////yKTBSIiOvqpJFR/Uokc2Ih33NxfV2HPpzYJDDIxCsSyF0usQaOlC5UmoVsMeykbDrXaDE1R0qUWdAQUnSyUWHDoGyBVcLHFQOjDA9IggNRBigQUMQJ2AEBuC3RRyFqACeCVCNRSKIBBSUo7xSLMJxeCTTCiHCjOv3IX72pwysWod96kUtLGB7kCAmw0g2oRJJNTKg5FshCLLjhC5GiR8xO6XQp3qtbDYu+98umilxBlamDKPmHOvYxiDbib5PtT7jOzWzXcOXBiRZSY6E9gwx62W3H8WSMmtQo47lUprpRpA/+9b67rbHZzEC3vTjk7vZlE2Fy9vpO8187O0bd1RUVudoOtv/F5mdo7Q/is+Z/f7NGdty3/79/H+TnbXrt9bW9efPW8Wqet33n4ZDwy1PVykHktJJ19VI73GfZdTocTMaZ3PC5zqEzrps5jExJxRSZq1HVVXudVFSrECueyJEss+10iaxU5rMF6QMNvcdRZqTu+5qCYFuHG64TJ0nQlK3ByRsAxIUZhQSyBLSYEVGJ4akQgDQyWZwIEsHJxI5Msdco3PWedRqI6u15TTDNOlLKbf5jCrbP8f/O0fs/jtfzffbfmM3zv//L9u+fP9eu37a2V87tstaE+3fdPiI+MsmHX6//vkQAAADd5VT3HjM2ifMgnpNMZvFUJBOYeYzeJbrqew8xm0MZIVEhIqqmkbxbMc6S7q5FrMkFWvd8CZEmzIEHckIWZithTJ8VtESVvavWd5n4/1tVVXc23NJu7Pgq6ZOEMlt2GipZD7K8LyXLOA9ehdaTmXPKsnpkJ+kb5FsU58UXyKlhiA5zqo8zc1u/5pc+0igJFgUB2ELt2/9swLufxiUUljry5m1pIqobEQSBALiUYAP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////V2aqqlkFdCRunU4siooZUoxO/+zu7GpVf1j2gQqZdLadE3/4ezUV818n/KLOMtFm76MxRtzWaW0/0Zjwx/1I7VwdjSdk50XY3lunLWzvyn3TKeYjGemyrrkyjZKGjEruqPIFwYY27ku6WXspeJ9tyFobsR2b9v5fP/9z7/3z9sz/5Pf/9/H7du/z/PlZ7/3Ntn1/eefEP+c0+IsvZz4UVi0mkqqlUXd7HbUJMmY9VC+c47FPuphtQKo73Ri6Meyx7OjcmH2Ro+GqCkMtOmHqm/2ZLDdPoYW9mHkfBLi0l6+1nJWzqhfTjFl0sQy5SwLZEyjikvnkaSY4rFlFmN+z5dd+yNKQNUflp7OYjCz0PUbXvJ6SBafUy52kYn6//bG+u3ff3zv3fw3Z9+O7vPb/xkT23d8532/4+//47u2Rfn1Ffe+P4ucetVASJUbjv/qSokcLavtMNFt1lg49rvMM0Giv1/Pur+NginEn5ZRmm2jD4u9zVObA+JNxOIzLJUWW3tVySaSJ6SVcSh0Ry0IKJH0xnRqCaRcSH2ALJYMBYcc3ZNUAmP0CWm28ItJWSnW7sqd2TNQZ4+FvmfcferV5RUgnVVHXIF1WPcLi7Goc5JtcmF0bRrWGSpMRJjSgOyIw//vkQAAADjVTTuHjM2iTrAnsPGZtFEoxO4eZDep8sCew8yW0nxMRJS0yoMUsRByWuBhQTNxDkdqe0DIrO80cjVjuqPSMaUgYk47i3Cp3DT2rN7aUrNg3xu1MpPZV1tJsZZLTqSiTXuTrZn0/VepLjEJpVll4YBt0Yw2/v50vJXZmF08MWYemcbfs9NlYVULJWspUEAIfAT+hemUZFZO0ebsocVB4mjAS3ID5g0PPCx0JA0eJBAp///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////o+EotJqpZL2XmLlSFedCeaKbzjEUGXNopsEL0y2YlEBRlrAjXUMCd1z1v2a3WOeHNshJXvcfPmbkCbrY6LdzGiIg2uhH0tKbqcy8eI58tEtqLkQOqSg3S9ooyCiidEdGlnFp2aTTc+qRbJxpb13ebxvnxtM3ec8W/TKbNsub3TIhAzSFACcdKhcwaC4NA8ExNHEmKO6VTSdfTSRiKPsmxdFI5nqt1a7wLZGgaMe2yfUujLU5g7UjthnbrTlrxNbN6xNbTkaH9Wp0HsOdi1SIJxkvCrHWUzv3zcxQ+EKH5KvTC52Ms4weaNID0XEAmglMEJNImaGDxRxYXQyhsKXTtVFBy5VPMVe1rcTFNFOpatVEQtf//zHH6fNf7/f/zy3/N/X99zd93rqn9uld1rvwkVw8jRNnQgk1qm3//VFTGpXeFSu1ilmC1XE/YHqdCddw1zhFI06cQIYzUk/SFZRyC3u6SyE+zNonSqpU9aS8yvx7KuNQhBVVB5ds4mn7iq0y6VsbGSiubtmnmzOyR+C9DOrNssqJapBy1nFGiXk7akIxTycdqeUyulbVvzZQl9Uyc5QpuPubNVJVl9Gxm4ldTW2Z7g0bkTNokpD0CrFSgQcXFyKnCg//vkQAAADWKPTuHjK3qi8encPGZvU0V9O4eYzaLJxidw8yG9h1RSKTUyoHWy0yZS7XSy05z2eHgQNTahcqkdp8UyYSKRCDHuYKwoZKTWBiR8pyubcRJUphd0WKjUGmILMhhV0MhSEKUofGCgsgoMnFTkdBc5RVWEqmONEnHjkFJXEDOcRcynIIio86YigsgeEQiR6vqOTopmRjTOqpXtz/Skh07t9Npiq6OiHtyZllpq5UZnOVVfdlmkS7qxUMtxRcf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////JxVyKTUyqNyNPloMDKZVPZJ5Y0FLSrlIcmQViyKiSFqDFoKDYgYSsFXNydPClwfh7bDsZ7i9WryNIouFGbMa0HGY5TRjTCk9QSZyNTWpPcwpruFYxS8ttjBW7ZGkC6MLmy7nYKXRyZpC9sl5lEx3xmOx3Sepme2y/z/7jf/9ny/9+z7/3//1n2tyP8/+ft2f//7PzPeO+79x/ufvvd5inbULilZrWJO7ppIDVwseZlUSC1ticpnj6E4WlEEfgUYVcJFpEYuoc5Z+21O9VjcwuzGbk1mnqK5dNr2jMaTjMq8VcKA/y68rylspn/Pw9TuRnKE/cXi0ZcWUuGZV9NG0GQoEd2jek6P6ZZdDGKRGc0jGcwy29z62m/zP2WkwKIxqLt+p74uUUoOLKxVFxcWOGXiQgXQeC1YjcQAqzhI3kxpN191I7tDjnH2hOz39GGHI+uUVm0SpMcp0ItGDjTUapPladpxmuevIo8IlyCKfU2aZ0MxQ0eaYPKs4QUFIFze2YQR5kFGtdKeIAwmWHDh40QA7EYQVIDghB3RodCtp0LCRSXHCgbqxymyQ5bh4eKC42qgSkygmQgTGw5iGjxxX707NfMVS2Ms9pT//n5pa/7++///ldOKZqr1mo+u6W3mKuu7n6st6K9J0fuqgdT0zQ//vkQAAADXSAznHjM3qOy7nsPGZtFhY9NYeMzcq3x+cwwyG8JoIzIQERVQQVxBGoP40CaQUkzxXKV95BQpWB4tYSlPkYrgJjLsaHHKqeSQRI4AhUXU2WXpkJHtelaXbvVsmZCp+n6WfD1+8RpqL26oGudea/x3+pFlv7jZaajSymu0FKA5grIo1aJqVTZi9us59dmp4VsNWYzO7yX3+x////839v2zP/8/rPk/I3Xru33/dqWyPT5Dl7YyAHkPTDji5M6ZkI//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////J7ciiVVSqOdKxqK8zYqZV+nGJmJHghWdkNTcvV0DQGxBBmkRoRx7DPyV6Z5vsY6zbuHAXj0ZGTJMzILIFITdXen1y0Un+6ei75nI3tZz2l3Rm83M7aWtTFJ9LHXmRP2mrXW5bXNtt3Ta9NWbMI8xtzKKFp37v6J5DhktnptxRRIValyAOMIvDwoD4DYJVjjKWySVVf/DCOCOSBOlDCSSw8eRW2z8IoSMLdmQUBIkRmgJaEBDCzFh6SKOQhmYge7o2onkM3AKCIiFlynzGQw5t4tn7KKunPKhCTnTymnRf9FGGwZtYnhF21ypAjzYFNvwpNz8zmudRhOjUiJr0Xr4BQnu0x76Z6+v3251q2CP352/7Hvkb3u2f+m1uj22/aDfdfvTVjob7cpu9RGPl68xrQ7NzIdBBA7kOmkjb/NYwiT4ok0mqlUCIV1fVBgmE8tHrxy6ql42m1ZehufpEr4HymOFJXZh+bPT8b9g5rhHbmDcoGxVnGhpTDgbHtZAnZhGJGKEpFCimi0i5xcELnnFPC1Yd3LSKFmGKZJ5kjkgQylEguItEDNCRjZ4qg1JGWYfDuOGtuLIggKfnzW5yd21Wna2hTkLPVf979bXzX/cf1MW+9ff9w11KX8x6xpuh/MpxU8NCY5KaiLdq+FvIo//vkQAAADbWQTlnjM3iRamn+PGZtFI41O4eZDeK9xqcwwxm9IssUJP4CzvbZOE9EMTycfzMUCaMxiNDgGS5VMJYbBai49RlF2Fom2avopnYzOBJYfhc2VbZ8L1mSzVTuEH3z284YjKLS7xkNidMlaysxnLQptLLKz+fbxtZ83KZn+QtneJdJLX2HjtMbbJxvmpuDm34/+R//9/z/53398+f4///3Kdn85va614etQ3/Nye7xloxS4pra/7l/vS3J6c//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+IwxqyER191JAG6bBc1LBNxRxZWe0RqBo7p5uZh6wapOHYb7gRCQExZiioamLq785d4Xj7G62v4kY5xWnWmSu805JzL1F6ORlkIaGFyYuPCZmh1plIxUv89Hz5eNy8llruKclW86OtjXIMenUoJBjjyQyVNEgIFkTH9vr4CP0PDr2iyHoCrWuKiICDg82LtM3Bdn3RRJ39NI/SxT9cnEhKoQzcVVSxNy1NBs7pdnoRS22Lmj5KFp4AavKRk445FFlfcOOVyj0ZiOhzOcaos8XLW1Sw6LtZm13Zopq4LIkaknjKFReFdZDuCtqLpSDlsYJYphYXGKIgaqCD1FxQwUJSRLMkm6spcvaQ8UsS0O7NfcPx//fEfX9/3/f98cxSa/137NNx/PNxM09Sn8fd1NdTOiSSOeRSTm4yUqqlUIwYxYExGfIBbdRKEO0l+VvjYjrE4diMmyQzVWWUaQizS/Eyz0VRevNsNf2CIJt0/azyLnDxUZVqo1izbZovxRZJNaJh+FAdExZ6hx8l7RuJyazIsx4lEVREmkWfIFtlONG5iFjbjoG6kDongHNNos8tKtOvVZktF6lH2tJ7X/fH3//x/m/f//9/+fHaI8v3zNfaqfv/nvRT3jy8dsbv97+om9xnIoeaWU//vkQAAADT9eTuHjM2iJ6yn8PMZtFfY9OYekzerqR6a0wyG5J01rKTVSqNBth2LgqZEmrIbI/YLYJAUpChVVMoDCI5+GZQVVQ2G8QoQVdfbt/63EUobWPYq0H9ZXpPA1U+1vN7MuZNnrz3SmErl2TcqoSyWs8NiS0UTLxA9Pf95TMchG7EYHh2echBNvtTpc5nqa3dyfPLMowL1+mgUQoI0EFCymGljhZchOGzMrJ2ihR6hZF4sOJf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lK2Rpu/uqHu5RZ87jG8nIncNwYB37eLZWwx/bLrw5641pcfXWrt8+PFXuUqolpMrl9CY63lFtxktIXC0+dGeSrrZTN5/R0iuL6TxpT5kT8buo3Y0y10lrqrucQ7JIVKxH7c2I3Cdt9LnNPKnqWGBcKsDAlr/slHcWaxgeWpuhpxJneWxRD1UPe2SZumSSVXTKONY+TLPJVKVdwoLLH80E9OMxpKMkWp7OlUpTVyc19k077Pxxikxdsoojkmw+EgZcMnDIc6YNdqIEu5pyaYenRQM/MNekOxhq8O5qky7hImaYSNVOoA6hcogFZBLAYGGu5aNIlE8uipv/Kr92tnaq8o+Cml65Hab5RaUF5WP87/f3/3W/dn/bP/v7/H+5vx8/Zn1/4362NKE+N/r/c35P+J/7LVmxFbZfGAWNFElJNtuIAB6bhQWXhCKjbqhO9tTZ+IJs/5bp/pHp5gEivlJbWH3pAsfR6Z0bAJDnc0qLZLNEQgcWbAjWyh8RJos7k6uQZZWOWyCXJUaMKPNHDzRw50DthhEMWKSiwOGXY8w4YrDRDFUJsXEwjniKbCkiKKCynBsY5hohWUYK9GQ3N2KtwXTKdXTJ/zNxHrd8zcVUQZz3PfE/UQpa6jIl+9DrlEhTFpD3tuLrqF0UR+LN9LFKKdxBuC//vkQAAADUGNTeHmM3KiMWncPGZvVS4rOcYYzeqhMCcw8aW1E6jZBLNX6RllKxDyFMWUm2q97SJFviPrGqqFyZlHbn6mZU0fLo5Pz9/Udfc36++8J9GcZ8h3j9tVONqebvh2RxclGu56ScQ9xaTQxLHLbl0KqsLatO28QNqHvGhLoJ4y89Uqnx2y0u+t8nv5zG8/5TN+9Y/b9/2bHp97/+9fvn75lN27xf3t4iW7Y2N9fxOfM+MUhrc6Yn2l8OZWxeoWMJhf/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4OzjKKalVDC1eCSRySyVWYzK/mtHDECQ2yW0UaChSUIakzsGIekY4ZwJuBLF8Gujz13mEMqI/rtfjHOdf+fcJe7gz5pYe9i3hMQV6STQLlDDytvnstIprIURtD56g7Cgsp3rVtyr0m1Ym+UzY7v3mW2XnPTRs/P23e3b92+//Puv8x/mYzdv83722IfczPjfv2nP8fGaNz1OZ3psps0x7MjI0RaDQyIjaqVQEBvuBEDYVj+fwHUbaytorCuSM98LIkhHUl5t0JgnjI79rwamexrmMy3LOLrlgtOkhBhzk6Ss8Xt+SRcltEZEbc3EZ5BjIzdSTMZAChjESgl92JdTaROW6teF7WBmGcmYzWVmYU1G0r+9ZvMmRmKZztn5aFlb+07//n/3/L7f+H+9t+Y3+P/++a/2pvt7fYbe+d53tm9+2fPvpm/uDrkFehwOsqSSqqWRhpVmgE7UCKir9mvUKBhHFhwhBAiAzUYE4IMHcGCeGKckJxg1HTkyNb/ask5SXi1f2Km+eqrcbk3JDkjVxhiaqTazMu6OxkgvUbTaaTSiJRNTLZgrXuJjZDctlDU1SYvAgjNAmdME1wUi5UsUXTaQMKUtnVj1IZDK1rYyhOo/dnBN52H7/uHtYPtMi/v/rv0+9t67PcVpFjdUO3ro4brjw8Y//vkQAAADPGPTfHjM3Kh8encPGZvVhpBOYeZDeKrxOf08xm8FXhEIhEWq/4YSGMAxC2GezJpwcZXKesMFKwhVOglHSp4Bs2dVzMfVjQEhAmUBgRDaW28W2tffxLou5TJppG3j6j9Se2uYdT7Jrp53nX0tMNulP2htkQMtOvhd1SFrVbvWntGJxnZnozHeIec/vDIfec1SlG5B+Uz5mO7P3+ft88N9n/58xmz4zbVb/dfIj/fP+P++v5n7mejr0t2bzjzMoe2Zz6Gf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////onVtFJqZVG6P+ldaR2G1249yvAHOoRIaKtdk3V6xCCIMyDtNzFCFBAgdFkoYnGK3fzrJrVUvXVFMeUKPMu3LpR1vmyZaj2VyPjXk/C3TQutstTVsxnolmWvZVaZDY6VuUQUfEnU2J5JZTQ/7tvK9vzq16XUmFoVU///v////mR/s/59+M3+f6zf+/uR9+//4/86/mf/mtV07//+Zx8fW7n1BJtiSSTVSyLvFjUPtLIqRiUunDUSdBZmjkNQ8Uye26y25R7M+zpA9F/ezRh1kuY/ZFZzmCMwcJbDzDXoWZxjuzF3UHqJh+QKkF3buPzKlg+FpnHXiGNs1FsgwaxhbCh55ArrQxRDCcWUTiGLDSkcVEE8eIDHFg4W5guToVU2SL62o1ESM/qOHzua/+/iJ/54q+745/4vpuI8dFRURXzTdwjcLy0rfdztpPVnSNu/tGUWgr+yNuNyONtDskdQTUXaPc51a5Q40nNvGSV8fD0AxCaO8oFOJastNyRglKKRApgDRWVrnGPd7LFS4EUVaJJI0kVEwcbvSPK6RwIZmOmURxGEqIOcS5zWcTQzC35aF0Gw6OPkiWW6jcPhELm7JSxFHCUfSyCZcg7y1Z1zbRTvTdndsvMt9//////7//////9tf/9v+zM3+f/N+fvm/e29s+U7/f/28fwt5PFCw//vkQAAADcGOT2GDK3qhscm8PGNuU/GDOYeMzeqLLmf89CW0Z23TSVXSyAUjfoTEYgkxwsaoYnlVSRMUU1r0MSw1dkuDbgUjcL3N4LHEVh4QikqFmQ6DSsdGMdHHgOIsUqK6sexkEDGLECMVBcXFCoUiK5NWneyMyigcQT3O4iUYICzlKMHi6jBRDEDg4jalqOVI50GkF2VCxpiTf29PZFNVKenolUJrdmZGbuWTOVFcxjOqWdSuhXRy1XnjGOf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+b/GySWqv4pjhKxSHgmVg5XFZaos13BRHlFRB+3RHEn1ToEQVkfMesFFgDwnsfFnAfEkHXjRTMhjGkYH1litqLM0gA2REhYwpkBhBYwqvqFBk/KYQAEAIgt3F2MQ0hhioI4HTIUkJQpi3VFS7GQgKGDjQgqOxGGen8y5lN/srHZIeqt9+FYX2ZIUUi810hB7qzBmNWVR6JOK7GFcGDbN0BEmid5GilVUqjIe6sdB/HNHVUZhxD1rdjCQWORAhZjAmBqbkECmBAUCoKDCMyBiyDY66O6eaUcepTl5Z6zJgDm7JLNlbdEEQyRnTokt4Kd/vOv6bJrWgmzo6lDmq9ZM32OPZGbdb33g01gu0OUVfFm6i+5TMsk8+/OvtTVJ1l6d/em+I7/791v3M1yahWW1TxYbfQbuuVTNDeZkXhyNF3cGwEohWRDRHJHG2iNxtbMBHoQsqyZvhTyURHvUTChrjEGJSlRJh7CGxBrg8kEiQxLyYWmjj1lPGW6tsaKQZShmO1j2y3kVTsjCXUXcjlbcx6SdQ2KUlqnVIRGmxcSyR+FH1o3B5idqyb5EXMIS+4mjKz1chPNE7SjMmlSRVmy8vHfm77lPI7te2guIQ+evA39ulCv1NLGnOEr3XF7SS3Sg4qlIsU//vkQAAADeeQTeHjM3CTi+ncMGZtFLYlL4eYzeqYRKYw9JW9WtiaJLVf8PNUGGTGYvaTcFzp9NEzDg7qRjlKSq8SBmKDhTN1NRZS2K1uGP3IIgr0+fd//nIIdRlt6hB+d7P7sqztm623t8Px+fT+CjpgGZCbOaXg+4cqMc7e0EHPu5Z7CfVQQtepfaKz5b9fbXx934iZrtjeP37fe7fdZsz/93Z99/4268/9nnP/H/aZ+T3dmxLa8PU0/ez3jKfZ+PmSdZ8//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////k2yNFJqZVAIbvWYCEcUJehKlKykD4p65mgsxKDoYkUsJSHFsqaKZu1MneI3E8r60P73ms8lzztdbxLLt5CikllW8Wgx+q3NLukYmnq3yEnKSgM91RaJhuQzRLBV5rkKNtPaPkNrMdG3S/vifDX9dtt7+vhaDGhHXXyPXeFkMH7EIKMgrcsUARtBNzUtGHjRAw4Rg6W7m022ZkUuo4R+uBzHUhUqtb06hrLq1aaAiWzhwUk4MFb5nG1iRLZmaqc////at8kUWxqOS2SM95xqSc0GCktNR/mq00ijBJJjiWzMzLyRIoyaRx5nP/VY8tXaq/9ErmWNIwSrznec/7Eku3bZ9V3mZyjiWV+xxKt7V/2r//zM+f/6//756qvX/8zPbP27zOeZz/9679v2rHnGOJJPVHEhvtBRwrIN11tuddKxvEKGM/NE6UJbFdFoxPo2UKFDtSWRCp4pdEhDIpQkKGNZ5Skia2MpS2peJCiRItihxYiQiokHg85WEilmMYziJn1KyGDo41DGDwBCqOWodDodcpWlKUqlL81SlKVDG5jOpSytqUoqpSlDpWMYsxjUAYAhVHUpUMZSsYweMY1H//+rf/ebqUrIYuapSspSt9HzG6OVjGMZTGEg8N/wpsFY//vkQAAAD/wAS4AAAAmcgAlwAAABAAABLgAAACAAACXAAAAE////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFH5q2j6Kej44OZ44OrMDEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAyMQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8=",
+  wrong:"data:audio/mpeg;base64,//vkQAAADFI+T2U94AqXp8nsp7wBV8l3YZmXgALuL2x3MPAAehJJSTUoCLmcaKFsdE/Q9yJQBnDDS6cUEE51WfgBuDfS5+HRFT6FrgW8l8ZWMkpzqNsE3Je5MEx/k7MtcCFjjW3kRvOdC2wnZlzvIkqvV8JPs9qaY1ezyJ9n3TLGr2eRD1fumob9/hjf7pq79/uHf6zDfx8P4+/7v4+H8ff94Y8P/MPTv6Hnh/5h+Z/h59/zD//oef/5h/f//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////96EklJNSgIuZxooWx0T9D3IlAGcMNLpxQQTnVZ+AG4N9Ln4dEVPqNcC3kvjKxklOdRtgm5L3JgmP8nZlrgQsca28iN5zoW2E7Mud5ElV6vhJ9ntTTGr2eRPs+6ZY1ezyIer901Dfv8Mb/dNXfv9w7/WYb+Ph/H3/d/Hw/j7/vDHh/5h6d/Q88P/MPzP8PPv+Yf/9Dz//MP6kkUWjCUSBNNM1XeMigqsKRsbFjzFQMABM5ishLeqW3EiHVZlEFzkaQlGFiHKYTcXww1Epn1SfExWnJPtd8r3dogvTQwIp7DiSRDoUj9dpNQubYvuTve7eD0Mc08wx3OsBmdWhPa/OMU3R4qWZrhvJ7Z3Pr2z/m+vrc0OR9eIyzbtWe1dz6//z/m/jUfTP9wWyFvdtbtW+873r61/ref85/hyyVrEc43iTPNPS9LkPvmb5r//6mix6HlH+HEPirTSRjMSaJKSSSSSaTbgqsB3EG2ji1zTYtIr5bsCoaq5uKCNNWU+ilZVKFGGUH6UTEXwmaHJ59UkQ7VpyU7XfK67tcHE6YFM9hxJIiGKR+u0myu5F927n3a0HqBzYm2PHrIzOrQntc5xim6PHFma4byPaXcbWLZ/zfX1uaHIxXiMs27V3uu96///+b+N40z/cFqhb3abdqx913Pr61/95/zn+HBkrWIzxsvJp+iml199181//9TRY9qP999Y//vkQAAADl1bWM89IAqPq4sZ56QBFAmDXywxLeKCMGvlhiW8VRqtrqrbQBKQEdBnqh4iHBffQ+xMaGOaUHFiRlAmxJGsEAGJSJOoYT3PSpYuIHk9v37lkjB8IkRKlsVpWkyWKrF0Ftl+ji3TaOJ9VpeL2VZRWZOKpNyVOTQTYRwQPZaXgbiaWi0m0rU4srJqTQaxe5KKmmGmWUoyuV5qyqi8J5tZUanB7pNX//CsTWiDn/h/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+qjVbXVW2gCUgI6DPVDxEOC++h9iY0Mc0oOLEjKBNiSNYIAMSkSdQwnuelSxcQPJ7fv3LJGD4RIiVLYrStJksVWLoLbL9HFum0cT6rS8XsqyisycVSbkqcmgmwvBA9lpOBuJpaLSbStTiysmpNBrF7koqaYaZZSjK5XmrKqLwnm1lRqcHuk1f/8JYqsvAPPlFFarr7v6gqSSs1aReVjgp5YlD1bLUvXGIigDEIdz40fglmA7XmqA6P49HizZiqfmRcWkITjcfoEZeodlJUP0G0udY4joyQnVCBoy5PWZkFC5kuJjjSU2lkLZZJ6ODLaeM2rEWIZoTuHrcQrwOpkmNPlGRGgc9otBe9nBmcCp0yakwrFO2WWlFV6Sk+q/8kntQ2q37KEVkpvzP8S1/////rUVquvu/wFSSVmrSLyscFPLEoerZal64xEUAYhDufGj8EswHa81QHR/Ho8WbMTp+ZFRaQhONx+gVF6i8pKh+gnrnWOI6MkJ1QgaMuT1mZBQuZLiY40lNpZC2WSejgy87jNqxFiGaE7h63EK8DqZJjT5RkRoHPaLQXvZwZmwVOmTUmFYp2yy0oqjpST6r/ySe1CVVvnKEVkpvzP8S1/////r//vkQAAADwtgV8nsS2iOTAr5PYltEsVxXSe9LapYriuk96W1FVlarqrqMt0OgWYvJwK+Msq6PrLOXUhGLhgdCe6uykGmyHw9thklPLS46kw0KxyZr1bsE34mA54MpQA6BLbsmeIl8myySQ1fU+bRKsLZO+gX1OjRWK7SHUUjFMlNbVk3bkr7pROahgl6YSThrlp76xXn04QqFRhW2vb4+fauvHbS1mWzv/ag6MNj/XuVsf///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+KrK1XVXUZbodAsxeTgV8ZUq6PrLOXUhGLhgdCe6uykGmyHw9thklPLS46kw0OjkzXq3YPvxMBzwZSgB0CW3ZM8RL5Nlkkhq+p82iVYWyd9AvqdGisV2kM0UjFMlNbVk3bkk+6UTmoYJemEk4a5ae+sV59OEKhUYVtr29Xz7V147aUmZbO/9qDrhsf6/lbCgtV1dV9CCEaA4negDIPVUI5XVs1x1Ao1EX05FC6mRsk08qsmuVWWZucFTjzt2FGplanJnJwk1njoHQExwWPmFr1ldxCmSiknawprnoJi53A5eILc9eaBdpA03SknSkcbaggg9B2a5g5I+cg3D5FhHBkrjKdQhiCbGTK4eVxTwbRqkhWSlvqElN5zWpVnh4fIJa9ZW3ANQWq6uq/BBCNAcTfQBkHqqEcrq2a46gUaiL6cihdOkbJNPKrJrlVVmbnBU487dhRqZWpyZycJNZ46B0BMcFj5ha9ZXcQpkopNtQKa56CYudwOXiC3PXmgXaQNN0pJ0pHG2oIIPQdmrMHJHzkG4fIsI4MlcZTqEMUmxkyuHlch4No1UBWSlvqElN5zWpSzw8PkEtesrbgG//vkQAAADsJcV8nsS2qMK4r5PYltU21xX6wxLapvriv1hiW17VlprqriDjEGA0xwnQLeesFUPoWZYqZaUA7aNiWoezoaIBcoOLFynyyX3mz2BYWW19n8ihsTh5wlOREOL620diiVEpxxpdJ2yTm9AkzHr90U9eq5JkywtBqRWRsvZmtTp3gyvddliCttVcpl9en7rJQZSgtbqyPjPrWvs7/l5ZiWRqFfP9jGOvX+YGY///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////tWWmuqug4xBgNMcKEC3nrBVD6FmWKmWlAO2jYlqHs6GiAXKDixcp8sl95s9gWFltfZ/IobE4ecJTkRDi+ttHYolR0440uk7ZJzegSZj1+6KevVckyZYWxqRWRsvZmtTp3gyvdUyxBW2qtaZfXp+6yUGUoLW6sj4z61r7O/5eWYlkahXz3sYx16/zAzFJJTSTbbbbceFhk+RGXlKXapG/n41XpLsOkMeDF02Io0uTSsBwdmSkDw0BGw6cxa4QYBJhKB4XWPl1heWRMiYYH5RRb1A/gZXCJGcWfrMGyKLRogNytFK0zuCmY6XUTzYsPFSaI8K20prS51SRDpldhOGSc8ims5thOcq6bGkWMruuEfsVprMvgvCNdOE1raUZuGfcVYWi1QZfqOkkppJttttuN1YZPkRl5Sl2qRv5+NV6S7DpDHgkumxFGlyaVgODslKQPDQEbDpzFrhBgEmEoHhdY+XWF5ZEyJhgflFFvUD+BlcIkZxZ+swbIotGiA3K0UrTO4KZjpdRPNiw8VJojxG2lNaXOqSIdHV2E4ZJzyKazm2E5yrpsaRYyu5OEfsVprMvgvCNdOE1raUZus+4qwtFqgy/UY//vkQAAAD/pXVWnpS2qN6uqtPSltT/2BQeeYzaI8MCgw9KW2JTdtttt11tx3iSBGj/H7Cqnky5ssGLCUQ2BIDKFxgJBVjpExY+SyVGh8UqQmyRGyWSERFB6PjBFMUp4QlB5DnWZLPZ6pZtDsY4imSolRkgNR7KTSrbtQlns+KrK02dZRJzhsYNXH9VJ8fGTS25cVpxu45K82KJJ+eNbH1bK08vJZK/eNJ1VswtUIr6lJ9////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8lN22223XW3JMSQI0f4/YVU8vubLBiwkOD4EgMoXGAkFXdImLHyVYqND4ZSy2SI2SyVERQ1HxgimKU8ISg8hzrMlns9CWeh2McRTJUSohIDTPik0q3HUJZ7Piq5FNnxRLzhsaauP6qT88aaW3LitOP8YSvNiiS2PjWx9WytPJ5KEr941dVbMs3EU2hpPv+DRU3MREf//bbiKi0jeXLc3uCZou6LDKzK+CiYQkHSWRmyUJMirYVYVj6fnivvfZrWh39GY97km4WUDE9JWk757fVv/3k7MbmSIZtmpjCteJjoOQ068vH05HEOazWQOdnl4gegqPFIFI2jhhfJStsmb9zZrOaZ7ogdnUdVpKo9GA5bJJJ/81i6iknMdbUfq5NFSsm2R7KyH1jofJkIW0punro/GiqApNHiU14p5co+oqXjcO7JKQX7kziMBlUB1pCqq0KXwz/wlVR8M2vKqhUEtqW5Wf5TUZCA0RzMHFGEWGadCSh1uBpto6sbYkTRhjOTYJYtTw8xamSKNRVrFYoVbOs7N80EGIWswk0eXTIc//vkQAAADMOQSeU8wACRKzmMp6ABFy1fXfmXkALkq+u/MvIAMzVJJLMrUMRhFcSJeifHXtyVrDFjuFMx1WDTyCSeouaozGuj3lMLURInInle7hksIEVqyjrmNx+0PmfG35POi3ntT72Zt+Nv/ysysvH87zqt8yGeIy5+X9xzjW8uhJtEiRtt79YYiZcY1bDRDuxZrZBGylvqvrurar7+3/b03afd+8vX/f60P8+TkP374r8vM715rmmVX6fZtZ+3tyGRRqwa5lKu0GUx7///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4fukcc/6ViAsCfUxoGmxoleVsdwgZey6jlgvoTU9DaEooQaSPLLENMXOWkMSiMXbJGlQ/JMXNQ+yjVhM0Yo/ZjEYfCbmoSapVt9pcLbmVJY2omdDpW5v6N6Gj2Z7V4WFGqnTNZstJ3bxinoyXD6TRXYxUNoiCYYNA4ef1dl//tuH1njK2PTsUXEjgKBkFmHggXkycxgxYxkxQxULhcLhkWij7RHXZGYQhxoOIvRH8vQAgn1ghljC0B7WUvSwJ8UkJGX4uS2trtpDDUSuP0nMePyWIIthowlN941QvBdDwQ81C/QXrCxf6zvZKzja3JQFjZo0F6w/73j67UyIg6Muk/hirrNrfX3v/oW4zvELhPGz+tf8fX/+vv9QaiN7PFj0Z7e2Lf5r9e//xrX/z4kJk1Ehs818M+whUeWdV//6jizU+o5NT/n/7OdnlyZOYwYsYyYoYqFwuGQyKxPcyh+2RmIIcaDqL0SvL0AIJ9XwVwwtAe1lL04E+KSEjL8XJVrbe0iHqJXH6TmPH5LEEWw0YSm+8aocBdDwQ81C/QXrCxf6z9krONrclAWNmjQXqt/+/rXamREHRl0f+GKus2t9Z3f/aFxZ3iFwnjZ/Wv+Pr/61/+oNRG9nix6M9vbFv81+vv//Ws//cSEyaiQ2ea+GfYQqPTqv//UcWHp9Ryan/P/2c7PL//vkQAAADeBeWOZhYACga9sczCwAE/GDXTz2ACKAMGunnsAEaZklajTJRqmrr7/EvHGIsgv0Bzhn1f5shkDS1h3gU02w50VnhsAQKIlDcEcrFMQRqUjbI8kMOhJp1RzXlZ8fHoFR5ySVFRDPTJZCG6q9H49rdB6a5Ma83NT5ooc2xu4XNB+LXF5I9jD1H2upv86KKhxB5oof2S9tmjq+Hfx6x88ce1Jqz8/sdR+opnzLfd8O/YgrfR+fOru/If///7a/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////aZklajTJRqmrr7/ExHGIsgv0Bzhn1f5rxkDS1h3gU0usOdFZ4bAECiJQ3BHKxTEEalIeZHkhh0JNOqOa8rPj49AqPOSSoqIZ6ZLIQ3VXo/HtboPTXJjXm5qfNFDm127hc0H4tcXkj2MPUfa6m/zooqHEHmih/ZL22aOr4d/HrHzxx7UmrPz+x1H6imfMt93w79iCt9G8+dXr9Tv///69vSMjLVVVXBC5JGaRCEaPQQFgSDHAnbVfFU54BIjCg/d2GrtSO6UUAhn4mnx1vK1vjolJg8EvjNl9L6mpuaepvMUv3Q0ZrhovQkh3SNbZbApUPGkamCrkLd2bKXqn7zDrmLUzpe5FaKNmx20vTwVQqvX37O3+6arWu3r7dl6E+2xMG59Ho6q7fBs7k5N8us1+k5PfV6Or1JpszB0E0ff//9YyMtVVVbaFySM0iEI0eggLYkGOBO2q+KpzwCRGFB+7sNXakd0ooBDPxNPjreVrYx0SkweCXxPZfS+pqbmnqbzFL76GjNcNF6EkO6RrbLYFKh40jUtVchb9mym1T95h1zFqZ0vcitFGzY7aXp4KoVXr79nb/dNVrXb19ux+hPtsTBufR6Oqu3wbO5OTfLrNfpOT31ejq9SabMwdBNH3///W//vkQAAADvJcWEnsS2iNi4sJPYltEv2BYUexLaJhsCwo9iW0Za5uvuvwEOKlVjuLwSE7WV63xtNcceiQXS5JiJsnkMoSdIXFyUh4XD5LV1xIuXlc4J6lSxtknmyh8X7iDn67u81AyZTc2t56TJMiooSl4z7unIscTLs5UsXggpteM18cnjvsJPmw7Uu6LM30wzeZe5NEWpZLxuWTSXxRLV7hCG76Sk3c9y/mZPNakikEf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9lrm6+6/AQ4qVWO4vBITtZXrfG01xx6JBdLkmImyeQyhJ0hcXJSHhcPktXaJFy8rnBPUqWNsk82UPi/cQc/Xd3moGTKbLa1T0mSZFRwlOxn3dORY4mXZypYvBBTa8Zr45PHfYSfNh2pdzLM30wzeZe5NEWpZLxuWTSXxRLV7hCG76Sk3e7l1mZPNakikEWWuvbcbbcqLqQEnBIzUL1kvZpMbftrembQzHY9OlrxXh9vCKmqB4aSgvVExq6IvLToruJI0BQxHapQDj4R5gRGXSMTWPiyQlGpLkSzmXqlnB9Y3HVKihViR0fibJUBfKgR2LqyaO63bC0ycaVouy3ssaiQQgXcft3vUsPbzy2JXH0xOTKnSt21qf5zXW3Hf9nCT+0r7r/40y117bjbblRdSAk4JGahesl7NJTt+2t6ZtDMdj06WvFeH1+EVNUDw0lBeqJjV0ReWnRXcSRoChiO1SgHHwjzAiMukYmsfFkhKNSTIlnMvVLOD6xuOqVFCrEjo/E2SoC+VBHYurJo7pu2Fpk40rRdlvZY1EghAu4/bsuSWHt55bErj6YnJlTpW7a1P85rrbjv+zhJ/aV91/8a//vkQAAADpJc18nsS2qOS5r5PYltU5V9X0exLap6r+uk9jG1QCVuqqr0VWAeBbVafykRyoa5PlxSlMpJzEYld86huykOy/wDS62HD1deu2sJpVbJ6lQtgyXEI1pqhYvGrxY48+WJSMqTqXizzRyKmi9UnWrJ9BMmLIDbCeqwYXaOcWyaC3QuS8DJV7tX8PcGTvYx071erXt60bt2uqpvW6/Z9bDaOU+ny+35w10ZKd6qVn///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9AJW6qquhVYB4FtVp/KRHKhrk+XFKUyknMRiV3zqG7KQ7L/ANLrYcPV167awmlVsnqVC2DJcQjWmqFi8avFjjz5YlIypOpeLPNHIqaL1Sdasn0EyYsgNsJ6rBhdo5xbJoO6FyXgZKvdq/U9wZO9jHTvV6te3rRu3a6qm9br9n1sNo5T6fL7fnDXRkp3qpWZVpaSbbbcobJGBwi6JQOkzE0jm93jCyQkhQDlOfilXWGyFdBE9GHxDG6rTW+Iym2UR5OzAhKD5Np3wdBxw6MDrMCW5mBiQcGnEAeaJSuMTHRjT51FPkUjTB1xpWDapZCs+UBNbCJCnWl4MvVMoWkcWjv189FM2yr1+5S9VkaOtMKOUqFttFoMHHKVkK6XwpjCjU72sZUt68p3V/pqwAw013X6LMqCEjsTQxT0TSOb3dMLJeSFAFS+WwdV1ZshXKInoxcXyiq01viMT2yiPJ2YF5Q81KfiiNERqXCK7QxhfcLmIBS5YhPHqXnLkUueqQz68nVlSxDUqmWH2WlrUdqFrXHqw57dHY2VK15+toZ/7+c3fSxtzFTfZeVIapQwiYylX3k1HClExkVMxCnkLnKPXn86rGxt5fc2Zh5s//vkQAAADsBUWEnsS2qJCosJPYltU62DXSexLeJ1MGuk9iW8lWrvvuvoMgzBtoMvG0U4nI2v8yRTfC+PYNwOSqRbrcKx0jmg0loQFuZXGfMC+Zk/mVWUduSHDx8PWjprvbOYbKLIooFbmt2jkyFMcvktvaXihsyM0wmtiuHbPHYmq1asV7ikzST/5ZKSltVq1wnenLrG06dOUf1thNRyOvsvfmkjoZAs6EetXfr//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5Vq777r6DIMwbaDLxtFOJyNr/MkU3wvj2DcDkqkW63CsdI5oNJaEBbmVxnzAvmZP5lVlK3JDh4+HrR013tnMNlFkUUCtzW7RyZCmOXyW3tLxQ2ZGaYTWxXDtnjsTVatWK9xSZpJ/8vKSltVq1wnenLrG06c3KP62wmo5HVbL35pI6GQLOhHrV36EKlZqqrqH+xFcIKoRfLuR+wsWGp+J6UMhqJ5BIaM3n1sRQFB8YoeqlqHbVBcPiCdk8fCA+e3iTWZaRIkI3Lr7eTIoYBgYNCFYw1TUIHjhsPKBFTtXBCueLUZYbbR3F7I1AWYkwlSGGlFjLUSQpBDj8QrbBgpqHuq+3GBSSLXQr1FhdNaTlK9w2Pgk5At0vl7tReriVZXqcz9/s///WIVKzVVXUP9iK4QVQi+Scj9hYrNT8T0oZDUTyCQ0ZvPrYigKD4xQ9VLUO2qC4fEE7J4+EB89vEmsy0iRIRuXX28mRQwJBg0IVjDVNQgeOGw8oEVO1cEK54tRlhttHcXsjUBZiTCVIYaUWMtRJCkEOPxDLYMFNQ91X24wKSRa6FeosLprScpW3DY+CTkCXS+Xu1F6uJVlepzP3+z//9Y//vkQAAADpJd18nvS2qQK7r5PeltU5WBY0e9LaJysCxo96W0CJWVqZrwIQ/HmSxDTxNkxCZMLnWzkvQmAfClOp6txPuTEdJaQqVbcIrFqerVFVVVtzhrTJDpiyKBlrjwgbKW6NOao+QLzRV975GiNSakenC4xXg2cksjQ6zdwecmmcxrt1Bs71VGWoo8nqvil0WmbjNm4VqtOa7UJwnisGX42xU6y6dtMzjOEY3D4zcW1MAH/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8IlZWpmvAhD8eZLENPE2TEJkwudbOS9CVg+FKdT1bifcmI6S0hUq24RWLU9V6KqqrbnDWmSHTFkUDLXHhA2Ut0ac1R8gXmir7j5GiNSakenC4xXg2cksjQ6zdwecmqcxrvqDZ3qlGWoo8nqvil0WmbjNm4VqtOa7UJwnisGX42xU6y6dtMzjOEY3DMZuLamAC0117bjbcmhrC6hpD6JIai5QtUsMe0rMzVQmErVTGWoFN2utLpKD9byuWnFb1VzjPE0yrSNiKp3BrahmjJKuTCLBTFC3Rgy2E2iQfWhFmGTPmZD02cp0IOi8mWJRTpLbWMtmljBMkZJaamnJV5qTKHFpMQmvJJlDNlPwSbnBhZRlDN++l2lmGVfJpKS85KMq6hTpaVxqkqirspeO9hprr23G25NDWF1DSH0SQ1FyhapYY9sszNVCYStVMZagU3uOtLpKD9byuSzi00q5xniaZVpGxFU7g1tQzRklXJhFgpihbowZRhNokH1oRZhkz5mQ9NnKdCDovJliUU6S21jLZpYwTJGSWmppyV01JlDi0mITXkkyhmyn4JNzgwsoyhm/fS7SzDKvk0lJeclGVdQp0tK41VVFXZS8d7A//vkQAAADrNgWOnsS2iQTAsdPYltE1WBYUelLaJqsGuk9KW9KJLaSjbjbbkohJUhEEbShT0QSiYVduDCIawtk85GZTVQ4+VWTROaAyhPhxcpZ3C+6b+Wly+M/h9Pgn54mT2MEozYm4TLk4zeM27WTSby16nO6xFWLJwLyJ+p0ECl4XgYtz+/rxU5juait7kt2PjSeVHKyF05SC088YebMsWv7XruSYSVnD59jKKqU4a7/p6n///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lEltJRtxttyCISVIRBA0oU9EEomFXbgwiGsLZPORmU1UOPlVk0TmgMoT4cXKWdoX3Tfy0uP4z+H0+CfniZOcYJRmxNw8uTjN4z3ayaTeWvU53WIqwsnAvIn6nQQKXheBi3P7+vFTmO5qK3uS3Y+NJ5UcrIXTlILTzxh5syxa/teu5JhJWcPn2MoqpThrv+nqaq3VtttpuWBdMAXJKVzHSTAoFazxILxxoEgFISBALipJ6WEoyyOYToiQiYRsjMgoiAoERnRQm3nUs8ym8YcT010zJKrpxIcIUZghVMpyLxMKmw9AnprDsTyqNRhTH4rE8q2mmwzOorsLOO2wyvJgtRpJebmV2V5MJ9CmeRKRX6CbUFO9KK/Yiw2iUfKKcWkoL7DyxS21HL7Dw1YAGVqqmuEC6YAuSUrmOkmBQK1niQXjBoEgFISBALipJtLCUZZHMJ0RIRMI2RmQgRAUCIzxQm3nUs8ym8YwnprpmSVXTiQ4QozBCqZTkXiYVNh6BPTWHYniqNRhTG8VieVbTTczOorsLOO2wyvJgtTSS83MrsryYT6FM8iUiv0E2oJd6UV+xFhtEo+UU4tJQX2HliltqOX2HzVu0//vkQAAADtxVV8nvM2qKKqr5PeZtU2FxYUexLaptriwo9iW1ICRqqqryGOTChmLA/D4etKtvvsjc1tCJfoWztKtgRrbc5bLnlqbMRW+NeC5N7grm6E4Ug73YvUSQtQNIZsM1EGPCSQ/dJmw1HomlOgSFmrrpTFonYggcjm11UcTIgyxqDXT0mROTltPdqsiddImUeXVS6FGxX7xEslMbk+oxA50LcqJAHorpZAv///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ICRqqqryGOTCIZiwPw+HrSrb77I3NbQiX6Fs7SrYEaFtzlsucFqbMRW+NeC5N7grm6E4Ug73YvUSQtQNIZsM1EGPCSQ/dJmw1HommOgSFmrrpTFonYggcjm11UcTIgyxqDXT0mROTltPdqsidaSMUeXWy6FGxX7xEskbG5LVGIHOhblRIA9FdLIFsrVWk22m5YXAdx4FvLwb8KyIWVV8MhLJBNPi2Tj1BWZRDqqLnBUwN/847o0LjY4JxdE88TtekoLnWTwyYEPuTiQrYsMoAqybHozKzPFXESWipAajNktBEs2TMGpJ6+R9bUShiKbEUGlmkK5hCXQJ5Oaqp3EJGgVhkspCwSpo0Sk2oyuSyTZpSbWSldV0RTWm891tvUYZTgDowEcytVaTbablhcB3HgW8vBvwrIhZVXwyEskE0+LZOPUFZBRDqqLnCMwN7ecd0aFxscE4uieeJ2vSUFzrJ4ZMCH3JxIVsWGUAVZNj0ZlZniriJLRUgNRmytBEk2TMGpJ6+R9bUShiKbEUGlmkK5hCXQJ5Oaqp3EJGgVhkspCwSro0Sk2oyuSyTZpSbWSldV0RTWm4+623qMMpwB0YCO//vkQAAADi5gV8nsS2iPjAr5PYltFH2BWyw9jaKKMCtlh7G0ABlZqqrwbaYFjE5ZTzRaogsrP5MF1UURoeQ0JBP86J1QUohBg8h+z1ViEwarlQ9HDq5qzXGEzyKARj1fNsqwRSBgoakpjXoi5gjctRlXHbI2XxaRJBpfINr8VWeRw74RTi1I+Xum6hOLMG17a2Le/Upl73JTn51S+Mu1dPdnOUI1Kae5U5wj6nCLqmn6+SS//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////QBlZqqrwR6YFjE5ZTzRaogsrP5MF1UURoeQ0JBP86J1QUohBg8h+z1ViEwarlQ9HDq5qzXGEzyKARj1fNsqwRSBgoakpjXoi5gjctRlXHbI2XxbSSDS+QbX4qs8jh3winFqR8jum6hOLMGy9tbGcvqUy97kpz86pfGXaunuznKEalNPcqc4R9ThF1TT2vkkkEUWWma8V6wWRShyUpoMJjL/S3L7kaXC5fF8VBXMarYMUYoTi5uBej4urGNwpeaPMqz+Z12zPYUKksBeJvHpCNF/oOr9SyetOK1i1mDFsntzwfK8J/vZEop54lxDcUPMMY3RDozKNnXLTEludVVuaatvtvNqsjPNRJWetaaK6Ib6bdhelyW0Kyar7P0+Dcuuq9Fj+ZmVa9yOitqafeW3av/7//Wgiiy0y3ivWCyKUOSlNBhMZf6W5fcjS4XL4vioK5jVbBijFCcXN0Xo+LqxjcKXmjzKs/mddsz2FCpLAXibx6QjRf6Dq+6WT1pxWsWswYtk9ueFisQn+9kSinniXENxQ8wxjdEOjMo2dctMTN2qo3NRXfu83HkbmxM161porohvpt1l6XJbQrJqvs/T4Ny66r0WP5mZVr1EdFdpp95bdq//v/9Y//vkQAAADyxbWEnsQ2qJCcsJPYltUs1xXyexLapbrivk9iW1lRmqrqr0U5GzAQ48Ccq1Bsri5YuzPnBQMx8PDhBd7m5Vl9APCkLztfH33TwJC4hl5iE9pS9hgTlB0KCGIIn7aSzihQPRUTmmlI1sYaw5XEaZWHPxw6BGexaofMMgRyLE5KyzCkoQx5KKyPSCkONhyUu2SCRkyTF71UEVMs0Nc2lLLK7Ws02YipwKRW/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5UZqq6q6lORswEOPAnKtQbK4uWLsz5wUDMsHhwgu9zcqy+gHhSF52vj6108CQuIZeYhPaUvZIbWIkBcqf+ytdpZASoT7LK0JbJhmTozNTuNTb7nUPT1FlT7DEjamn1Y3KSC4KSbVhGUJ5BBU06mrDZShSqV2rW+eZSjMYoNnEEwkOSzHACpwKRWRFmqvuvoUiZHiDLRiHtSuQbKz3lZiC9UE0gMysfO5E7C8JuHJULQkPt1ieS2PRwL5XJRk5ZxmwlA+QpIEQUnUmNVSJRAmUKlkEoRkJTkSEgaCm1JvFUiEgsomhXWUjIlhE4joUblP8lyFTCk1ZxXySHIqI4o/lP6y4iRsED4zVX8UPigRxXjvndTWns9ydz8ZfwbyK/uaIs1V919CkTI8QZaMQ9qVyDZWe8rMQXqgmkBmVj53InYXhNw5KhaEh9usTyWx6OBfK5KMnLOM2EoHyFJAiCk6kxJVIlECZQqWQShGQlORISBoKTqTeKpEJBZRNCuspGRLCJxHQo3Kf5LkKmFJqzivkkORURxR/Kfqy40jYIHxmqv2UPigRxXjvndTWns9ydz8ZfqN5Ff3M//vkQAAADx1cWEnsM2qGy4sJPYZtUrmBXyexLaJvsCwo96W0dVleqqr0LkcI1CUsY9RsNCoivsSwjjSMYrk3I1WxIVzxaUQqKRo/CZWrZJZBaLJUojRs9BxOQ5KPSIT8MZNIwiLPHLN5WWw0UydIkfZ7pnQWfJHDfTwZIHKdIo+z2gpifRIuVjuYYeWqXmcd214vFGu3hog91PbVk412hmzM5228+YWGQhmf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+6rK9VVXoXI4RqEpYx6jYaFRFfYlhHGkYxXJuRqtiQrni0ohUXDR+EytWySyC0WSpRGjZ6DichyUekQn4YyaRhEWeOWbysuBopk6RI+z3TOgs+SOG+ngyQOU6RR9ltBTE+iR5WO5hh5apeZx3bXi8Ua7eGiD3UXbVk412hmzM5228+YWGQhmYgtN1d1+QxUkC8MxxOFMP0+6cvKyFaVikrHIcGxrvL2lJULQDQU0GjR/MaIpWQCstTwG+t1tVAyJgVIGnQWnrlEQpKNOYRvXyqMiDk6b0aEmbkqvIVqkxGy0rdKpF2BMdgzJWU5JoHtL96GU/auTi0jVanvuSOL11TKCne05NQWipNiTMMqqjScHyv7e9pOLCLIZn8EoqtVW02225KChXQbhUOJeUw/T7pa8rIpu8cT+VpuOSznT+FFUiiHCTCpoQmf7dL1mhTMK7kW5YdbVQRJhCQNOgtPuKEwpGGjDCM+XykjJBzaeo1UTcoryI1SYjMoiFOlUi7AmOsMyVWbRHUDRpenoVl8tVzarSNVE3vuS8XrqsoKd+nrUFoqTYlGHqqjSqh+Uft7rSaqBE6GZ5wSZ//vkQAAADtBVWEnsM2qJaqsJPYZtU3lxYae9jaJzLiw097G0VFZqqurkA6EaLaPtCFC/UC6dM/7oUlMWjkdFoyeys1orL2EYhRlpYxtmfUF9o0KiVWs2d4iBBwEUPOi31ICocDEgY5U/ToCypRJkAVMZPeR4iwoQTJIGNqxUBxRQ0TKsWdCYm1GzMo3bInwauHnW2vXTL1Rb56qVGuo18mmvol4aHnHFkbQcR1/f////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////FFZqqurwHwRoto+0IQ1+oF06Z/3AUlMWjkdFoyeys1orL2EYhRlpYxtmfUF9o0KiVWs2d4iBBwEUPOi31ICocDEgY5U/ToCypRJkAVMZPLkeIsKEEySBjasVAcUUNEyrFnQmbajZmZu2RPg1cPOtteumXqi3z1UqNdRr5NNfRLw0POOLI2g4jr+kklNNxtxtuSCEPTANcPnjqSaNUrp9aRwWGpVlAfhqsjSr5ZlxK+jQXBSKxUPMV07XcymcFRDpbNZ4eR+KiCNKcZGalJlnEljmhaK5ypUtRz0UCsuWPeet0TDOLpREiB26zWY0bLiFiNfv9nsyt9W3RqvXY7vu3d9v4dsw47MayCkXZ8LsLqZpS5a/++nqmspWNfbqdvvstsvRnceSSU03G5G25IIQ9IA1w+eOpJo1Sun0aRwWGpVlAfhqsjSr5ZlxK+jQXBEMCoiYrp2u5lM4IQx0hZrO3wR+KiCNKcZGalJlnEljmhaK5ypU2jnooEZcse89bomGcXSiJEDt1msxo2XELEa/f7PZlb6tujVeux3fdu6tv4dsw47MayCkXZ8LsLqZpS5a8y+nqmspWNfbqdvvstsvRnce//vkQAAADsBbWNHsS2qNi2saPYltU2VtY6exjaptLax09jG1Xm6tttttzYzE+SY0Em3naq1uZzrJyk8RlpIPx61qGX9cKdh1LwYEZYawO2OWyI2SDgv4vp7msDXIipsh8UqXLYLwHyBHSBbJYbLadWgl88NTtnnkckSyPW5wQsHZPjPE/NWaLDbrYjK4Kak2UvqwfHxWwtjpQbra2EW3L1OWergrBPblPI5Xkrb/gabvP////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////15urbbbbc2MxPkmNBJt56qtbmc6ycpPEZaSD8etahl/XCnYdS8GBGWGsDtjlsiNkg4L+L6e5rA1yIqbIfFKly2C8B8gR0gWyUTZbTq0Evnhqds883JEsj1ubCFg7J8Z4n5qzRYbdbEZXBTUmyl9WD4+K2FsdKDdbWwi26dTlnq4KwT25TyOV9Vt/wNNnzLZKabjcjjcmBNh2xzWMQtKo5Uun+4TmUyqeAXMAafpjDdLy1KggeOB1MXTDX4oD4trxEHc0PCs0+dSnTMjTCcQWWPqI8dW3QWFMd3IkPjx4tpFZblxiKGboSa6GnQk1l8DDy7lt1S299o436yqKjyvecigrDRj4YZ2/tUsudOWudbj+Bj6P/E5Z9/r3yrPMWvlNv89NrtHAo8D4WyU03G5HG5MCbDtjmsYhaVRypdR9wnMplUsAXMAafpjDdmi1KggeOB1MXTDX4oD4trxEHc0PCs0+dSnTMjTCcQWWPqI8dWvoNFMd3IkPjx4tpFZblxiKGboSa6GnQk1l8DDy7lt1S27+0cb9ZVFR5XvORQVhox8MObf2qWXcctc7eP4GI6P/E5Z9/r3yrPMWvlNv89NrtHAo8D4//vkQAAADuZbWNHvS2qOK2saPeltUw1zYUexjapjLmwo9jG1ZWqtttttzInpZuQfbxLIiKh8Rm+XNlXk0u3yhREls+Bh2wORJZNpt691CyuIcRveMk7LSS3q0ciUTMpyN32VmSYujGS1k69728aFy740zBpNeLajRjkrTONzVOagXaxPKgwcjFKylsXHs1CTKy+l4dONay1rmrfeQ/hFz7azxhnT1HmqY/Z3GvB6YmwhyL/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9laq22223Mielm5B9vEsiIqHxGb5dsq8ml2+UKIktnwMO2ByJLC2lnr3ULK4hxG944TstJLerRyJRMynI3fZkyTF0YyWsnXve3jxcu+NGYNJrxbUaMclaZxuapzUC7WL5UGEoxSspbFx7NQkysvpeHTjWsta5q33kP4Rc+2s8YZ09R5qmNbO414PTE2EORKtdem2225yBLkH4XFHl7MKCyUVdGt2KHh/IhsmHJSW9j+64LsNqj4OOnErFbRoPJJiHdSpPWorxIsUjTsUCuDX220BafqitVRHDdLZZ6Cy+kpj8o4KsUjPikwh+u6Cxck/w1OoF9diaUNtPq6KYbwXbee47q5W9f761S3yHomZ6nsOOrbrMjez9tFS7UGMfad7Jebu1keuRFWuvTbbbcwQJfB+FxR5ezCgslFXRrchQ8P5ENkw5KS3sf3XBdhtUfBx04lYraNB5JMQ7qVJ61FeJFikadigVwa+22gLT9UVqqI4bpbLPQUr6SmPyjgqw5GfFJhD9d0Fi5J/JqdQL67E0obafV0Uw3gu289x3Vyv1/vrVLfIeiZnqew46tusyN7P20VLtQYx/zvZLzd2sj1lE//vkQAAADqxWV8sMS2qLiyr5YYltU61/XSexLaJ1r+uk9iW0lTlpqqr41VuA0VqlVSyNXI7LLfaHF8qmxcXDFypY30OUQmO0wff03ozi+pOHtaiKVLW5D4+lgo1wxu1qU0JMjJTWxMXt2aL6gODtUZTr6hSbZWTqK1I46Xsni4UbJTW4tFETKWY1DxVlPvTlNKN5ackcWUHhV47abzq1ufJyuTaur0wy0PBkBUxub/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////lTlpqqr41VuA0VqlVWCNXI7LLfaHF8qmxceGLlSxvocohMdpg+/pvRnF9TIe1qIpUtbkOp9LBRrhjdrUm0JMjJTWxMXt2aL6gODtUZTr6hSbZWXqK1I46XsniyKNkprcWiiJlLMah4qyn3pymlG8tOSOLKDwq8dtN51a3Pk5XJtXV6ysvUh4MgK2bmQBleqqrobBUFzE/ZHFIoBygKrUrKSVwsBJSZjUoZxGcWNTsfA9bLIcr72bUFVDHwhj2W+obw8xeUzAHoyROJiqYGVx0hUHSFdApqGZxknOyHFdndNL4SrniEVnjKH6uYQtsWm27FowSNqozCGLEVdQ1E65kvBlBNfZM6leJ4rOGQpmbBKnBnPXY82ZycpG/5zpJ12zfjuTTOf/1//QgDK9VVXQ2CoLmJ+yOKRQDlAVWpWUktCwElJmNShnEZxY1Ox8D1sshyvvZtQVUMdCGPZb6hvDzF5TMAejJE4mKpgZXHSFQdIV0CmoZnGSc7IcV1e6aXwlXPEIrPGVfq5hC2xabbsWjiRtVGYQxYtXUPidcyXgygmvso6leJ4rOGQpDNglTgznrsebM5OUjf850k5O2U/Hcmmc//r/+g//vkQAAADvBSWEnsS2qGqksJPYltU3mBX0e9LaJusCvo96W0EVqqrqrqUamHkO12OM921DaM+aOJIjMVhNERcp+3298vnoHkNxCePpzdVGadepLiuuznkMDAULCV3bizq8S0RIULIpsVU53JPm05Jdm6cpJW220K9zgpA8pI5pL9byUF5vTgtJWoXra836nuSr5dvUkzDbil7qqdCUYM+XdCtQ02cTMFgi+v/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////xFaqq6q9FGph5DtdjjPdtQ2jPmjiSIzFYTREXKft9vfL56B5DcQnj6c3VRmnXqS4rrs55DAwFCwldTcWdXiWiJChZFNiqnO6O6bTkl2bpyklbbbQr3OCkDykjmkv1vJQXm9OC0lah9bXXfqe5Kry7epJmG+KXuqp0JRgz5d0K1DTZzJgsEX0qFLaTaabkgE5GKcnijPhMptRwreR6+ZEGdr1hTji5Ysv1dom5SnqlF9mb80driHCTqnWo62qG3MlBdMwCYLGDeYrHjMxazyNRKbXyzAzgiZCZTzk6ayATlmg9NE5B21rRMGihhW9rYWwUV0h0WXUpAy1A2onBDCCfjTxqB6UCdbL7DCpgrsZQlKEr5CuOK3CM6gjSQ6RQf55tXTCoUtpNppuSATkYpyeKM+Eym1HCt5Hr5kQZ2vWFOOLliy/V2iblKeqUX2ZvzR2uIcJOqdajraobfJQXTMAmCxg3HFY8ZmLWeRqJTa+WYGcETITKecnTWQCcs0cmicg7ayaJg0UMK3OthbBRXSHRZdSkDLUDaicEMIJ+NaNQPSgTrZfYYVMFdjKEpQlfIVxxW4RnUEaSHSKD/PNq6Y//vkQAAADutbWEnsS2qMC2sJPYltUyWBX0exLaJlriwo9jG1WWmururqGmeodpjrBiKh8qZGbUjeU7wB2VyUQkA1z6OqGHkEulAgKknVaTOGKU2LMCqHY24iQqYECwrA/VozVXaRQErkTnzYSmXVQDcSyjEOqmwZVbNQPOnCMalqM7BO/mv7Dqxmbe/MnO4IEpp+55D+VRljvsvbcHrxgt7v+rV1qnbmf+FTS2LR/Sn/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////6y011d1dQ0z1DtL2sGIqHypkZtSN5TvAHZXJRCQDXPcdUMPIJdKBAVJOrZM4YpTYswKodjbiJCpgQLCsD9WjNVdpFASuROfOCUy6qAbiWUYh1U2DyrZqB504RjUtRnYJ381/YdWMzb35k52wgSmn7nkP5VGWO+y9twevGC3u/6tXWqduZ/4VNLYtH9KCDS2k2mk5kWEXctga8I9z4by/wlHmEzrE4w4zH2E0VQYdQOidXC/dGuhs/E/o/Lz4tCWjP+9KwuI2QbUBozISwebVaFIeQjR1NRfKkSFxYSLhE3E/TSyWkRey8nrbZ+Jq2kMHzvU+qppHjUJIenC5oaicnS+u2MpxfhlpUmTavbSbsji2psKuS7R2DKm38nBth73NM1H7GNIVVuvTcbbcyFaQM5Ao3xnmZDP+Ez1hKM8L4YcSxbCaH0GNQOlKuF+8bUNn1L8I/H64+J6M/70tGx7Uj+wLjWxZpGrSvE0pHJeKaGwn7LLG0RYuav1R5ZqCUyfS/aNqPUdTbVS2iNvfhlKksd8qcst6GlX1uOoT+HfxXra/R8ptV7bb+wP6d1ux9M2zb0NHWP2Zv16Rx9Z22wWC//vkQAAADtxU2EnpS2qKSpr5PYltU12BYUe9LaJssCwo96W0VbqurqvwCyVoPE8UGTo/nzYxPrbcwsFC4BCMGxg8jlh2jenhKNmgUokvYlYoJCYlVeWrdkiK6QSF0VV4Qk00oyX1HBh60F7Y3DJVspButxW2Maakn4R2TS0EGN1CS0m+00lieqfNWqeujOKc1IzrHqrsRntQplDdSWqez7N1TxhTNJvIDSA+mv////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////BGVqqqrwGcyiInCa5pIp9AYn1u5lYqJxIXj+XDRfbocf9AHUhqhRhY151LUwsWjFmNNBHazRXSCR9FVeEGjTSjI3IVwYetAvZjcMlWykEdPxW2MaRIl+xHZNFoIMbqElpN9ppLF9U+atSPWGZspzhk6zVZsZPahTkN+S1T2fjaVPCCmaTeQGkB8GmvuvbbcbcyCTOwkpMmM5JR4EhbnKrW/T9z7RTWqFclVJJqLBsp1CP470qrryeZ2vvle0J5icosSBaaxkRqi6+3qO3fCYhJETrRKua2yQsSiNwmK6TrzWUNGSkSQVELBWKJMkWJSjb47s2UpxYOGUC2OYWW7FQ1Wny9ZU3kdnlPCUc2clYGyut3OvarSOL43CXjWspTbnO5bcbi01917bbjbkoJM7CSkyYzklHgSFucqtb9P3PtFNaoVyVUkmosGyLUI/jvSquvJ5na++V7QnmJyiuEC01jIjVF19T1HbvhMQkiJ1olXNbZIWJRG4TFdJ15rKGjJSJITELB2KJNAsSlG3x3ZspTiwcMoFscwst2KhqtPl6ypvI0zynhKObOStGyut3OvarSOL43CXjWspTbnO5bcbi8//vkQAAADrBcWNHsQ2qPq4saPYltU3GBX0exLaJrsCvo9iW0dm75NttNywrguygHPYTE91S0voe5YK0usDsWRzOTQxzoNcLp+MS7U4iPZrGkhLRwfJSq4pao1Q8OQ/DxTwwgtNHBiAsJBY4QihxSMg2xEEgwRweRlk0pB5UOMJsqoHEuOJLPKqF1U+WQtCYVqHGlmCpYoK1Ep0fGOGovxbDi0UtF7uGQ9u41nq89IUvZWyA///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////92bvk2203LCuC7KAc9hMT3VLS+h7lgrS6wOxZHM5NDHOg1wun4xLtTiI9msaSEtHB8lKrilqjVEZCTkkWw9BFeNDVDxxE0WWctCUE9MHEjYihKNsrQetU0ldWynKzcqu2tlR8Yo7qC8FajLHMrsIV2EOVcPjddycI/1snLwivCP3alBuX1Lxv5vbhUV+ytkBqpS2kmmk5oY5QH+H6YxejDW1SxPrVWSEXCKVTESi4aLsq20cl0ZIJfI58eprXUFKAsnxsSkiJdbtdGC4SbVJixlWL3JaIWh4ZLstLZbiA4S0yWGGU8Z2ROH5kx1U4yt5ssPOrtKFLnBn4YOuLRcUin24xbXuW3OcGfhLI+UiypNeDqVbTZUrEGQjOyszS8EMG5wj5XAygrw863SqqUtpJppOUGOUB/h+mMXow1tUsT61VkhFwilUxEouGi7KttHJdGSCXyOfHqa11BSgLJ8bEpIiXW7XRguEm1SYsZVi9yWiF48Ml2WlstxAcJaZLDDKeM7InD8yY7E4yt5ssPOrtKFLnBn4YOuLRcUin24xbXuW3OcGfhLI+UiypNeDqVbtlSsQZCO2VmaXgrBucI+VwMoK8NnW6V//vkQAAADuta18nvS2qLq1r5PYltUy19X0exLaplL6vo9iW1QBWqrqr5NXwOs9FWgmFyUbNH1hxZ9q8obqlTqln3qLh2pFXY9U2svX+bVfaR6KZ227i531Whlx8cB1sP4gpqZbmpE5JcWl71SZbCWLiPyrGKmorMl7Cs7apoo8omw+3ygwkw5Nx2oeFSmtHWLcrHd9HOt2JwfUK7GRghp11PZ1DWLxWD79VFamAyqHV8n///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////6AKtVdVfJq+B1noq0EwuSjZo+sOJ/5mKbnpXLJ//O4jKhbsNJRNVq/bVXcP49H6HdSrv1aGXHxwHWw/iCmpluakTklxaXvVLLYS24j8qxipqKzJewrO2qaKPKJsPt8oMJMOTcdqHhUprR1i3Kx3fRzpdicH1CuxkYK066ns6hrF4rB9+qitTAZVDq+SVmWkk00nNFcTMIMZdRmpCCoGbN4D1DbH4/QRueoBY/mLrhO8RTtpGWTr4l6dYVConHpIypvzdzawTbQhhbjboagZIXj/ITcFevBRQ6DkSUu0jiqk8VpuQFiMqqdtXE2moHnoWLlFBHVFVZtSQuxXYoGJLp4mrV+KzlKMmFn2zTboqtSSQxkziToLm01l7WleYt3QcabnGmsjysy0kmmk5UriZhBjLqM1IQVAzZvAeobY/H6CNz1ALH8xdcJ3iKdtIyydTEvQ1hUKicekjKm/N3NrBNtCGFuNuhqBlC8f5Cbgr14KKHQciSl2kcSqWitdyAsRlVTtq4nJqB56Fi5RQR1RVWbUkLsV2KBiS6dJq1fis5SjxhZ9s026KrUkmYyZxJ0FzaaycVpXmLd0HGm5xprI4//vkQAAADtRbWEnsS2qLi2sJPYltU2GBYae9LaJrsCw096W0lGmqvuv46DNIgKChUA+Ftdq595Jy5YsBw8ePKF+9eUSaoMoXyS4jxnynZkqJy+fLjyGVlzBRo9QRR2l3IUoojsypBqFWd4TlGhXTR7WKflojKhlaa02bWpJHhdR04vrt1JqZpWnVPtpJ10E8X31V8yjtDKLV742kjkVyamw/n6zXenfPka2KlR/4Dv//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+Uaaq+6+hJDNIgKChUA+Ftdq595Jy5YsBw8ePKF+9eUBNUGUL5JcR4z5TsyVE5fPlx5DKy5go0eoIo7S7kKUUR2ZUg1CrO8JyjQrpo9rFPy2iVQytNabNrUkjwuo6cX126k1M0rTqn20k66CeL76q+ZR2hlFq5+NpI5FcmpsP5+s13p3z5GtipUf+A4olJpqNtttuVJsco8UINsebEdB/K5/SzStPVCTxcFvSLq2Zm1gVq7elpyLW4FcQ4jydHK5Uohgcn9Z4URUPUj46hNz+NzPDpU0IuSHltKvIjjZBTyLFZPL9tEo4ZVUbKWxAbKoEDQ5G4Sm6QuqjWOU3cdySSRuZ5m3ZWbbKraabmIStOSvYxpFDLyFT1blZzlkMya8Z4wrdV/TmSiUkmo22225omxyjxQg2x5sR0H8rn+rO1p6oSeLgt6RdWzM2sCtXb0tORa3AriHEeTo5XKlEMDk/rPCiFQ9SPjqE3P43M8OlTQi6A8tpV5EcbIKeRYrJ53tolHDKqjZS3QGyqBA0ORuEpukfVRrHKbnHckkkbmeZt2VmzZVbTTcxCVpyV7GNIoZeQqercrOcshmTXjPGFbqv6cy//vkQAAADqVgWEnsS2iNjAsJPYltE6l/YaexLaJyL+w09iW0VVqqvuvyHDGFoLszoxjNVQsWvlyHs4F5OPBCiUwb0EoKG8jbH4acY3HS4uNS8tIa43V7baioY1hLkDR7vUmZIl2HucspuPO0PFsUSitOoptF8NLtI5QtacJMlGm5zfOVa7GkKjWLZ9ctiXZW3+pXNpHJBplSobSa7jdvXtrYXW35ZUp3uyqTKdT+/1VYl///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+qrVVfdfkOGMLQXZnRjGaqpYtfLse1gvJx4IUSmDeglBQ3kbY/DTjG46XFxqXlpDXG6vbbUVDEmEuQNHu+EzJEuw9zllNx52h4tiiWLTqKbRfDS7SOULWnCTJRpuc3zlWuxpCo1BbPrlsS7K2/1K5tI5INMpVDaTXc3b17a2F1t+UalOO7KpMp1P7/Kq6RJJTTcbcbbckBDFAIyLu5FgPVjSyHQsNb44NzISxAHUO0Q+w8+hnxUXqnPaPjGrD50oJaYdCQeltCg+FscESAnIliZJfvYO4Ojag6N0LrZGaVHyumCtmY1qqMoyTnDCNEdtSBsig2lTK6UH9VlEcbNHJNb2lE5mCGZgqo+WRjcO5P5GNwg5XuXpheU7hBtEo20vkYd6UV9RSfKtl5JEklNNxtxttzAIYoBGRd3IsB6saWQ6F2t8cG5kJYgDqHaIfYefQz4qL1Tnpj4xqw+dKCWmHQkHpbQoPh0cESAnIliZJfvYO4Ojag6N0LrZGaVHyumCtno1qqMoyTnDCNEdtSBsig2lTK6UH9VlEcbNHJNb2lE5mCGZgrB8sjG4dyfyMbhByvcvTC8p3CDaJRtpfI53pRX1FJ8q2Xkk//vkQAAADoBdV8npY2iSK6r5PSxtE62BYae9LaJxLaw096W1UBlqr6rggM5UBpn6gi5pFVLD6HmCwCIhCACqA0CrBNfK4LA40BlYCwfPmNtqyQYMCRdKTKmq6fpqxNbXdtQ+SqB6oLBwSKnuUwI0PVVI24ftMTFYLc4hZEshm12fRocRz6tuuZ1auIWLce3ob3vfZtv795+sxsZFT9vubG3W09mz2Xr78PxZPT1vdh5dsUFoSWn///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8QGWqvquoWsqA0z9QRc0iqlh9DzBYBEQhABVAaBVgmvlcFgcaAyWAsHz5JttWSDBgSLpSZUmrp+mrE1tdm1D5KoHqgwHBIqXcpgRoeqqRtwzaYmKwW5xCyJZDNrs+jQ4jn1bdczq1cSYtx7ehve99m2/s3n6zGxkVL7fc2Nutp7NnsvX34fiyenre7Dy7YoLQktJJSTSjbkcbksHI7CaKpHo7UVRq6JiqoRa4VqlVyMlew5Z4EKqKVBHpJBrh/DxDmXMdYjm4nDBfMrdVqgvRIA2DzhUyP8zyFsdVcjJiNkvVQmhIxORTrI0w8rZhNAXSykFoFZKozAh5FF6slSJAemgXazXW07TyMkVxDDa9aoTrFEyZJqVrx9l4EtMvycm1qlU5bCVV5RfNiORnUvklCSkmlG3I43JYOR2E0VSPR2nqjV0TGVQi1wrVKrkZK9hy7gQqopUEekkGkH8PEOZcx1RHNxOGC+ZW7TVBeiQBsHnCpkf5niFsWVcjJiNkvVQmhIwbIm6yNMNFbMJoC6WUgtArJVGYIeRRerJUiQHpoF2s11tO08jJFcQw2vWqE6xRMmSala8fZeBLTL82Ta1SqcthKq8ovmwKB4Wgg//vkQAAADq1cWEnsS2qM64sJPYltU6VxXSexjaJxriuk9jG0Olq6vuv5JhymUXN+JIUDOuGbHo4OlsjkonD2D7hI21o0HRsUFypt938d15B0dC2eMKsimqFx5RoNnTDtVK2iWPEskTDE5JWX1EXNIsglkYdI5FDM/TK0V5swLJKrYzewk3OSNPpV4XT+gg2vGrrz/tyCJhSV3WTMq603Fit+aslFPdrd/uPqcoMi34Af//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////nS1dX3X8kw5TKLm/EkKBnXDNj0cHS2RyUTh7C9wkba0aDo2KB0qbfd/HdeQdHQtnjCrIp5C48o0Gzph2qlbaWPEskTDE5JWX1EXNIsglkYakcihmfplaK80MCySq2M3sJNzkjT6VeF0/oINrxhdef9uQRMKSu6yZlWTTcWK35qyUU937v9x9TlBkW/ADEFlqrqvyF6Rs6xOTyJ6fDMqU9B7UwEIqnQKJC4OLRT70qHgrPDYLFISLz7XIy4+gF04PDM9f+v4R/cF+jck1gvG+tsapj0tH55BFazK4u4dIfVgdo9Cn5ehWMFp5d7VllEMRvAiP9VXqunUbKNbZn7Xvd1NVNDdD6nW0u2O0lU8FmOo03G48sqo+lvlzIre+7WPf+uVo+lgljx5H9IgstNdV+Q4SNnWJyeRPT4ZlSnoPamAhFVMCiQuDi0U+9Kh4K3FQnIhwbPtcjLj6AXTg8Oz2P6/hH9wX6NyTWC8b62yAmPS0fnkEVrMri7h0h9WB2j0Kfl6E8YLTy72rLKIYjeBEf6qvVdOo2Ua2zP2vfXU3JobofU62l2x2kqngsx1Gm43HllVH0t8uZFb33ax7/1zqPswSw2PI/p//vkQAAADrFaWEnsS2qLyosJPYltU51xYaw9jap0riw1h7G1FG2uruv5Mj5JwTwpk3GNRDlc87VGO0hQWEwPV9j6Y2KlAeXz4Tm36p7VeQnS6cxE9xSi3kPyiZggmEpah18JH2qPF5TXSmkyhXRDMSRKTWPSjRTSeiWM1dtu8PKvTvYWxGnpyOU+8jcqWtHFjNydN7aCzSs5JeVNVjRSk18h4wzE9hWxnvvK7YcEE/jNf/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+KNNdXdfgmR8k4J4UybjGohyueeSMvSFBwmB6vsfTGxUoDy+fCcnfqntV5CdLpzET3FKLeQ/KJmCCYSlqHXwkfao8XlNdKaTKFdEMxJEpNYfSjRTSejMZq7bd4eVenewtiNPTkck+8jcqWtHFjNycm9tBZpOckvKmqxopSa+Q8YZiekEo/rGYcEE/jNIklJJRtxttzFossKENyh9uUfjMCSrnPlylnbzriMx73z4zE1Mb1iJqkEKL5Ri3Hmnip4/2FwUzhEh6iyJV5NG5XdHu5k13sLiSVEJxUrVwfHWBepUJKpMPWcm5603c/PUatmaLm1j0SRc3Cqg39PXacePOuV2rLF+jhXXgi20yfbSytm1/zWbzLrVaWpnd7ubaO007favMvM2DT1VUSSkko24225i0WWFCG5Q+3KPxmBJVzmpcpZ2864jMe98+MxNTG9YiapBCi+UYtx5p4qeP9hcFM4RIeosiVeTRuV3R7uZNd7C4klRCcVK1cHx1gXnqhJVJh6zk3PWl9z89Rq2doubWPRJFzcKqCv6eu048XOuV3WWL1jhXXyLbTKraWVs2v+azeZdarS1M7vdzbR2mnb7V5l5mwaeqq//vkQAAADvJb2OnsM2qKi3sdPYZtUz1xYaexLapkriw09iW1hJKSKaTbabmCNGYW0o2clp6ra0xRd5Zi5QfkPR86NRnw4UU0AzTHitw/n4krKhOXz9xwzr72JCZCDcBLdkDjjhwo5MEWUfESibiRRM8yzzKeSJaCJ9cyZpJlkjDMsyJx0TjEyRhdGTZsnqRPQlAuu9LopU3E2xbsVVUust9acxFT+4y2xjnPlHAny////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+EkpJJJNtpuUI0ZhbSjZyWnqtrTFF3lmLlB+LuiyKNRnw4jagGaY8VuH8/ElZUJy+fuOGdfexITIQbgJbsgcccHFHJgizD4iUTcSKJnmWeZTyRLQRPrmTNJMskYZlmROOicYmSMLoybNk9SJ6EoF13pdFKm4m2Ldiqql1lvrTmIqdrjLbGpz5RwJ8iSkmmo22225kjZ3DWUJNm9Mwjkbnm2tqXcYARNiuV/N89EcmCZQGIoH0sKIpcfLth/KacskBXG3ZigsNsiZNwxJBOJgo0Q4PA7M8YmyjZLUOkaomI8yDKax4gWZQIi8EG02bOrNMrpzbxpAi6TJIpjGQuEiGaMjtqcvOtoyQdFrKks+Pgknh9e5bV6qtWIFmpxr/qyQVjJXbK5JSTTUbbbbc5GzuGsoSbN6ZhHI3PO1ty7jACJsVyv5vnojkwOlAYigfSwoclxeXbD+U05ZICuNuzFBYbZEybhiSCcTBRohweB2Z4xNlGyWodI1RMR5kGU1jxAsygRF4INps2dWaZXTm3jSBF0mSRTGMheSIZoyO2py86lRkg6LWVJZ++CSeH17ltX1VqxAs/Y1/1ZIKxkrtlc//vkQAAADp9gWFHsS2iQrAsKPYltE3GBYUexLaJusCwo9iW0ZaqpNtNNzAfi8TYU5Li1KRXv2KvleDyhh6mLZgSVdIJasgJ6PkLi2sayqM4OzgSTtBlexSz+IwdbCBXJpK3JsthMoTlGYQVuPdZggGWzH2WTkwjLUigjqdspsK9Db4XVU2t1Xki8tSZuppMtoE4M+oz1aD0lCs2MvcVlSNLGoT9zdGE5Zs4X6hOo+UG5bWeCt//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+y1VSbaabmA/F4mwpyXFqUivfsVfK8HlDD1MWzAkq6QS1ZAL9HyFxbWNZVGcHZwJJ2jlespZ/EYOthArk0lbk2Ww0oTlGYYrce6zBAMtmPssnJhGWpFBHU7ZTYV6G3wuqptbqvJF5alG6mky2gTgz6jPVoPSUKzYy9xWVI0sahP3N0YTlmzhfqp1Hyg3LazwVtZar02223KhH18Rsl6fPE+FpJNzj6uBgXieCzYivILDFG2jsT4z5ihzQs62wXuKpfNh9Ojdax7MljpomMiRTJfZJIUJsTtxNnc1OSKBmRkSHJp7cXM4aJ0JAQEi8JSkyYkbJFkYfe3GT5G0bJAcZ7aUnMMNI0+uXnLISZQL4olaba+IYSbXTWp04JQzILLqQ6c9xLtTTtJJ0JpWhWWq9NtttyCEfXxGyXp88T4Wkk3OPq4GBeJ4LNiK8gsMUbaOxPjPmKHNCzrbBe4ql82H06N1rHsyWOmiYyJFMl9kkhQmxO3E2dzU5IoGZGRIcmntxczhonQkBASLwlKTJ6RskWRh97cZPkbRskBxntpScww0jT65ecshJlAviiVptr4hhJtdNaTE4JQzILLqQ6c96XamnaSToal0I//vkQAAADlVcWVHsS2qRC4sqPYltVAmBYUe9jaKAMCwo97G0ab/9uSRuTkSSMfxMTiQCmVDQ1PMSRC8+Ow4GJ8Q3luc7U2OVQYtFA3qsm0TWmy9cWiWfQsZ1jJC0DKQ6aibqkK0R4u2KTBpHDckhLMik4ZFVmq1JKKJOaFiEGezqqUSy8S02r+J4snqtVS2xq0ulOCc4JxjeLqYdh5VOCa6Tak3L5s8/86elmy+5OE5wt0V5Tn/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////7Tf/tySNyciSRj+JieSAUyoaGp5iSIXnx2HA5LRDeW052pscqgxaIhvVZNomtNl64tEs+hYzrGSFoGUh01E3VIVomi7YpMGkcNySEsyKThkVWarUkook5oWIQZ7OqpRLLxLTav4niyeq1VLbGrS6U4JzgnGN4uph2vKpwTXSmpNy+bef+dPSzZfcnCc4TdFeU40v17bjjcmgbRIQIgfg8iv2eKHNT3MCCkWFUL6hSjgllVajVDYFwlingFKbrmucvJW9xVFkKYaRmaFEpc/sUS0sH0aXypjjfoj18yL2sKlzkL65YekJhDLsRxj82iLt0iEjfdXUTxnFDuGJfWKKz9+pWrno2uZluiy6vETP1rL9nHW3mbtQTeaXifXMOp5Ynvgihuwx9J+ZnM22Xv3TM5rbS/XtuONyUBtEhAiB+DyK/Z4oc1PcwHqRYVQvoalHBLKq1GqGwLhLFPAKU3XNc5eSt7iqLIUw0cmaFEpc/wolpYPo0vlTHG/RHr5kXtYVLnIX1yw9ITCGXYjjH5tEXbpEyN91dRPGccdwxP1ii9+/Urzno2omZbosurxEz9ay/Zx1t5m7UE3ml4n1zDqeWJ74IobsMfSfmZydtl790zOa2//vkQAAADs1gV8nsS2iRrAr5PYltEw11YUelLaJgLqwo9KW0BBWpruvyEtgC9JEr36LjqCA6+J0ReLIA4nj+rVu514DUUPEWCrzbmVeL+K1JkuP6zkSSTGEwVIB5DKdxYkhIi7BtChQJYwsKSBonTEwjVPr20UaMJGRizDS1Ryapojc6arU/CDi8TUajU7YgpTMk5N19juLYo0jVfOdtJ+FsLRhkPFLc2Mp5Cvdbi2t3O9/8Fo/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4IK1Nd1+QlsAWkkSvfouOoIDr4nRF4sgTE8f1at3OvAaih4iwVebcyrxfxWpMlx/WciSSYwmAUgHkMp3FjUJEXYNoUKBLGFhSQNE6YmEcT69tFGjCRkY5hpao5NU0RudNVqeQg4vE1Go1O2IKSZknJv/Y7i2KNI1XznbSfhbC0YZDYpbmxlPIV7rcW1u53v/gtFlur22223IQPgomUo1WLAdrkl2Bk/dgdMJikByAKh0k+KqE4WFExtgBRWP0jpgjFRAGiEKsiybkcGQ9ITFjT3sR1g7EWEOiRGyZO/Vj5EogibKeCeIUlEbTBVGgTV53UEGyyhhCugQ8688skbRKPeplpMtmFV4MwxP3VoiBhleob/FZbT6lzhHLjbnRkowzOGStuEq16lvgwy3V7bbbblgfBRMpRqsWA7XJLsDJ+7A6YdFIDkAVDpJ8VUJxEKJjbACisfpHTBGKiANEIVZFrcjgyHpCYsae9iOsHYiwh0SNsmTv1Y+RKIImyngniFZRG0wVRoE1edegg2WUMIV0CHnXnlkjaJR71MtJlswqvBmGJ+6tEQMMr1Df4rFtPqXOEcuNudGSjDM4ZK24SrXqW+DA//vkQAAADvFcV8nvS2qN64r5PeltUwGBYUexLaJfsCwo9iW0ISlaqprqQsWRKIQXo/3V1xEVvhuberWZoVa+2LTHqJAyqrsqqglYunb+8kzZCVr5aTzc0YvNnKIo8Z5pd5rGll2S0xwgiaKq0pq/PnOYONxhGcW05m04v1eCWygwpTV98WZvaUg5LxWkrU0d2v5XOMMxZSFyuEshqd5jvO5TjHN2sv5ONbHJQ8MpZQqpl////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5CUrVVNeiFiyJRCC9H+6uuIit8Nzb1azNDOvti0x6iQMqq6pVUErF07f3kmbIStfLR/NzRi82coijxnml3msaWXZLTHCCJoqrSmr8+c5g43GEZxbTmbTi/V4JbKDClNX3xZm9pSDkvFaSsJo7tfyucYZiykLlcJZDU7zHedynGObtZfyca2OSh4ZSyhVTJVbr02223Oap3ClhtNJYz2Qb2Asdrhk14Yh0nH4/LZ1Dz8JoXZDCEoMvFrWNK2C8ej85ZPC3DeG54asVd4ORYUtgZmJVxKNkxF2aW59I2X0wa+VjCzZaKMgXQ2gghgrRgjIpJrwniLJkaLEUG1rpiSiHWVzyuNL9vWGkmFZsblTTmpItBtKeR+q9NdysZXdSxamFajUPt7j1VuvTbbbc5qncKWG00ljPZBvXix2uGTXhiHSGPx+WzqHn4TQuyGEJQZeLWsaVsF49H6Vk8LcN4bnhqxV9GIsKWwMzEq4lGyYi7NLc+kbL6YNfKxhZstFGKF0NoIIYK0YIyKSa8J4iyZGixFBta6Ykoh1lc8rjS/b1hpJhWbG5U05qSLQbSnkfqvTXcrGV3UsWphWoyh9vce//vkQAAADtBcWEsMS2iO64sJYYltEy2BYUexLaJmMCwo9iW0mWquvu/00KGyYzL4myB6qCGpyxy7RDxc5Do9UuG7u1S0LPRjNLJAeb7Y7ojAqHY9EBbZt6kZGciCszaxmscmrJFAylrDVNKRc8fQNJnWW8Xk0jLxKFmI0guoFtTTaZm9Oo2y0u0fiYg1NqdaYYWNr3f109I2WC85VmapBVApSGevva3Vdrs78r1XzIsSXq//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////mWquvu/9oUNkxmXxNkD1UENTljl2iHi5yHR6pcQXdqloWejGaWSA832x3RGBUOx6IC2zb1IyM5EFZm1jNY5NWSKBlLWGqaUxl4+gaTOst4vJonLxKFmI0guoFpJptMzenUbZaXaPxMQam1OWmHLG17u5OnpGywXnKszVIKoFKQz197W6rtdnfleq+ZFiS9Uq1XpuNtyckhUog5TyMlcH0sMjL+yxngZHpZDMei0ihlJhHIHlAhuRwGFl9CHA2PCcpvaed6bUQORB4bFzqASqstnZCkgMio+SoilPi0maHtNFeYp8eaPcyfmfdsEJCbUJmJmmNpLqpmUFmSPG4JVFyNJogni9VuMF9XQJEeXCVQTTpUgtEj8btSbS8EMKjD/Iy1DWNTlnqXalWq9NxtuTRJCpRBynkZK4PpYZGX9ljPAyPSyGY9FpFDKTCOQPKBDcjgMLL+IcDY8Jym9p53ptRA5EHhsXOoBKqy2dkKSAyKj5KiKU+LSZoe00V5inx5o9zJ+Z92wQkJtQmYmaY2kuqmZQWZI8RwSqLkaUiCcF9rcYL6ugSI8uEqgmnUSC0SP3dqTaXghhUYZ8jLUNY1OWepdo//vkQAAADyFdV8nsS2qOS6r5PYltUn11XyexLapWLqvk9iW1QBlaqqrqRaJK0XRCjnV71aiMm5FaVX4BrqhVRm+0+58XixCQR8FCzu91l8nHR6VC5dK17NWaZEK5pSD7XzWiZQwMpoY0xCJ7TSFtpLS+vVrX4yQtJEialxUk0s5EcZVffTZi5lN6ykaV1+v1zM3TtBUYSez3rZe7lNNxxWcq2o5UJSc9KFz/TjHHRfojS////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////6AMrVVVdSLRJWi6IUc6vgrURk3IrSq/ANdUKqM32n3Pi8WISCPgoWd3usvk46PSoXLpWvZqzTIhXNKQfa+a0TKGBlNDGmIRPaaQttJaX16ta/DJC0kSJqXFSTSJyI4yq+7TZi5lN6ykaV1+v1zM3TtBUYSez3rZe7lNNxxWcq2o5UJSc+oXP9OMcdF+iNLkqy1V3X8hLOMwg0MbxRvjocItJIZw2MSXGZjgbqL7DxpYsj8X1qqIfbRXYaLInMl942XwX/T5Q8ChcIitluL5zaQlFkCImIdjPD5fRA88UsgRuiu0Xw/FplRWTMGJubVMlJrb4ShNM0vS7j8YWpjoRSnLElZTagiaRxRxWtleSkSnU1Clqd+9nPGdjKeesuq6UROmyVZar7r8kJZxmEGhjeKN8dDhFpJDOGxiS4zMcDdRfYeNLD6PxfWqoh9tFdhosictIZ8Rl6Ff7nyh4FC4RFbLcWpzaQlFkCImIdjPD5fRA88UsgRuiu0Xw/FplRWTMGJubVMlJrb1JQmmaXpdx+MLUx0IpTliSsptQRNI4o4rWyvJSJTqahS1O/eznjMoynnrLqulETps//vkQAAADmlgWEnsS2iPzAsJPYltFAFxXSexLaJ8riuk9iW0VVqqvu/wD6NwJwzVGgT9qxzOO5H5kPFyYqHYyt23YxSJ7oQF0fzhExTkaahmhEwkKDc+g5m6j2Cp0WFKNaHklI0RU3jTCfjbBC2X1i4obh8bOQNkRxrZVPGU4spxXyFa9KDEXpduoShBG0SFUbCFRvcynkSjBleq3xjKp7CK8Pm1k/Wy+Rv7UV9ar77zxTh///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+qzVVfd/gH0bgThmqNAn7BT8zjuR+ZDxcmKh2Mrdt2MUie6EBdH84RMU5GmoZoRMJCg3PoOZuo9gqdFhSjWh5JSNEVN40wn42wQtl9YuKG4fGzkDZEca2VTxlOLKcV8hWvSgxF6XbqEoQRtEhCjYQqN7kKeRKMGV6rfGMqnsIrw+bWT9bL5G/tRX1qvvvPFOAIK1Nd38EDuUB2iuEmLa1I9dOmT7ZyGvGQSEokxIKe9mniOJvjMutK1KWbwYaDw4WCm0qdpzEYzAOAokDJQ+Q25lY2IUQnEJEYaTmvRMhQJtr30qMkCqKZk40KVDS1QZUaIUjZEm7baOsiY49DTSbJyTTZ3tKwaVm6WKdhKK8WrhOKIvIyc1Co0rkclt96eM1PNjWsp994BI//2v/////QCCtTXdfUDuUBuiuEmLa1I9dOmT7ZyGvGQSEokxIKe9kzxHE3xuXWlalLN4MNB4cLBTaVO06CMZgHAUSEowfIbcysbEKITiEiYaTmvRMhQJtr30qMkCqLTJxolUNLVBlRohSNkSbtto7hMcehpq2UpNNp96cGlbysU7CUV4tXCcUReRk5qFRpXI5Lb708ZqebGtZT77SsAkf/7X/////o//vkQAAADoZcWFHsS2qS64sKPYltU82BYaexjaJoMCvo9iW0VWqttttNyEEcP4LMRaEP4+FUyuovlfuHLgNioMxqufb6VlGtOyIOK0snqSt0RTeUKxwOCS+gX57DZ2k0SkpJWw8tAfULnCUwbhNg6wQzagv8uUNVthWlXsTnTZy0UHpQjOEZ4yrqKDUG1tSgVkSrmFcZU2VbJaml3JwjdwVx6ja3aU3LzIzcnktaqrlja8FeTU5z///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9Vaq22203IQRw/gsxFoQ/j4VTK6i+V+4cuA2KgzGq59vpWUa07Ig4rSyepK3RFN5QrHA4JL6BfnsNnaTRKSklbDy0B9QucJTBuE2DrBDNqE/lyhqtsK0q9ic6bOTRQelCM4RnjKuoqag2tqUCsiVcwrjKmyrZSppdysI3cFYvUbW8kty45Gbk4S1qquWNrwV5NTmRKKUbcbkkcl4z1KOo00zGSBiI5xWdt+hUQAhXBQJD1yziqkQ+Fw2SoY/n6kt85CnfLXh4I6w4eQ3WFh4hnhAgdYjO6v0MHSrGMzM8M/Qrnd5iPCG4hTzGXdviSI9xWv1vEnNr32XE/Zu2g6JO8miU0svs3hwsq+fpeh3Ktx22ieNdztM2kN0JZE8/DXZYihfj3Gfemsz3Q3acctHvXxgZrr23G23ORalFqJ2mYx6FIcTile36HogDFcOhMebJuPUiHwuEZKhjuT1JPiUQl98fvHQd1hw9DExQMDIkBxZlA2F4twQMkLwmjQCvTml5/CQbcc+KVcZ0UcZkPiuy9FMRo21UA3FKdySxy8izjMJL6vRRBFs2VxO6iu+XgvqLGYVcE5pIHSbTjfUxOb7pXWvH/MTnJhiW3k6U//vkQAAADpFaWEnsS2qNS0sJPYltU9mBYUe9LaJ2sCwo96W0aWqvvuvyGpJmznieQzXypTTi8+WUl3Nw5KhmSLUyNMhLS8dhmQwiCXszXorGrKg8K56bodV9NEbmyjhqankqpaJdZll7KXdIlmhHOZnCcGl0bLaB6htdONVaIvBVA0n/PP4s0h3FoQrbtRphuK+5UsniqBZdiNTuS+OQtWiyo3b/K7jPYz/uGsR0In/I/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////7S1V991+Q1JM2c8TyGa+VKacXnyyku5uHJUMyRamRpkJkvHYZkMIgl6c16KxqyoPCuem6HVfTRG5so4ampslVLRLrMsvZS7pEs0I5zM4Tg0ujZbQPUJ1041Voi8FUDSf88/izSHcWhCtu1GmG4r7kJZPFUCy7Eancl8chatFlRu98ruM9jP+4axHQif8iy13bbjbcmAzh7ocFInksmXZ1uLLuipe3SxVnUfyKmV+Lt8JVt8UfkNCme61R++XnqTP2ZD3jqSWes5MB48WUEoOnldkjmLGDYFEShokixPS8SRG5yzSLHpXItRcuYYUOYseLvJjjJakeRgVw9BklXetmqQgpMnixjTKeszULHCMo0b3K1RlhlCjLJdOMtk3JzKrat/LyoI+1tOvZeKarLXdttttyYDOHuhwUieSyZdnW4su6Kl7dLFWdR/IqZX4u3wlW3xR+Q0KZ7rVH8JeepM/ZkPeOpJZ6zojposoSh9yeyRzFjBsCiJQ0SRYnpeJIjc5ZpFh9K5HKLlzDChzFjxd5McZLUjyMCuHoMkq71s1SEFJk8WMaZT1maixwjKNG9ytUZYZQoyyXTjLZNycyq2rfy8qC/a2nXsvFNU//vkQAAADtVb2EnsS2qMq3sJPYltU01tXSwxjappraulhjG1WZl6vuvqUKdBeEGYSbmaqFZFdeSKXoyw0dFmjpUgs7DYv3GfeSWodl1NEmJZyeKkBRW0Fh0b1MoPKsHuy7UJMRpI1WNTxBJhIlIYNECyFWHXQtLtEfacl8tBJlabkGyrFYSbVaXhf3y7Gs6nKfhUpsMoETVyXyqnqT8mhlOezqFXCnSl4e/V+m1Wzs0X////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+szL1fdfUoU6CsIMwk3NlUKyK68kUvRlho6LNHSpB7sNi/cM+8ktQ7jqaJMSzk8eQFFbQPDo29MoPKwPdl2oTRGkjVY1PEEmEiUhg0QLIVYddC0u0R9pyXy0EmVpuQbKsVhJtVpeF/fLsazqcp+FSmwygRNXJfKqepPyaGS+7OoVcKdKXh79X6bVLnZopQZWq6q9M+Z4JNZDDbJKsbgmlscoMy2tLISHSCJkS2CULTRaP4kJheSj5CqsdL60fR7KZ+eKEsEbGGbJHLyYI38M5i5DiLKXzBc4dsx/QzlAK2G8bkbNLNuuttLLLlkNlTq+6AXbqzqLucTU9a/BSNdNfarXFK3XKxVtrGNrok1I7Ttr6y46znT8zebL/oh39qnzOMPVbcHS5ZygytV1V+z5ngk1kMNskqxuCaWxygzLa0shwdIImRLYJQtNFo/iQmF5KPkKqx0vrR9Hspn54oSwRsYZskcvJgjfwzlFyHEWUvmC5w7Zj+hnKAVsN43I2aWbddbaWWXLIbKnV90Au3VnUXc4mp61+Cka6a+1WuKVuuVirbWMbXRJqR2nbX1lx1nOn8m82X/RDv7VPmcYjq24Olyz//vkQAAADvRgWEnsS2iNi2sJPYltUt11YUexLapjMCwo9iW0VWluv+/5mlEXsciiWFIgnJ6y/DmU4COkWEQ6cnJXtMnBadwXIapntjQ6oKVDNS9eOCzVVEx4uuJhHv1tEXZFSo6UOm3zaQckORRqwRs3BlORg5I8UaZkvmSQ9tPWKZ+X1USBZWDScpNLyOxbI4tL+pyS1SUEar5x2si25aTK1ZW1VOrxr7//cdUqMJZn/pP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VWluv+/5mlEXsciiWFIgnJ6y/DmU4COkWEQ6cnJXtMnBadwXIapntjQ6oKVDNS9eOCzVVEx4uuTCPfraIuyKlTJQ6bfNpByQ5FGrBGzcGU5GDkjxRpmS+ZJD5p6xTPyfKokCysGk5SaXkdi2RxaX9TklqkoI1XzjtZFtyKTK1ZW1VOrxr7//cdUoEGO+lVur05HG3MC6JgmwizwcZ7KwyVayfuRAPz4onhTOERRtLsoIXYL4LEKxYo/G6fmA4lc3WNmSbCnw6MGyIZbDEz822BmY4QkozIV0lTeFxEgPHTAIzktBe2Dqx4VlKahSLXqPGsHCt6tUStvSbImHyf9aUQzYTxn7CrXPFZNqeF7VRcm4hmxeXnblD09FPL9edZlwmtAflKq3V6cjjbmBdEwTYRZ4OM9lYZKtZP3IgH58UTwpnCIo2l2UELsF8FiFYsUfjiPzAcSubrGzJNhT4dGDZEMthiZ+bcBmY4QkozIV0lTeFxEgPB8wCM5LQXmwdWPCspSKFIteo8awcO3q1RK29JsiYfJ/1pRC2wnBn7CrXPFZNqeF7VRcm4hmxcLztyh6einl+qnWZcJrQnvklo//vkQAAAD79cV0nsS2qOi4rpPYltUOV5S6ewzbo5sCl09KW2lBpurqrbB9gnCTxTRRS0nXbLXWW4nByUDE9aJyGijdOnWjIuoAlNu/frunT566mPSsrPbV5omEQ8KWcImzMpJsrIjpkiXezK8umlUSZKWNIamyq6TVocWetOtIVCaMbjK4Sj4qsIrZgivMWtnrahyMcl9VxbJbH3ktltxqUclkowaVyW1K4+tqaJNmT/Jg3/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////KDTdXVXAH2CcJPFNFFLSddstdZbi0HJQMT1onIaKN06daMi6aiU279+u6dPnrqY9Kys9yvNEwiHhS7CJsllJNlZEdMkS72ZXkaaVRJkpY0hqbKrpNWhxZ6060hUJrjcZXCUfFVhFbMEV5i1s9bUMIxyXkri2S2PvJbLbjWxyXlGDSuS2pXH1vmiTZk/yYMC3JbbZJG2lFMClEoSYGyT491wTM9zoVaEqZc1w0DWnHSOKN6lVyRmstlaFPA+49HBEigl2jmcsXO5I2LOUXfgWbhy/Xgsx2Zu9kOzs8vOgKAJfIpWFmCYJZgpClLy9ydTRZ9p8g3b1ke0YzozmVrvFb89t/2a9TaLVN0bSLJkoQBm5IsHTWlBbkttskjbaimBSiUJMEdLsk0gT87zIWlmOmZpiaIZFPRsrwax0KIDSoLKle9hqNw2C0T9w9vlpandmsuSba1+PuW0nCmdTQbPJfKkrV7tFJoGTCp9ojYnkKZRtIumToDpEag1Fpu0BY9OTSzM6heVdX/DJ9bwrzrayFXptBXgjbxemMQE1Hg9sLxc6qms2//vkQAAADRKCyuHpM3KOq+mtPYZtFtJBIwekzcLSQiVw9hm9CtIhKVVX2YxKh5sZMGdUmhtax8bdqHxYZRSGG5rQJkTJzEoOQOlOEmpNyZWmxCMP0viCDj6kGfNox1Kxd6XPzLNTabbPcqjG/SHIFEKoxaZLGqWYXREtEITts73pzbelTM+W2G3vDdsxLWaVf/s2H7HvKLizb9dj2tlm2UnqW5/+9t/8v1/8d2nvtPnjf/8z7vhv3+bnrO1/5uPNK02CkbE2hInAZSM2I////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8OeCySNyNpJkyOZLRmKUy3B1/6VevWWCacxrl/e0zkNaWiqh0tOwfh9lXqbjNLWgwBkYLB4pIg4GkNRcGOMudLOZ9RhPIjbi+ejRJX8u5c4Ux2PkH98NKI1frD9fUulnZymZ6fDe+ZbzUvrXOFtpUZLzX/25vLrLazHxj/SYHf9P1/Rq0fuFnNuJb6nrPIWfpAP/lacQ308XoyVWklUaERksx2kOk6Efw5qHqh8seUUYKMiZi0JP9QjCpIw4yqa67U2R+y07V316MRtGjlMBpG7lmr1q1OEnb29yYW5ZR5vLTdk8zVnZW5qZyS6h+2uUbN579bBFm9pP5V26UV93e6enqY6HzEC1eb+NeZqDTWxVK+oW7XkM0ZPeTetsZpjXP1/VeWjXSxHfzmc76xsy4a3ddNlW4WcBwmhTwj4zcQUo1RRPKJlWVJJuqUBG+P2jKdiSQ1Dl2xRGHsChVqRaNZnLjRm9EcNkd51DuWVH1U3fm9ESkSdo5dfdJRdHaJ/oYl7CR2CjRhoNWOmaTDHulKDGLnkGP8kSaIP904ii7GumrovTb8vvZumY1Tau6Wq1omBjUy0i8u5aozCtbdl16hWkP4yfkD9ZieNSCBu6Ga8+tn/7bGZ/vd+2fu29//rfPmu3z56q6dinyflu9tGUznhPsVIFNKISQ6G//vkQAAADKiOymHpM3CbTAlsPSZtVo5BJ4ewzcLcx6Ww9hm9BUTZJVVVUUUznz39Tmgq+G8iQ5VWiYHmrGn1qhmJpdqcLggYlOCuz0lUqOsyjFZK6hqV5LaeqViYnUnLzt9v41H/rqO0So2blGnf7rRsMk0a5vvG+S3TnNgr56mtTXCs+W5/QuVeNZqg/J/P3O0y9Y/hbY3jZpJ27f9mrv77fWx/v7/Il//L7f9Y//eZiPF9/E9/BdV38tvY2Gtu/L+vt3d83p//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////C9sTaVUoCUKiZJ06TtClqjLMyanYSdYnJUZtqdbU7l4IGRKbphxpjqo6TIpmkPTf0zBqJY8Gspt6aRuR3vlTl/nFo+Cjaq77VAHsW6piHfT8RfTJL1vt7lZkxLzN73h2yOv6jOy0fJ9THa92DcNzT28xNv2tq1pzZTmjn/32f7+cdv/mdd6p+SPfboGn6I58jWvMtiQ/+y+XfFrTdRRJNVVUHGhLEWiNTejIUBsVcIr+tUNADRyIqYzGvQpvCdQPOxliJxlQhtUdcjliOFXfYmKJbffPdoWmaaZ1UTxCzfnaDkCT98jlUpvRbvleT32nOpDDH+2DqqG5OneDD0bLyLxod37XrG5vQ5tlY2FH9jr+YzU7P25PXLOfMlKj0H7b8vL/3f/9nJ/z62v92snJiIwovb2d71F7R1bey2M8tccvC1ZjJwxuwlGs2tbLOdSZfrrbbqpVhgQWFRIagkOfsjkyQ9tivK0ZaDh96LFCE+lhIiXirRk8i2mrdv6Gwyl9ukFbOf7y27d5myikgFwyRdlAzGVku3Z7Tny+bOklEVneHLt4TIHWp1IIWQNHOh5lNPDMj74iblmqikaDpwfpqEWsEUekQJkDEr7ILhIo7rqyZ9uKNQ70YeQLz/4/7Nv7b9dv3/z783dz/Mb4z19y3eo2+2/dyMa39t5ac+Nfyf1xWtTX9OdU//vkQAAADEuQSVnoM3Ctkgk8PSZuFm4tJ4ekzcrFwWWw9KG9EkJJAB/jtYiALo9CwphiwqauM0eKCoFAei4mUJnjkvUzfNJRLv5lw8chiWqjnY04gs0+Bw2iKYjCDXKyqjYy2+ryot48fNYxtzbv+8X4fvfy9vb2be9antmzdna2WSh9hn03cSmebnvk+VGd9zpMUe2150pGbvcNPZofd/v6zq1sfwz/flffp2ZepfOdmPkeq3LykukjUzBZLYWqE9iHI4z6ctme80x8cnZ7m///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4UShJJVVmhhMhpkQSiEeE7k6ismLuZqLILGWm7mo0klQhmousbk72s+aqPEsZbSlCWzYvHQ339ajdUP9VmZ7Lw7N94233rsmcSilvJXRuE2OLaf7LrP3zfvO/ird7m2Karhtj5EpMe18uSZ8XqBW3DyTtqPpth181RrnSafDZ//D47NG+JlofdaN++++fa/wqXnG9LZG+VTbNTKFlVFIxuxOEWb+taptrjEfdn2aDGkiUqqqokB/skQu6NS6tioVM2MKsY5rGgPQ6DxlU3FxRsPOIDUkSR6FCtEUpdRWj6GG05qTMZm9W86T0w0CHO24VBcagSNZ2aKxKHQ8XsO1u+ym6NWfl61K+pXs9dW90Zr/WSaz70gVcY6Tfd55HUaaM7QdNFJ3toO9Ldi1X1FqjHeczOzvdxr0+P73d8brvc1jvlTU7i2+92j9p3GjLd+p6Tb2qlxFN0sJ4dMQcaqNmVqD2bbbdXSsQOi3FPXByMi0p3CNmdXEboiZh8ph1pqEw1czqtOnic917dpTnZVfYs6XYUOoDYoUmuHYxBZJEwmtBYOA6QYVIgswPGHO2abFn24/WjjbhJFGMNp0o91INNENBBuzx3iknRUMVIvDVu72sDWi3Gh2K9wQLwQysOax9mF4/Rll1UtBiC5Qi9fE/1MxOvf3cd8zLd9dQvH9/Cdx+kJM/XdtyOGoCmWaKoCu11zY//vkQAAADNmQSeHpG3CqEgkrPMZuFfotKYekzcqcMGXw9Jm8LkJRJKys0QYvDYTchK0+P1qcZHG7xrXK2CojcKGZtvhk2sVVqc6u/uubaioPpmWGX0or7WV8rgcFRnSIpyTzcjK31MY8iarRTQclaoaJUBZ9Tjw3msMu5amsPzsKKKLUU8HCNXJh8ePiANaHsXEx8MFRAeoYLkcnJdt5/NmTUzalyPfYiPc+q+RKtMYQ0MkOsyiTdh1JQTDKFFO+Cgg8cqQMAAhH////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////i2UkADfzFLePUSctV5fXUNTuD+fMDVpiSpNdFLnzsOeRRATiY2KZRuNmq7t4fJL5sRc7UltSTwhEOgy4h4h8eppDe5cP7p6bd1vEO+t7MZbPscnXertm1GJsvxdpXvyDN3E7Y4prrO9riZ9v7vHZ4vdLrLr8142HrGfWbxu7sW0NO3W58by8/4+m7XynnDS73xrY+XKTSbtnJT5OpREilb4ZRCrXhugZBIYFm40kv//8o4MNnUhIV2vrqFhlYJTjaUMubRlHbG0ddDEeNQ5GpBgnisqyrC25G8U2TONIUnLzKTmDSKj1FeE4N2pqnPOwki0JpvR7+z5cu6jnbLsrXoy/r+5l1MYh/e/cnPk+9kYWRxTJwsg7c1l+rMOtnJ7Mo55vYQ7kryihZiF5/fz/sz5/Tt63u0vevtZ62/GNjY/vtkdqRb5t9mZ/GY+u2oP0rTaynzEQ+RgMKifSyST/+rLLDY4F+6HM8Vcs7+GwuLkRpUnE0eeaQVBUz1I44wwX7OHBLFKd0injoxK0TRuFfr2lB1ajaOk0rMLL4flg4QmcSTsWm5MY9kTRN54cxOTlHFBb6nqrt1FowiBGSkdU5uIfoOWXiAGhqFEy3GC4ks7ZiwSg5iZeIUn2NLWU2GpE4/uCBL6mW9i4bWLWHwBQ3YRGQPZOLWw4kmIyLBOFnCMi//vkQAAADQOPSeHmM3Kmsgk8MMNuFRI7LYekzeqxx2Vw8yG9NuZpJLVVUbSFHWLsoSaopQQ109i+DF0xxBXpUpF5fI8yJle6NwqjWRmiilbGNMkcKbE5qzHrdsjk3XdDlbeK/9S1zHNdtwppiZ262jfl1kHpOv+s5q3155u1W21PW+2X9OjLnx2nSEY1PmPlzfMuOBPb0fjwZ2ac7a/2HbtOfx97Q2/39bLd2b+k/utPhrjEWfWTptjMmNbxDFpkHo949vXr/5MFSf/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////h2SIkmqaqA+BkAhmJgTj4Zny9S2yc2PtAsmjq599qIWONglarxTUYRpnyB6+mSccfJtdK07cOZmT5/YoQUBXEoqLRYQIMFdWg4bIJjtBWA4KsIcPoOqE2HdFYqws3r1ijU1uZlEBsokWboMEYEwyUzZWQwlCYcmMakCgQ9POlynIqVSU5IxkT1jt8vzfd4sEMaIJzdnbOeFI5xOiwlj0R6tjwnJSRBi9bpG3V0rEacHNckJR7IvNzG2Q7uMVkMCYsYsgU79WK3e27zyov7M9rPkKnClI7cIMom0MKkOluLTslZtpcyY2oXFIW6otV+VowhF/3mWbiJW3sSee9x3Oa8qIYqcdjkpavc1HNPomoU1tzj8Od5p9xR8kKk+7qHtraL1f1v/+zN/nzd3/v//2+f/d7//tuRmtn3f93t3d87eH+N4p53Stnc2MW11kYYMD+rbbdUoMQFyaGZPlvUqjYVbHf0ywplkQBXPGg0tMj7pC8B4tNeJyx1+sZ5VtwzPmxNXLsPYiTmNW50ebKWRQ+rnrTXWB7PUU6I40ZLdcY+Xa9hnDIQOdqWceLbEHkqPmhFC8B2Yw0s4WQkwWJPgRjT5EUXLIHo5+UjFkKQaScI9/HV/FXXXLWnzSfxNN93E8xUX0jpXdslvcausWlQvpmNM24zV60oejtSUQ2//vkQAAADPiQSeHjM3CbcUlcPMNvViJBJ4eYzcLCyCVw8xm8N1bRJLTVUQeGLcWA5TdTyHOEaOxOF+BCjEhdOBA7mZBXIUhg6gUQoMIrmwsnDKn/u1Q03me7zPFQhEjNLlKS0dx2ckfiX81Mp+Yo9mqMZr24vez7F9pQlt2iLqw+G18qJzVnoTBtebZtZdO5IvUqpl4a5VTif/Xvz351szP2fe+6/Zv/H9M8M2Tjw1P8Z9/yHaneMm75UejKeJ1zpUSZ9K6Nb0bxodlur////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////yj5W0krKAiOKZxfb8h2LD5yiucS9WlkH74peZtvjiKl/h2Zr9qg5saYsxDEGSfKmDFVwuABw8VWGWoL7uCDuQY1WI+qHHCQPMENWY1DhntkCwKG6NsKbXGVSEGKOkrizsZqBZsTUKBb0CFRgwuU0qTUeRh5l5Fwpl+ff9Gm5fx5O5ZTuU4sJCnciJ3sQ2SVFvFJkzCGJcaDoqVxQM00KSquvx2wYGDQO0336oVu2CFB0bbGyPJhKTHsJxaOAzxnc4MRO+z6tJso+aaPJaOOnCJlvpBOrNqX6TMXGJT5i43M35L5NNOJPjxWREKLrT4A7Re0tLkmhZC8eaMMlRdysukUzzCcwQOg5Ax/FsWx3UbVMTVBKmVR0RskCOtkZfbXzxebdY6fvdds1yn741fIeuVOE8dO9OZnxr2tKbSvPw3tZuQxr+KmfKT+0i56Re9jTbqmVhhYS0djJ6oj9XMOqrkiI5mwLDSmgWdcGhTi8zVYObZRoUihOFiunN8XcdpaKty8SuUodpueSoZi0+mdFxiBxxlmnk0ZF/9E6RdqZyhBUowcjLujM8LbANQd7lGPMQaBmuU0acfZNFAQxAGVz+90fCXVjmHHq6BwcJsxSkEFTrZ+//3fD5X+Prvu//61789f4/7d9x7/r537037a2Zvn/XZol3iu+4vK+vPS//vkQAAADMmPyeHmG3CdbBlsPMhvFg49JYeYzcrUR6Swwxm5EzbZJLVVUSB2LBCZR+qJJsi0/c5Y8p+IJ3BkdO2Px2tPNc9ZTe7nUIexj7h9ViEOQLbTbFYxLRyYjzI6aatwWheH/cXrkEqOUdYpdTDHUcwT427mqjjo+4O5jyIzvqHTWs0UNjieZkUZVCCUKx+aFnwypPTPSnTKJdS/JGc2hnfWXJYent60mInXc1iNCaqlYBU48YdjcHgiBRQf/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4SljabqpFiZuEfd7pF4ssD5/OzRCk1NlCcsDBsyj9PhvhWdntA23dF3x1+cLh2xnPKs0ePDk2uCzxEGbVFqOamdbmpt0+6QviJ7hOpRexQc1WhxxhNDhpZY1TZqD6kHyYcew8Zu58sYyOWtYsePJKOEhVLDKOMNMNLKJ7eqypVThFb1N0R55LW4KFhnBZy1kiijIlEJVIDLDhUXPMFybW0UU1VVCTGRPCNVPbXLY4M91Yr5kn08kC82LEHC0zbRZmcLMTtSAhb5k2HM8s2UcXPKu8c+YNOhuQIvDPJY/H8FYiJxyMxuYe+o31Fs9NaGo1vQdbJnnWnm2yQKmrV/+dVO2jCcdeNa41tR7HglaVFTOt7bKm56CeKdbBkMa52GZv+/eX8dppnvG36+tTZEw+otsY9RaUtNO3zMpn1dam3KiWTrTmO8F46IRo9FFWQMSSZKqqrgChWthA0JUIlGrapYfOIUuQ0swPfKIhjU3CZS6z3QEGC1w7YabGSVJiSe8FJGlF0fkl5jWduQKhjcPmraDtDN8ImRGRGZJUZJ55kSVXS7F3jH4ZTw16cesFlKElApLEDKg49AGWClJg+6mxoqAeN8MUpVftj29vWLV2qTAiO7Wz/zv3MnP3adZ7hrb3u1uM+Z53YntFpb5921RNcut8kzmOiWutSMadly5GHJoo5k//vkQAAADMOQSuHoG3Cikgl8PMVvFipBJYekzcK+yCU08xm4K+jSSVd/+LO9cmY0i4qtSv1ZCZYGYysFhCtHmJGCWxA41plv/qzRQ+6cgZBlx3v3G0qphxlcsfQoKYMwF98TSaRto50GRHEBqPI2TwmZ9rc2FVA+igqYcKQPZZ5gUxflWVBFViBmZoKpbwUlBDnWaOQdM/y+et4uXVK/8tzOXvuWUn5/3m5SmZz7CRciy7s+6yEy4JDqjf//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4e1sbb76ViokWIiAONJPZV3RgivYZAG12UOpRqFOzTAeSRFo+u+uzNZDnFOadsEUr8fSqJujCY4rmKxhErnjBQxVFBwuyILEY4wzLExApalK90IZBIVMciCUcrizvEzCijDxoRIpRhHKeLRzkUUu6Ch6CjizGuJo8SFiKYGUTE3lOIvf9Nl9tq607+r9GNpdNaXZFd6NVJFW1u556EYxaI6qKkXJokqqqqNQuX0TQ5IBzVWmrL+elE03q3rGJIjqpxJKnwcIVlu5GhZgXa1HjKcSa+3WwVyTO+N/RlAw8+rVObc0nlzbbpYe+mVGHbbmQ7p5BrfXnKBpeHO3ci4uZVjVkZLIGltSjLilVk3pEt9fEau337RXx2ss+E/CEOrK3fv/yGd872+mtmbrT2//lu+u8IvN0r7CS7fxPdc19P6DwlAlJjrMjTj3gImoOPLOJJvRSBitbTTbbbbcJOSUQw/b5RKF6Tk0N+/dFzQodm5fTkCBIInEAD5lkCucnGm5pjTDnGRKaE3Z52mrh2MgZeTFo0ZU7gxzHHe1WBwPzGOz5UR2fyc2wjpRxbZRT//K5aErpO8LxpbuVhleIZzXw0Dfp4bqaVpJUxTEeubs5Z6Skj5wh/9ZsbX7/vrvOZ91n+Puvjd912zJ3Zbtu78b/pfxV0h/vNqqfG2r7kO0FW9HX6pA//vkQAAADKuOS2HmK3qmUglsPMZvFiZBJYeZDcK7yCVw8xm8LWsbTdUosRqK/fawyo3KkmZJ30GsSKTdstNAoWFYn8OJEzInaORMS0u5XZcahTQ6d5mOrONH0LIYc63SqsS6KwkxcjTEUcyEESmVj0OrOd0Y4kYpBxznUSNc6sICl2OLxgiMBoqinlNEFUUYcho0iGIIiUgqx0KxQ+kqpRtOv/po+Wmnbc77kWRtNtESZprzK9Z1KRdZlaijzVqf////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5ftbbbqlVhkrTI8LacDxKq/MZ/iPJmYilGAi0RtU5wFCN6Y7+1Ps6m9O/jFdte3+maduOZW/Khi+zbTqQ7//Oz03NIaOnYUe/nS4LInLssnp1xkbGTXjWQyRzIdGeVuGsmkcU9zqWIVyeEGGmZF5KTm1TPhpzJGmpNOYzY/b7ef6///7ffr///t9+M2vuft/mZ6/z60Z6ymb9v3f35Z9+enxmlNnl1GV1EpJqqqFzwgS4wCCOkXVuhOnm+ydgAUeQORSRxRSWvBv9DnAjkpJqlDsTyktIr0xKTJuBodKXiw0sRRcZWIkCq0McXdhVhmQiqWesO1jqdL60SqHSSi1DmIafESPQg3ijb3tlnKLiRtajs1k7hJ8mpR9jWHyY9StqpdKNeoaotKmL66er2qetfpph4M4HTdTfTIjSk2ervDI9wyilVyiQPNvS3FiZooXENPcgV3fsIC/pm23VsrCuYdPi7J1uQhbhs/kxDeoRXKBpA5lcww8nibl3rkiVfT4hlvr0XwxyKKbKEq2jy+5eo2U/dI0sYmN9kclavhWJ2aUf57MjB7UZ+hGAYl4jSAjE+UAUrArYxkblnVcyc4pEKOnecbimufK2JoANBbfqosipFFTAdr10Vw6f75//2/+f/vub5+M7PUfzP/8doynZ/c38qt/3Iyf27bO9tenf0m/z3k67zxg//vkQAAADSmNSmHjM3KoMglMPGZuFc4/KYeYzeKAr6Xw8xm0N+iTJNVVeMlhHQ5qwcJfVWo7wnDU8quxCiFkspUrRbmMMbh8doCXEiWhVlMUDISZ6tmvi7+teX+xzw2Qbd7V6+3X776ZvNNrsdvq2zC3yYamZpvq3XbVQhMJvqSbu7NhuVMtllMsxM01FNxMY1PVVtReVcifP+Q/7ec/7O2dv2e8v/cb5sNj2+eszu//+5nZ2vN3X1uZaV/GavcmNrNmsYOiAH///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4VyCJKqq/x3QFfDP07TgYFVf97LR1gnK8IBAAIQFJmWgaBKGFUwTOTi4MoSPgMcg1UdBLw1Q2/ctC3y+r3/v9TrbVlzbxdG7NlyFMtYXXw4tE9n/gzc2E6Lw81ozno3Zem3V80yIVsPEaQtRsW6OPEXaG1sPlW4nv6zvnbZz92dvv7fHzf1w2xuNOP2/bMue/3Z/9tcbuvWuZaSd9tr6WQbd1HWMPx2ww02NNN1SgIwEuLQX/e0w4JOExOFdOejAc1Y0IDaNHomnSYRIIizLS0+oCEJJeumdBbtetVvLHlpUSrY85FQWkp2Xp9x4OXRNCkXOx6H6bvlCzG7sdOVE7uVBCJpM8rzutjuxa5yLN1BXS0oxsnpFxiSsXDwtMpTUYzlRLyYq+pKP/9z/z9zO/bW16+sz///Ps5+7t77eN7Q/j42FxV8tqjS5pE6Xx31BlYvly+xEpm/+2ST/qrF3aB1uKOLJOrtrUmHcRqnHnE1GoMEkzR6M71HuVKD4R1MxDtn2mg13NZ0KMtDF22/w1vURy9djvu6g+fWQkvEXm0wdAixWTBACyWYijfRVPZANBQctzchG6QScoskgGRudiHpMyI5j7ZSJ0ucY0LPKkphBx74bpCTHZACW6KKlXvWljGNtn+cVY0OlWMJDw4SKgwQMrAYEMB8//vkQAAADSaOSeHjM3Ce8clcMMNuVlpBJ4ekzcKWsGXw8yW8NlsJJKrVUSIyCXj0F/a1wtKxzeP3uIYg4lcx+bAlwQoVnBOzfk8KVAhHDyLVwkN3qkaiNfDrZt0hh4ymp3dvmPPtFExvOFSyuz90jqk2Mtv3uK8RjpXkPW993CWJbeufdqQ/qIYq5Z62T/z8XvveUXUVyFf/dfPEvH//8Vj79h381nYvH77MR8d62Lb+zPHRRemuKrajpxvopC4jJ2jDpkqVI////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////J+iaSd3/+A0D/eWgDFksFVauPGGHXJ2UgYzhzyQENk6W/3CYFNQxVrO7NXdrlF2pie2kIkB7kEEOxgmPgAhjDNpcpFBhQmdgUFLw3aoWEAGUGIQ9D6WEVi8UgVTFo5hyam4YMpbkiVRJnDS13w4bHRtXlFB3sYANeGdTIqnMiJIR5afShfe/qiUnM9P9khVVrR0p8TPzOI8Qs+NSBK1MDq00Wrq78gbbTJlnJFOWIk1qNqG2wQrVDQ0uFSPUzi82VHM1TbSKJhlCigv4ruVyozlDfUJJRFOxM6c+Nj2Xb0dIsiQCjIOfNThs3F5Ub4/rfcYpkJVpC7NKsyEDCfWuS35Wb4OGaHRU2l0XfOgyU6qaWGMI6xcF5XkzFn8JVNlkn0t37f5//la8NHrsd2ppvXxnjI8f+jPufNz1Mds2fv+yrrt3wtHWu7nPTnGS+tRhqeGfySOT/+rGw3LF0aZbWX1PxJ2fMsU9M6o5ACFqIBjlOeQJ9V2eRWo0ovevcuknuFthmFCEfrbmVNNELXtNqcTr3GFfTUpII6rbrc/JShGqzZU+K8pJKQYGEKF7TtyE8gjXkkzHNSrGUoRSe6E2LrtwLJqQm2mrGcZ5ONuaOdvcSfmIU6tdtKat+t1zGCjWC62oRlmEFGkkkcmGkl4lHHz8qDDjygX//vkQAAADNqPSeHmG3Kncek8PGZuVTY5LceYzeq/RyXw8xm9WzUZJMzVUQk8iHGOfx2oGExP3zNmrNAzOgaixtHU/OIjrUgSu4ePfJUyFH/n7ONlTm/kEgd3BjqJAbqbCghCAjmDzxdD8FpFKVTGUExQg2EhHU3NxRinNxdTStmKRGOFGf2omARjlXRtErEjqOdQolKwS1CLvhPialJWfpxmpTbpGWWq/K05HMzPOcPtzZjNWDlAwqGBBR9fcIOIEO0alSGDWn//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////zNW0SSrVVDzLCRyCPBAKRQzL0dgeQrkABEUUFVWRWVGCOxuFzdSvsCza7iIgEQXR1FfaicLTo5HJtroymb1+9J7bZsGeYSmFS2zT7kRKJbtcn7N6dac94Yqd2Dluys9RvtUVHmb2+wa4iHm8hHMMeahVRU4+s2/NmWp6vPtVu52rXy4+X5xmaq8Mm2s203jvr+qrfKR+FUk1JGpurymVqlL3xinRUduInCqqGaH30rD2gx8kjUaFSOOIrPdn0Q1dKMQGgA8sO0bSiQ4uWKyMnyG0PUk0DyvaMfbrFT9ekyZ9oH3K/CK6NdDzKKdTMNHOosrpRZVCl6iTymQmXktqLhuwHaeoet7MYaXVNGuk2ET7P/rDJ7YjqFTp38SnrTg+eQdVHlwtv939u3/x2b9v87//9/+9f927Z+/j//frPjRv2Xprve+3Db++PX2MmoI61wz7Rxyf/1Y0WaDDH+havQ5XwobbfTpjR/1DETYuyByFHsTMeIOdjIiJt0eQekQbI+MUVNuJJuvpkwAcJc7lYe2gaWLIhNDj4QYjKFkQZYF0CtnaZ1iGjlk9vE7yk9FymUoqntLDOWlTMcfRxZs2D6n0jAx1IIniJenyVOJ6HxNyIFssDm6cZ///+3/7/P//8////79vv+v3/ns3//37jNv2Zr3fa22P2792942V0d4U//vkQAAAD/mQSGHpM3F7UgkcPMZuAcgJGoSYACBMAiLQlIgIMkTRJKqq0jytKORAIWvNTkwxojXEgqCZlJpZpDKram5Nz0MYTkqpdwvlmJ1eSlJVOlcjaHIQo7csjXp0Zx/FSSNzzT5OVNNbO24848/zG9tlkXRk7pS6WU2zDvrPzrO8kdCai0S0eROOJaRw6Sj8mfL1J3CpkkUQCzBMwmYunR//q9+Ozt69Xl5s/9tlna9mvVfcny014JPEuq8/fYPMvo7bVWmkcd2r0a5GXIsbGLIm/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////5riZJJaWqj8IsSRwMZOLtCmx5Bcpn2fA6vVPMUc0vjtqNGkgClAGRCaNNRI1TyzMtuWheGxua2//0z8jOTRrw7T/IpIKcj4zc0i0zEyq4fkYwDDcky0bWjs+Tt2nRpninI0adslE0IevS5mthPKfRtpetJTRxJScUWhbEs7t9/d8+t6/Z8/rXZrZc92vZz/+p+zklJMlqPtF5zZ3LMt1JO3ruRzMrMqbI/SLGt3Iz/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////tpEkgIKoBxEiEvVywTMpFEgAABhWOipOAoBEAF1/60BVI//vkQAAAD/wAS4AAAAmcgAlwAAABAAABLgAAACAAACXAAAAE////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFH5LiN5q2j6Kej44OW44K244O8MDEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAyMQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8="
+};
+
+const htmlEffectAudio={
+  correct:new Audio(EMBEDDED_EFFECT_DATA_URI.correct),
+  wrong:new Audio(EMBEDDED_EFFECT_DATA_URI.wrong)
+};
+
+Object.values(htmlEffectAudio).forEach(a=>{
+  a.preload="auto";
+  a.playsInline=true;
+  a.volume=1;
+  try{a.load();}catch(e){}
+});
+
+let htmlEffectAudioUnlocked=false;
+let htmlEffectUnlockPromise=null;
+
+function unlockHtmlEffectAudio(){
+  if(htmlEffectAudioUnlocked)return Promise.resolve(true);
+  if(htmlEffectUnlockPromise)return htmlEffectUnlockPromise;
+
+  htmlEffectUnlockPromise=(async()=>{
+    let anyUnlocked=false;
+    for(const a of Object.values(htmlEffectAudio)){
+      try{
+        const oldVolume=a.volume;
+        a.volume=0.001;
+        a.currentTime=0;
+        const p=a.play();
+        if(p && typeof p.then==="function")await p;
+        await new Promise(r=>setTimeout(r,40));
+        a.pause();
+        a.currentTime=0;
+        a.volume=oldVolume;
+        anyUnlocked=true;
+      }catch(e){
+        try{
+          a.pause();
+          a.currentTime=0;
+          a.volume=1;
+        }catch(_e){}
+      }
+    }
+    htmlEffectAudioUnlocked=anyUnlocked;
+    return anyUnlocked;
+  })();
+
+  htmlEffectUnlockPromise.finally(()=>{htmlEffectUnlockPromise=null;});
+  return htmlEffectUnlockPromise;
+}
+
+document.addEventListener("pointerdown",()=>{unlockHtmlEffectAudio();},{capture:true,passive:true});
+document.addEventListener("touchstart",()=>{unlockHtmlEffectAudio();},{capture:true,passive:true});
+
+async function playHtmlEffectSound(name,token){
+  const a=htmlEffectAudio[name];
+  if(!a || token!==speakingToken)return false;
+
+  try{
+    if(!htmlEffectAudioUnlocked){
+      await unlockHtmlEffectAudio();
+    }
+    if(token!==speakingToken)return false;
+
+    a.pause();
+    a.currentTime=0;
+    a.volume=1;
+
+    const playPromise=a.play();
+    if(playPromise && typeof playPromise.then==="function"){
+      await playPromise;
+    }
+
+    await new Promise(resolve=>{
+      let finished=false;
+      const done=()=>{
+        if(finished)return;
+        finished=true;
+        a.removeEventListener("ended",done);
+        a.removeEventListener("error",done);
+        resolve();
+      };
+      a.addEventListener("ended",done,{once:true});
+      a.addEventListener("error",done,{once:true});
+      setTimeout(done,4500);
+    });
+
+    return token===speakingToken;
+  }catch(e){
+    console.warn("HTML Audio effect playback failed:",name,e);
+    const st=$("scanStatus");
+    if(st)st.textContent=`効果音の再生に失敗しました：${name}`;
+    return false;
+  }
+}
+
+
+async function playEffectSound(name,token){
+  const sound=String(name||"").trim().toLowerCase();
+
+  // Correct / wrong are MP3-only.
+  if(sound==="correct" || sound==="wrong"){
+    await playHtmlEffectSound(sound,token);
+    return;
+  }
+
+  // The remaining five effects use Web Audio synthesis.
+  const ctx=await ensureSoundAudioReady();
+  if(!ctx || token!==speakingToken)return;
+  const t=ctx.currentTime+0.035;
+  let duration=0.7;
+
+  if(sound==="ding"){
+    // Bell-like single cue with a faint overtone.
+    toneAt(ctx,t,1047,0.48,0.10,"sine",990);
+    toneAt(ctx,t+0.015,2093,0.28,0.035,"sine",1900);
+    duration=0.62;
+  }else if(sound==="applause"){
+    // Softer applause texture: many tiny low-volume bursts with irregular timing.
+    let tt=t;
+    for(let i=0;i<18;i++){
+      tt+=0.035+Math.random()*0.055;
+      noiseBurst(ctx,tt,0.045+Math.random()*0.035,0.018+Math.random()*0.018);
+    }
+    // Add a very quiet bright tail so it feels celebratory rather than noisy.
+    toneAt(ctx,t+0.58,784,0.28,0.035,"sine",880);
+    duration=1.05;
+  }else if(sound==="start"){
+    // Light rising three-note cue.
+    toneAt(ctx,t,523,0.14,0.075,"sine",554);
+    toneAt(ctx,t+0.13,659,0.16,0.085,"sine",698);
+    toneAt(ctx,t+0.27,784,0.30,0.10,"sine",880);
+    duration=0.64;
+  }else if(sound==="finish"){
+    // Warm completion chord/arpeggio.
+    toneAt(ctx,t,659,0.18,0.075,"sine",698);
+    toneAt(ctx,t+0.14,784,0.20,0.085,"sine",831);
+    toneAt(ctx,t+0.28,988,0.40,0.10,"sine",1047);
+    duration=0.78;
+  }else if(sound==="timeup"){
+    // Clear but non-harsh attention cue: two short notes, then a lower closing tone.
+    toneAt(ctx,t,740,0.15,0.075,"triangle",698);
+    toneAt(ctx,t+0.20,740,0.15,0.075,"triangle",698);
+    toneAt(ctx,t+0.42,440,0.34,0.09,"sine",392);
+    duration=0.84;
+  }else{
+    return;
+  }
+
+  const started=performance.now();
+  while(performance.now()-started<duration*1000){
+    if(token!==speakingToken)return;
+    await new Promise(r=>setTimeout(r,40));
+  }
+}
+
+
+
+async function releaseAudioForSpeech(effectName=""){
+  // correct/wrong are now ordinary HTML Audio, not Web Audio.
+  // For the remaining synthesized effects, suspend the AudioContext first.
+  if(effectName!=="correct" && effectName!=="wrong"){
+    try{
+      if(pauseAudioContext && pauseAudioContext.state==="running"){
+        await pauseAudioContext.suspend();
+      }
+    }catch(e){}
+  }
+
+  try{window.speechSynthesis?.cancel();}catch(e){}
+  await new Promise(r=>setTimeout(r,180));
+  try{window.speechSynthesis?.resume();}catch(e){}
+  await new Promise(r=>setTimeout(r,260));
+}
+
+async function playRecord(modeOverride=null){
+  if(!currentRecord)return;
+
+  const hasSound=!!String(currentRecord.sound||"").trim();
+  if(!hasSound && !("speechSynthesis" in window)){
+    setStatus($("scanStatus"),"このブラウザでは音声再生を利用できません。",false);
+    return;
+  }
+
+  const token=++speakingToken;
+  if("speechSynthesis" in window && (speechSynthesis.speaking||speechSynthesis.pending)){
+    speechSynthesis.cancel();
+    await new Promise(r=>setTimeout(r,300));
+  }else{
+    await new Promise(r=>setTimeout(r,120));
+  }
+
+  const mode=modeOverride||currentRecord.mode;
+  const explicitEnglish=String(currentRecord.englishSpeak||"").trim();
+  const explicitJapanese=String(currentRecord.japaneseSpeak||"").trim();
+
+  // Normal cards keep the existing fallback behavior.
+  // Sound cards do NOT fall back to the visible English/Japanese text:
+  // blank EnglishSpeak means "sound only".
+  const englishSpeech=hasSound ? explicitEnglish : (explicitEnglish || currentRecord.english);
+  const japaneseSpeech=hasSound ? explicitJapanese : (explicitJapanese || currentRecord.japaneseRead || currentRecord.japanese);
+
+  for(let i=0;i<currentRecord.repeat;i++){
+    if(token!==speakingToken)break;
+
+    if(hasSound){
+      await playEffectSound(currentRecord.sound,token);
+      if(token!==speakingToken)break;
+
+      if(englishSpeech || japaneseSpeech){
+        // iPhone Safari: explicitly release the Web Audio session before
+        // handing playback to speechSynthesis.
+        await releaseAudioForSpeech(String(currentRecord.sound||"").trim().toLowerCase());
+        if(token!==speakingToken)break;
+      }
+    }
+
+    if(mode==="english"){
+      if(englishSpeech)await speakScript(englishSpeech,"en-US",currentRecord.englishRate,token);
+    }else if(mode==="japanese"){
+      if(japaneseSpeech)await speakScript(japaneseSpeech,"ja-JP",currentRecord.japaneseRate,token);
+    }else{
+      if(englishSpeech)await speakScript(englishSpeech,"en-US",currentRecord.englishRate,token);
+      if(token!==speakingToken)break;
+      if(englishSpeech && japaneseSpeech){
+        await new Promise(r=>setTimeout(r,(currentRecord.gap||0.5)*1000));
+      }
+      if(japaneseSpeech)await speakScript(japaneseSpeech,"ja-JP",currentRecord.japaneseRate,token);
+    }
+
+    if(i<currentRecord.repeat-1)await new Promise(r=>setTimeout(r,450));
+  }
+}
+async function lookup(id,auto=true){
+  id=String(id||"").trim();if(!id)return;
+  id=normalizeScannedId(id);
+  if(!id)return;
+  const r=await getRecordForScan(id);
+  if(!r){$("japaneseReadDisplay").textContent="";$("ipaDisplay").textContent="";setStatus($("scanStatus"),id+" が見つかりません。",false);return;}
+  currentRecord=r;$("idBadge").textContent="ID："+r.id;$("modeBadge").textContent="読み方："+modeLabel(r.mode);
+  $("english").classList.remove("initialPrompt");$("english").textContent=r.english;$("ipaDisplay").textContent=$("showIpa").checked&&r.ipa?r.ipa:"";$("japanese").textContent=r.japanese;$("japaneseReadDisplay").textContent=r.japaneseRead||r.japanese;updateVersionBadge(r.version||"");
+  $("manualEnglishRate").value=String(r.englishRate);
+  $("manualJapaneseRate").value=String(r.japaneseRate);
+  setStatus($("scanStatus"),id+" を読み取りました。");
+  if(auto)await playRecord();
+}
+async function stopScanner(){if(!scanner)return;try{await scanner.stop();await scanner.clear();}catch{}scanner=null;$("startBtn").disabled=false;$("stopBtn").disabled=true;}
+
+function updateScanInputModeUi(){
+  const camBtn=$("useCameraModeBtn");
+  const extBtn=$("useExternalScannerModeBtn");
+  const status=$("scannerModeStatus");
+  const hint=$("scanChoiceHint");
+
+  const camera=scanInputMode==="camera";
+  const external=scanInputMode==="external";
+  const none=!camera&&!external;
+
+  camBtn?.classList.toggle("active",camera);
+  extBtn?.classList.toggle("active",external);
+
+  $("cameraControlsPanel")?.classList.toggle("hiddenScanPanel",!camera);
+  $("externalScannerPanel")?.classList.toggle("hiddenScanPanel",!external);
+
+  if(hint){
+    hint.textContent = none
+      ? ""
+      : camera
+        ? "選択中：iPhoneカメラ"
+        : "選択中：外部スキャナー";
+  }
+
+  if(status){
+    status.textContent = none
+      ? ""
+      : camera
+        ? "下の「QRコードを読み取る」から開始します。"
+        : "下の「スキャナーを開始」を1回タップしてから、TeraでQRを読み取ります。";
+  }
+}
+
+
+
+function speakScanModeName(text){
+  if(!isScannerTabActive())return;
+  if(!("speechSynthesis" in window))return;
+  try{
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.28;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    speechSynthesis.speak(u);
+  }catch{}
+}
+
+function speakScanReadyOnce(){
+  if(!isScannerTabActive())return;
+  if(scanReadySpoken)return;
+  if(!("speechSynthesis" in window))return;
+
+  scanReadySpoken=true;
+  try{
+    const u=new SpeechSynthesisUtterance("Ready");
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.25;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    speechSynthesis.speak(u);
+  }catch{}
+}
+
+async function setScanInputMode(mode){
+  const nextMode=mode==="external"?"external":"camera";
+  if(nextMode!==scanInputMode){
+    externalScannerStartedOnce=false;
+    externalScannerArmed=false;
+    speechUnlockedByScannerStart=true;
+  }
+  scanInputMode=nextMode;
+  hidBuffer="";
+  try{await stopScanner();}catch{}
+  updateScanInputModeUi();
+{
+  const savedMode=localStorage.getItem("cameraScanMode")||"single";
+  if(savedMode==="continuous"){
+    $("cameraScanContinuous").checked=true;
+  }else{
+    $("cameraScanSingle").checked=true;
+  }
+}
+
+  if(scanInputMode==="external"){
+    const st=$("externalReadyStatus");
+    if(st)st.textContent="「スキャナーを開始」を1回タップすると、その後は自動でスキャン待機に戻ります。";
+    const btn=$("startExternalScannerBtn");
+    if(btn)btn.textContent="スキャナーを開始";
+  }
+}
+
+function normalizeNumberId(raw){
+  let t=String(raw||"").trim();
+  try{t=t.normalize("NFKC");}catch{}
+  t=t.replace(/[\s\u3000]+/g,"");
+
+  const m=t.match(/^n(\d+)(?:\.(\d+))?$/i);
+  if(!m)return "";
+
+  let intPart=m[1].replace(/^0+(?=\d)/,"");
+  if(!intPart)intPart="0";
+
+  let fracPart=m[2]||"";
+  fracPart=fracPart.replace(/0+$/,"");
+
+  return "N"+intPart+(fracPart?"."+fracPart:"");
+}
+
+function isNumberId(id){
+  return /^N(?:0|[1-9]\d*)(?:\.\d+)?$/.test(String(id||""));
+}
+
+function normalizeCommonFixedId(raw,prefix){
+  let t=String(raw||"").trim();
+  try{t=t.normalize("NFKC");}catch{}
+  t=t.replace(/[\s\u3000]+/g,"");
+  const p=String(prefix||"").toUpperCase();
+  const m=t.match(new RegExp("^"+p+"(\\d{6})$","i"));
+  return m?p+m[1]:"";
+}
+
+function commonPrefixForId(id){
+  const t=String(id||"").toUpperCase();
+  if(isNumberId(t))return "N";
+  const m=t.match(/^([WPS])\d{6}$/);
+  return m?m[1]:"";
+}
+
+function isCommonRecordId(id){
+  return !!commonPrefixForId(id);
+}
+
+function isFixedSixId(id){
+  return /^[A-Z]\d{6}$/.test(String(id||"")) && !String(id||"").startsWith("N");
+}
+
+function isSupportedRecordId(id){
+  return isFixedSixId(id) || isNumberId(id);
+}
+
+function compareRecordIds(a,b){
+  const aId=String(a?.id??a??"");
+  const bId=String(b?.id??b??"");
+
+  const aNum=isNumberId(aId);
+  const bNum=isNumberId(bId);
+
+  if(aNum && bNum){
+    const av=Number(aId.slice(1));
+    const bv=Number(bId.slice(1));
+    if(Number.isFinite(av) && Number.isFinite(bv) && av!==bv){
+      return av-bv;
+    }
+    return aId.localeCompare(bId,undefined,{numeric:true});
+  }
+
+  const rank=id=>{
+    const t=String(id||"").toUpperCase();
+    if(/^[ABC]\d{6}$/.test(t))return 0;
+    if(isNumberId(t))return 1;
+    if(/^W\d{6}$/.test(t))return 2;
+    if(/^P\d{6}$/.test(t))return 3;
+    if(/^S\d{6}$/.test(t))return 4;
+    return 5;
+  };
+
+  const ar=rank(aId),br=rank(bId);
+  if(ar!==br)return ar-br;
+
+  return aId.localeCompare(bId,undefined,{numeric:true});
+}
+
+
+function normalizeScannedId(raw){
+  let t=String(raw||"").trim();
+  if(!t)return "";
+
+  // URL型QRにも対応
+  try{
+    const u=new URL(t);
+    t=u.searchParams.get("id")||t;
+  }catch{}
+
+  try{t=t.normalize("NFKC");}catch{}
+  t=t.replace(/[\s\u3000]+/g,"");
+
+  // N is the independent number namespace. It accepts integer/decimal values.
+  if(/^n/i.test(t)){
+    const n=normalizeNumberId(t);
+    if(n)return n;
+  }
+
+  // A/B/C and other existing teaching IDs remain one letter + 6 digits.
+  const idMatch=t.match(/^([a-z])(\d{6})$/i);
+  if(idMatch)t=idMatch[1].toUpperCase()+idMatch[2];
+
+  return t;
+}
+
+async function handleExternalScannerSubmit(raw){
+  const id=extractExternalScannerId(raw) || normalizeScannedId(raw);
+  if(!id)return;
+  $("manualId").value=id;
+  await lookup(id,true);
+  // 読み取り・発音後に再度スキャン待機へ戻す
+  setTimeout(resumeExternalScannerFocus,120);
+}
+
+
+function scannerCharFromCode(e){
+  // KeyboardEvent.code is based on the physical HID key and is independent
+  // of the active Japanese/English IME for the characters used in our IDs.
+  if(/^Key[A-Z]$/.test(e.code))return e.code.slice(-1).toUpperCase();
+  if(/^Digit[0-9]$/.test(e.code))return e.code.slice(-1);
+  if(/^Numpad[0-9]$/.test(e.code))return e.code.slice(-1);
+  if(e.code==="Period" || e.code==="NumpadDecimal")return ".";
+  return "";
+}
+
+
+
+function unlockSpeechForExternalScanner(){
+  if(!isScannerTabActive())return;
+  if(speechUnlockedByScannerStart)return;
+  if(!("speechSynthesis" in window))return;
+
+  try{
+    window.speechSynthesis.cancel();
+
+    const u=new SpeechSynthesisUtterance("Ready");
+    u.lang="en-US";
+    u.rate=1.0;
+    u.pitch=1.0;
+    u.volume=0.22;
+
+    try{
+      const selectedName=$("englishVoiceSelect")?.value||"";
+      const voices=window.speechSynthesis.getVoices();
+      const v=voices.find(x=>x.name===selectedName) ||
+              voices.find(x=>/^en-US/i.test(x.lang)) ||
+              voices.find(x=>/^en/i.test(x.lang));
+      if(v)u.voice=v;
+    }catch{}
+
+    u.onend=()=>{
+      speechUnlockedByScannerStart=true;
+      setTimeout(resumeExternalScannerFocus,80);
+    };
+    u.onerror=()=>{
+      // Even if the short readiness utterance fails, keep scanner usable.
+      setTimeout(resumeExternalScannerFocus,80);
+    };
+
+    // Must be called synchronously from the user's Start button gesture.
+    window.speechSynthesis.speak(u);
+  }catch{
+    setTimeout(resumeExternalScannerFocus,80);
+  }
+}
+
+
+function isScannerTabActive(){
+  const readerPanel=$("readerPanel");
+  if(!readerPanel)return true;
+  return !readerPanel.classList.contains("hidden") &&
+         !readerPanel.classList.contains("hiddenPanel") &&
+         readerPanel.offsetParent!==null;
+}
+
+function resumeExternalScannerFocus(){
+  if(scannerCaptureSuspended())return;
+  if(!isScannerTabActive())return;
+  if(scanInputMode!=="external" || !externalScannerStartedOnce || scannerTextEditing)return;
+
+  const active=document.activeElement;
+  if(active && active!==document.body && active!==$("hidCaptureInput")){
+    const tag=(active.tagName||"").toLowerCase();
+    if(tag==="input" || tag==="textarea" || tag==="select" || active.isContentEditable){
+      return;
+    }
+  }
+
+  externalScannerArmed=true;
+  const capture=$("hidCaptureInput");
+  if(capture){
+    capture.value="";
+    setTimeout(()=>{
+      if(scannerTextEditing)return;
+      try{capture.focus({preventScroll:true});}catch{}
+    },20);
+  }
+  const st=$("externalReadyStatus");
+  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
+  const btn=$("startExternalScannerBtn");
+  if(btn)btn.textContent="スキャン待機中";
+}
+
+function startExternalScanner(){
+  if(scanInputMode!=="external")return;
+  unlockHtmlEffectAudio();
+  externalScannerStartedOnce=true;
+  scannerTextEditing=false;
+  externalScannerArmed=true;
+  hidBuffer="";
+
+  const capture=$("hidCaptureInput");
+  if(capture){
+    capture.value="";
+    try{capture.focus({preventScroll:true});}catch{}
+  }
+
+  const st=$("externalReadyStatus");
+  if(st)st.textContent="スキャン待機中です。TeraでQRコードを読み取ってください。";
+  const btn=$("startExternalScannerBtn");
+  if(btn)btn.textContent="スキャン待機中";
+
+
+  // Fallback: if onend is delayed/not fired, restore scanner focus anyway.
+  setTimeout(resumeExternalScannerFocus,700);
+}
+
+
+
+function decodeScannerAsciiDigitStream(raw){
+  let s=String(raw??"").replace(/\D/g,"");
+  if(!s)return "";
+
+  // Some HID/keyboard encoding modes send numeric QR characters as their
+  // zero-padded decimal ASCII codes: 0 -> 048, 1 -> 049, ... 9 -> 057.
+  // iPhone/Safari may also leave one or two leading zeroes from the prefix.
+  for(let trim=0;trim<=2;trim++){
+    const t=s.slice(trim);
+    if(t.length<3 || t.length%3!==0)continue;
+
+    const chars=[];
+    let ok=true;
+    for(let i=0;i<t.length;i+=3){
+      const code=Number(t.slice(i,i+3));
+      if(code<48 || code>57){
+        ok=false;
+        break;
+      }
+      chars.push(String.fromCharCode(code));
+    }
+    if(!ok)continue;
+
+    const digits=chars.join("");
+
+    // A/B/C teaching IDs have exactly six numeric digits.
+    if(/^\d{6}$/.test(digits) && /^[ABC]$/.test(activeCsvProfile)){
+      return activeCsvProfile+digits;
+    }
+  }
+
+  return "";
+}
+
+function extractExternalScannerId(raw){
+  let t=String(raw??"");
+  try{t=t.normalize("NFKC");}catch(e){}
+  t=t.replace(/[\u0000-\u001F\u007F\uFEFF]/g,"").trim();
+
+  const fixed=t.match(/([ABCWPSabcwps]\d{6})/);
+  if(fixed){
+    return fixed[1][0].toUpperCase()+fixed[1].slice(1);
+  }
+
+  const asciiDecoded=decodeScannerAsciiDigitStream(t);
+  if(asciiDecoded){
+    return asciiDecoded;
+  }
+
+  const n=t.match(/N(?:0|[1-9]\d*)(?:\.\d+)?/i);
+  if(n){
+    return normalizeNumberId(n[0]);
+  }
+
+  return "";
+}
+
+function showExternalScannerReceived(raw){
+  const st=$("externalReadyStatus");
+  if(!st)return;
+  const visible=String(raw??"")
+    .replace(/[\r\n\t]/g," ")
+    .replace(/[\u0000-\u001F\u007F]/g,"")
+    .trim();
+
+  const decoded=visible ? decodeScannerAsciiDigitStream(visible) : "";
+
+  st.textContent=visible
+    ? `スキャン受信：${visible}${decoded?` → ${decoded}`:""}`
+    : "スキャン待機中です。TeraでQRコードを読み取ってください。";
+}
+
+function setupExternalScannerCapture(){
+  const capture=$("hidCaptureInput");
+  if(!capture)return;
+
+  let submitTimer=null;
+  let rawBuffer="";
+  let physicalCodeStream=false;
+  let physicalCodeLastAt=0;
+
+  const clearTimer=()=>{
+    if(submitTimer){
+      clearTimeout(submitTimer);
+      submitTimer=null;
+    }
+  };
+
+  const resetAll=()=>{
+    clearTimer();
+    hidBuffer="";
+    rawBuffer="";
+    physicalCodeStream=false;
+    physicalCodeLastAt=0;
+    capture.value="";
+  };
+
+  const submitRaw=async raw=>{
+    const id=extractExternalScannerId(raw) || decodeScannerAsciiDigitStream(raw) || normalizeScannedId(raw);
+    if(!id)return false;
+
+    showExternalScannerReceived(id);
+    resetAll();
+
+    $("manualId").value=id;
+    await lookup(id,true);
+    setTimeout(resumeExternalScannerFocus,140);
+    return true;
+  };
+
+  const maybeSubmit=raw=>{
+    const id=extractExternalScannerId(raw);
+    if(!id)return false;
+
+    clearTimer();
+
+    if(/^[ABCWPS]\d{6}$/.test(id)){
+      submitTimer=setTimeout(()=>submitRaw(id),90);
+      return true;
+    }
+
+    if(isNumberId(id)){
+      submitTimer=setTimeout(()=>submitRaw(id),260);
+      return true;
+    }
+    return false;
+  };
+
+  capture.addEventListener("keydown",async e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+
+    if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
+      e.preventDefault();
+      e.stopPropagation();
+      const raw=rawBuffer || hidBuffer || capture.value;
+      showExternalScannerReceived(raw);
+      if(raw)await submitRaw(raw);
+      return;
+    }
+
+    const ch=scannerCharFromCode(e);
+    if(ch){
+      e.preventDefault();
+      e.stopPropagation();
+
+      const now=Date.now();
+      physicalCodeStream=true;
+      physicalCodeLastAt=now;
+      if(now-hidLastKeyAt>1500){
+        hidBuffer="";
+        rawBuffer="";
+        clearTimer();
+      }
+      hidLastKeyAt=now;
+
+      hidBuffer+=ch;
+      rawBuffer+=ch;
+      capture.value=hidBuffer;
+      showExternalScannerReceived(rawBuffer);
+      maybeSubmit(rawBuffer);
+    }
+  },true);
+
+  capture.addEventListener("input",()=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    if(physicalCodeStream && Date.now()-physicalCodeLastAt<1200)return;
+
+    const val=String(capture.value||"");
+    rawBuffer=val;
+    hidBuffer=val;
+    showExternalScannerReceived(val);
+    maybeSubmit(val);
+  });
+
+  capture.addEventListener("beforeinput",e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    if(physicalCodeStream && Date.now()-physicalCodeLastAt<1200){
+      e.preventDefault();
+      return;
+    }
+    const data=String(e.data||"");
+    if(!data)return;
+
+    rawBuffer+=data;
+    hidBuffer=rawBuffer;
+    showExternalScannerReceived(rawBuffer);
+    maybeSubmit(rawBuffer);
+  });
+
+  capture.addEventListener("paste",e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    const txt=e.clipboardData?.getData("text")||"";
+    if(!txt)return;
+    rawBuffer=txt;
+    hidBuffer=txt;
+    showExternalScannerReceived(txt);
+    maybeSubmit(txt);
+  });
+
+  window.addEventListener("keydown",async e=>{
+    if(scanInputMode!=="external" || !externalScannerArmed || scannerTextEditing)return;
+    if(document.activeElement===capture)return;
+
+    const active=document.activeElement;
+    const tag=(active?.tagName||"").toLowerCase();
+    if(["input","textarea","select"].includes(tag) || active?.isContentEditable)return;
+
+    if(e.key==="Enter" || e.code==="Enter" || e.code==="NumpadEnter"){
+      if(!rawBuffer && !hidBuffer)return;
+      e.preventDefault();
+      await submitRaw(rawBuffer||hidBuffer);
+      return;
+    }
+
+    const ch=scannerCharFromCode(e);
+    if(ch){
+      e.preventDefault();
+
+      const now=Date.now();
+      physicalCodeStream=true;
+      physicalCodeLastAt=now;
+      if(now-hidLastKeyAt>1500){
+        hidBuffer="";
+        rawBuffer="";
+        clearTimer();
+      }
+      hidLastKeyAt=now;
+
+      hidBuffer+=ch;
+      rawBuffer+=ch;
+      showExternalScannerReceived(rawBuffer);
+      maybeSubmit(rawBuffer);
+    }
+  },true);
+
+  document.addEventListener("click",e=>{
+    if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+    const target=e.target;
+    const editable=target?.closest?.("input,textarea,select,[contenteditable='true']");
+    if(editable && editable.id!=="hidCaptureInput"){
+      scannerTextEditing=true;
+      externalScannerArmed=false;
+      const st=$("externalReadyStatus");
+      if(st)st.textContent="文字入力中です。入力後、画面の空いている場所をタップするとスキャン待機に戻ります。";
+      return;
+    }
+    scannerTextEditing=false;
+    setTimeout(resumeExternalScannerFocus,80);
+  });
+}
+async function startScanner(){
+  if(scanInputMode!=="camera"){setStatus($("scanStatus"),"外部スキャナーモードです。",false);return;}
+  qrScanLocked=false;
+  if(typeof Html5Qrcode==="undefined"){setStatus($("scanStatus"),"QR機能を読み込めません。",false);return;}
+  await stopScanner();scanner=new Html5Qrcode("reader");$("startBtn").disabled=true;$("stopBtn").disabled=false;
+  try{
+    await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:240,height:240}},
+      async text=>{
+        const continuous=$("cameraScanContinuous")?.checked===true;
+        const now=Date.now();
+
+        // In continuous mode, ignore repeated detections of the same QR for a short time.
+        if(continuous && text===lastCameraScanText && now-lastCameraScanAt<1800)return;
+        if(qrScanLocked)return;
+
+        qrScanLocked=true;
+        lastCameraScanText=text;
+        lastCameraScanAt=now;
+
+        try{
+          if(continuous){
+            await lookup(text,true);
+          }else{
+            await stopScanner();
+            await lookup(text,true);
+          }
+        }finally{
+          setTimeout(()=>{qrScanLocked=false;},continuous?500:700);
+        }
+      },()=>{});
+    setStatus($("scanStatus"),$("cameraScanContinuous")?.checked ? "連続読み取り中です。次のQRコードへ向けてください。" : "カメラをQRコードへ向けてください。");
+  }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
+}
+function clearEditor(){
+  ["editId","editEnglish","editEnglishSpeak","editIpa","editJapanese","editJapaneseRead","editJapaneseSpeak","editSound","editVersion","editComment","editExplanation"].forEach(id=>{if($(id))$(id).value="";});
+  if($("editMode"))$("editMode").value="both";
+  if($("editEnglishRate"))$("editEnglishRate").value="1";
+  if($("editJapaneseRate"))$("editJapaneseRate").value="1";
+  if($("editRepeat"))$("editRepeat").value="1";
+  if($("editGap"))$("editGap").value="0.5";
+}
+async function saveEditor(){
+  let id=$("editId").value.trim();
+  const english=$("editEnglish").value.trim();
+  if(!id||!english){setStatus($("editStatus"),"IDと英文は必須です。",false);return;}
+
+  if(/^n/i.test(id)){
+    id=normalizeNumberId(id);
+    if(!id){
+      setStatus($("editStatus"),"NのIDは N＋数字 にしてください（例：N1、N0.1）。",false);
+      return;
+    }
+  }else if(/^[wps]/i.test(id)){
+    const prefix=id[0].toUpperCase();
+    id=normalizeCommonFixedId(id,prefix);
+    if(!id){
+      setStatus($("editStatus"),`${prefix}のIDは ${prefix}＋6桁 にしてください（例：${prefix}000001）。`,false);
+      return;
+    }
+  }
+  $("editId").value=id;
+
+  const commonPrefix=commonPrefixForId(id);
+  const enteredComment=$("editComment")?.value.trim()||"";
+  const r={
+    id,
+    english,
+    englishSpeak:$("editEnglishSpeak")?.value.trim()||"",
+    ipa:$("editIpa")?.value.trim()||"",
+    japanese:$("editJapanese")?.value.trim()||"",
+    japaneseRead:$("editJapaneseRead")?.value.trim()||"",
+    japaneseSpeak:$("editJapaneseSpeak")?.value.trim()||"",
+    sound:$("editSound")?.value.trim().toLowerCase()||"",
+    mode:$("editMode")?.value||"both",
+    englishRate:Number($("editEnglishRate")?.value)||1,
+    japaneseRate:Number($("editJapaneseRate")?.value)||1,
+    repeat:Math.max(1,parseInt($("editRepeat")?.value,10)||1),
+    gap:Math.max(0,Number($("editGap")?.value)||0),
+    version:$("editVersion")?.value.trim()||"",
+    comment:enteredComment || (commonPrefix?COMMON_PROFILE_CONFIG[commonPrefix].comment:""),
+    explanation:$("editExplanation")?.value.trim()||""
+  };
+
+  const targetStore=commonPrefix?STORE_N:activeStoreName();
+  await putRecordToStore(r,targetStore);
+  if(r.version)await putMeta("version_"+(commonPrefix||activeCsvProfile),r.version);
+  setStatus($("editStatus"),id+" を保存しました。");await refreshSummary();await renderPage();
+}
+async function editRecord(id){
+  const details=$("dataEditorDetails");
+  if(details)details.open=true;
+  const r=isCommonRecordId(id)?await getRecordForScan(id):await getRecord(id);
+  if(!r)return;
+  $("editId").value=r.id||"";
+  $("editEnglish").value=r.english||"";
+  $("editEnglishSpeak").value=r.englishSpeak||"";
+  $("editIpa").value=r.ipa||"";
+  $("editJapanese").value=r.japanese||"";
+  $("editJapaneseRead").value=r.japaneseRead||"";
+  $("editJapaneseSpeak").value=r.japaneseSpeak||"";
+  $("editSound").value=r.sound||"";
+  $("editMode").value=r.mode||"both";
+  $("editEnglishRate").value=String(r.englishRate??1);
+  $("editJapaneseRate").value=String(r.japaneseRate??1);
+  $("editRepeat").value=String(r.repeat??1);
+  $("editGap").value=String(r.gap??0.5);
+  $("editVersion").value=r.version||"";
+  $("editComment").value=r.comment||"";
+  $("editExplanation").value=r.explanation||"";
+  setStatus($("editStatus"),`${r.id} のCSV内容を表示しています。変更しない場合は保存不要です。`);
+  details?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+let dataSearchQuery="";
+
+function normalizeSearchText(text){
+  let t=String(text||"");
+  try{t=t.normalize("NFKC");}catch(e){}
+  // Treat common Japanese full-width punctuation as ordinary search punctuation.
+  t=t.replace(/：/g,":").replace(/　/g," ");
+  return t;
+}
+
+function splitAndSearchTerms(text){
+  return normalizeSearchText(text)
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function parseCommonSearchQuery(text){
+  const normalized=normalizeSearchText(text)
+    .replace(/\b([ABCNWPSabcnwps])\s*:\s*/g,(m,p)=>p.toLowerCase()+":");
+  const tokens=splitAndSearchTerms(normalized);
+  const namespaceFilters=[];
+  const terms=[];
+
+  tokens.forEach(token=>{
+    const m=token.match(/^([abcnwps]):(.*)$/i);
+    if(m){
+      namespaceFilters.push({
+        prefix:m[1].toUpperCase(),
+        value:String(m[2]||"").trim().toLowerCase()
+      });
+    }else{
+      terms.push(token);
+    }
+  });
+
+  return {namespaceFilters,terms};
+}
+
+function recordSearchText(r){
+  return [
+    r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+    r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+  ].map(v=>String(v??"").toLowerCase()).join(" ");
+}
+
+function matchesCommonSearchQuery(r,query){
+  if(query.namespaceFilters.length){
+    const prefix=commonPrefixForId(r.id);
+    const matched=query.namespaceFilters.some(f=>{
+      if(prefix!==f.prefix)return false;
+      if(!f.value)return true;
+      const idTail=String(r.id||"").slice(1).toLowerCase();
+      return idTail.includes(f.value) || recordSearchText(r).includes(f.value);
+    });
+    if(!matched)return false;
+  }
+
+  if(query.terms.length){
+    const searchable=recordSearchText(r);
+    if(!query.terms.every(term=>searchable.includes(term)))return false;
+  }
+
+  return true;
+}
+
+async function filteredAll(searchId){
+  const sourceText=searchId==="searchText"
+    ? dataSearchQuery
+    : String($(searchId)?.value||"");
+
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0 || query.namespaceFilters.length>0;
+
+  // Data Management is always scoped to the active A/B/C profile + common N/W/P/S.
+  const active=await getActiveProfileRecords();
+  const common=await getAllCommonRecords();
+  const all=[...active,...common];
+
+  // Empty search: show active profile + all common records.
+  if(!hasSearch){
+    return all.sort(compareRecordIds);
+  }
+
+  // A:/B:/C: is valid only for the currently selected profile.
+  // Example: CSV=A -> A: works, B:/C: return no matches.
+  const hasOtherMainPrefix=query.namespaceFilters.some(
+    f=>["A","B","C"].includes(f.prefix) && f.prefix!==activeCsvProfile
+  );
+  const hasActiveMainPrefix=query.namespaceFilters.some(
+    f=>f.prefix===activeCsvProfile
+  );
+
+  // If the query asks only for another A/B/C profile, return nothing.
+  const hasCommonPrefix=query.namespaceFilters.some(
+    f=>["N","W","P","S"].includes(f.prefix)
+  );
+  if(hasOtherMainPrefix && !hasActiveMainPrefix && !hasCommonPrefix){
+    return [];
+  }
+
+  return all
+    .filter(r=>{
+      const prefix=commonPrefixForId(r.id) ||
+        String(r.id||"").match(/^([ABC])\d{6}$/)?.[1] || "";
+
+      if(query.namespaceFilters.length){
+        const matched=query.namespaceFilters.some(f=>{
+          // Ignore non-active A/B/C namespaces completely.
+          if(["A","B","C"].includes(f.prefix) && f.prefix!==activeCsvProfile){
+            return false;
+          }
+          if(prefix!==f.prefix)return false;
+          if(!f.value)return true;
+          const idTail=String(r.id||"").slice(1).toLowerCase();
+          return idTail.includes(f.value) || recordSearchText(r).includes(f.value);
+        });
+        if(!matched)return false;
+      }
+
+      if(query.terms.length){
+        const searchable=recordSearchText(r);
+        if(!query.terms.every(term=>searchable.includes(term)))return false;
+      }
+      return true;
+    })
+    .sort(compareRecordIds);
+}
+
+
+function markDataSelectionChanged(){
+  dataSelectionRevision++;
+  qrSelectionRevision=-1;
+  flashSelectionRevision=-1;
+  saveDataManagementSelection();
+
+  if($("qrSelectedStatus"))$("qrSelectedStatus").textContent="";
+  if($("flashSelectedStatus"))$("flashSelectedStatus").textContent="";
+
+  if(typeof flashSourceMode!=="undefined" && flashSourceMode==="selected"){
+    flashRecords=[];
+    flashIndex=0;
+    flashBackShown=false;
+  }
+}
+
+function syncVisibleDataSelection(){
+  const body=$("recordBody");
+  if(!body)return;
+  body.querySelectorAll('input[type="checkbox"][data-record-id]').forEach(cb=>{
+    const id=String(cb.dataset.recordId||"");
+    if(!id)return;
+    if(cb.checked)selectedIds.add(id);
+    else selectedIds.delete(id);
+  });
+}
+
+
+const DATA_COLUMN_SETTING_KEY="dataManagementColumnLayoutV1";
+const DATA_COLUMN_KEYS=[
+  "select","id","english","ipa","japanese","japaneseRead","comment","mode","englishRate","japaneseRate","repeat","actions"
+];
+const DATA_COLUMN_DEFAULTS={
+  select:1,id:2,english:3,ipa:4,japanese:5,japaneseRead:6,comment:7,mode:8,englishRate:9,japaneseRate:10,repeat:11,actions:0
+};
+
+function loadDataColumnSettings(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(DATA_COLUMN_SETTING_KEY)||"{}");
+    const out={...DATA_COLUMN_DEFAULTS};
+    DATA_COLUMN_KEYS.forEach(k=>{
+      if(Object.prototype.hasOwnProperty.call(saved,k)){
+        const n=Number(saved[k]);
+        out[k]=Number.isFinite(n)?Math.max(0,Math.min(12,Math.round(n))):DATA_COLUMN_DEFAULTS[k];
+      }
+    });
+    return out;
+  }catch(e){
+    return {...DATA_COLUMN_DEFAULTS};
+  }
+}
+function saveDataColumnSettings(settings){
+  localStorage.setItem(DATA_COLUMN_SETTING_KEY,JSON.stringify(settings));
+}
+function populateDataColumnSettingControls(){
+  const settings=loadDataColumnSettings();
+  document.querySelectorAll("[data-data-col-setting]").forEach(sel=>{
+    const key=sel.dataset.dataColSetting;
+    sel.innerHTML='<option value="0">表示しない</option>'+
+      Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join("");
+    sel.value=String(settings[key]??DATA_COLUMN_DEFAULTS[key]??0);
+  });
+}
+function readDataColumnSettingControls(){
+  const out={};
+  document.querySelectorAll("[data-data-col-setting]").forEach(sel=>{
+    out[sel.dataset.dataColSetting]=Number(sel.value)||0;
+  });
+  return out;
+}
+function applyDataColumnSettingsToTable(settings=loadDataColumnSettings()){
+  const orderMap=new Map(DATA_COLUMN_KEYS.map((k,i)=>[k,{rank:Number(settings[k])||0,base:i}]));
+  const sortCells=cells=>cells.slice().sort((a,b)=>{
+    const ka=a.dataset.dataCol||"", kb=b.dataset.dataCol||"";
+    const aa=orderMap.get(ka)||{rank:0,base:999};
+    const bb=orderMap.get(kb)||{rank:0,base:999};
+    if(aa.rank===0 && bb.rank!==0)return 1;
+    if(bb.rank===0 && aa.rank!==0)return -1;
+    if(aa.rank!==bb.rank)return aa.rank-bb.rank;
+    return aa.base-bb.base;
+  });
+
+  document.querySelectorAll("#dataPanel table thead tr, #recordBody tr").forEach(row=>{
+    const cells=[...row.children].filter(el=>el.dataset?.dataCol);
+    sortCells(cells).forEach(cell=>{
+      const key=cell.dataset.dataCol;
+      cell.style.display=(Number(settings[key])||0)===0?"none":"";
+      row.appendChild(cell);
+    });
+  });
+  applyDataManagementViewSwitches();
+}
+function applyDataColumnSettingsFromControls(){
+  const settings=readDataColumnSettingControls();
+  saveDataColumnSettings(settings);
+  applyDataColumnSettingsToTable(settings);
+}
+function resetDataColumnSettings(){
+  saveDataColumnSettings({...DATA_COLUMN_DEFAULTS});
+  populateDataColumnSettingControls();
+  applyDataColumnSettingsToTable({...DATA_COLUMN_DEFAULTS});
+}
+
+const DATA_OPERATION_VISIBLE_KEY="dataOperationVisibleV1";
+
+function loadDataManagementViewSwitches(){
+  const operationToggle=$("dataOperationToggle");
+  const operationSaved=localStorage.getItem(DATA_OPERATION_VISIBLE_KEY);
+  if(operationToggle)operationToggle.checked=operationSaved==="true";
+  applyDataManagementViewSwitches();
+}
+function applyDataManagementViewSwitches(){
+  const operationOn=$("dataOperationToggle")?.checked===true;
+  document.querySelectorAll('[data-data-col="actions"]').forEach(cell=>{
+    const settings=loadDataColumnSettings();
+    const orderedVisible=(Number(settings.actions)||0)>0;
+    cell.style.display=(operationOn && orderedVisible)?"":"none";
+  });
+}
+function saveDataManagementViewSwitches(){
+  localStorage.setItem(DATA_OPERATION_VISIBLE_KEY,String($("dataOperationToggle")?.checked===true));
+  applyDataManagementViewSwitches();
+}
+
+async function renderPage(){
+  const all=await filteredAll("searchText"),size=Number($("pageSize").value),start=currentPage*size;
+  const page=all.slice(start,start+size),body=$("recordBody");body.innerHTML="";
+  page.forEach(r=>{
+    const tr=document.createElement("tr");
+    const sel=document.createElement("td"),cb=document.createElement("input");
+    sel.dataset.dataCol="select";
+    cb.type="checkbox";
+    cb.dataset.recordId=String(r.id||"");
+    cb.checked=selectedIds.has(r.id);
+    cb.addEventListener("change",()=>{
+      const id=String(cb.dataset.recordId||"");
+      if(!id)return;
+
+      const wasSelected=selectedIds.has(id);
+      if(cb.checked)selectedIds.add(id);
+      else selectedIds.delete(id);
+
+      if(wasSelected!==cb.checked){
+        markDataSelectionChanged();
+      }
+    });
+    sel.appendChild(cb);tr.appendChild(sel);
+    const dataValues=[
+      ["id",r.id],
+      ["english",r.english],
+      ["ipa",r.ipa||""],
+      ["japanese",r.japanese],
+      ["japaneseRead",r.japaneseRead||""],
+      ["comment",r.comment||""],
+      ["mode",modeLabel(r.mode)],
+      ["englishRate",r.englishRate],
+      ["japaneseRate",r.japaneseRate],
+      ["repeat",r.repeat]
+    ];
+    dataValues.forEach(([key,v])=>{const td=document.createElement("td");td.dataset.dataCol=key;td.textContent=v;tr.appendChild(td);});
+    const act=document.createElement("td"),e=document.createElement("button"),d=document.createElement("button");
+    act.dataset.dataCol="actions";
+    e.textContent="編集";e.className="smallBtn secondary";e.addEventListener("click",()=>editRecord(r.id));
+    d.textContent="削除";d.className="smallBtn danger";d.style.marginLeft="6px";d.addEventListener("click",async()=>{
+      if(confirm(r.id+"を削除しますか？")){
+        await deleteRecordFromStore(r.id,isCommonRecordId(r.id)?STORE_N:activeStoreName());
+        selectedIds.delete(r.id);
+        await refreshSummary();
+        await renderPage();
+      }
+    });
+    act.append(e,d);tr.appendChild(act);body.appendChild(tr);
+  });
+  applyDataColumnSettingsToTable();
+  $("pageStatus").textContent=all.length?`${start+1}～${Math.min(start+size,all.length)} / ${all.length}件`:"0件";
+  const prevDisabled=currentPage===0;
+  const nextDisabled=start+size>=all.length;
+  $("prevBtn").disabled=prevDisabled;
+  $("nextBtn").disabled=nextDisabled;
+  if($("prevBtnBottom"))$("prevBtnBottom").disabled=prevDisabled;
+  if($("nextBtnBottom"))$("nextBtnBottom").disabled=nextDisabled;
+}
+
+
+const QR_FIELD_DEFAULTS={
+  qrShowEnglish:true,
+  qrShowIpa:true,
+  qrShowJapanese:true,
+  qrShowJapaneseRead:true,
+  qrShowId:true
+};
+
+function loadQrFieldSettings(){
+  for(const [id,def] of Object.entries(QR_FIELD_DEFAULTS)){
+    const el=$(id);
+    if(!el)continue;
+    const saved=localStorage.getItem(id);
+    el.checked=saved===null?def:saved==="true";
+    el.addEventListener("change",()=>{
+      localStorage.setItem(id,String(el.checked));
+      if(qrPageSource.length){
+        renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+      }
+    });
+  }
+}
+
+const DEFAULT_SIZE_SETTINGS={
+  qrSize:132,
+  idSize:1.05,
+  englishSize:1.18,
+  ipaSize:1.05,
+  japaneseSize:1.12,
+  japaneseReadSize:1.12,
+  softWordStart:true,
+  qrDefaultCount:50
+};
+
+function getSizeSettings(){
+  try{
+    const saved=JSON.parse(localStorage.getItem("qrCardSizeSettings")||"{}");
+    return {...DEFAULT_SIZE_SETTINGS,...saved};
+  }catch{
+    return {...DEFAULT_SIZE_SETTINGS};
+  }
+}
+
+function loadSizeSettingsControls(){
+  const s=getSizeSettings();
+  $("settingQrSize").value=s.qrSize;
+  $("settingIdSize").value=s.idSize;
+  $("settingEnglishSize").value=s.englishSize;
+  $("settingIpaSize").value=s.ipaSize;
+  $("settingJapaneseSize").value=s.japaneseSize;
+  $("settingJapaneseReadSize").value=s.japaneseReadSize;
+  if($("settingQrDefaultCount"))$("settingQrDefaultCount").value=String(s.qrDefaultCount||50);
+  if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
+  if(localStorage.getItem(SPEECH_WARMUP_KEY)===null)$("settingSoftWordStart").checked=s.softWordStart!==false;
+  applySizeSettingsToCss(s);
+  if($("qrCount"))$("qrCount").value=String(s.qrDefaultCount||50);
+}
+
+function readSizeSettingsControls(){
+  const clamp=(v,min,max,def)=>{
+    const n=Number(v);
+    return Number.isFinite(n)?Math.min(max,Math.max(min,n)):def;
+  };
+  return {
+    qrSize:Math.round(clamp($("settingQrSize").value,80,220,132)),
+    idSize:clamp($("settingIdSize").value,0.6,2,1.05),
+    englishSize:clamp($("settingEnglishSize").value,0.7,2.5,1.18),
+    ipaSize:clamp($("settingIpaSize").value,0.6,2,1.05),
+    japaneseSize:clamp($("settingJapaneseSize").value,0.7,2.5,1.12),
+    japaneseReadSize:clamp($("settingJapaneseReadSize").value,0.7,2.5,1.12),
+    qrDefaultCount:Number($("settingQrDefaultCount")?.value||50),
+    softWordStart:$("settingSoftWordStart").checked
+  };
+}
+
+function applySizeSettingsToCss(s){
+  document.documentElement.style.setProperty("--qr-card-size",s.qrSize+"px");
+  document.documentElement.style.setProperty("--qr-id-size",s.idSize+"rem");
+  document.documentElement.style.setProperty("--qr-en-size",s.englishSize+"rem");
+  document.documentElement.style.setProperty("--qr-ipa-size",s.ipaSize+"rem");
+  document.documentElement.style.setProperty("--qr-ja-size",s.japaneseSize+"rem");
+  document.documentElement.style.setProperty("--qr-ja-read-size",s.japaneseReadSize+"rem");
+}
+
+function saveAndApplySizeSettings(){
+  const s=readSizeSettingsControls();
+  localStorage.setItem("qrCardSizeSettings",JSON.stringify(s));
+  applySizeSettingsToCss(s);
+  if(qrPageSource.length){
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
+  setStatus($("qrStatus"),"QRと文字のサイズ設定を保存しました。");
+}
+
+function resetSizeSettings(){
+  localStorage.removeItem("qrCardSizeSettings");
+  loadSizeSettingsControls();
+loadSpeechWarmupSetting();
+  if(qrPageSource.length){
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
+  setStatus($("qrStatus"),"サイズ設定を初期値に戻しました。");
+}
+
+
+function normalizePreviewQrToSingleImage(q){
+  if(!q)return;
+
+  const convert=()=>{
+    try{
+      const canvas=q.querySelector("canvas");
+      const img=q.querySelector("img");
+      let src="";
+
+      if(canvas){
+        try{src=canvas.toDataURL("image/png");}catch(e){}
+      }
+      if(!src && img?.src)src=img.src;
+      if(!src)return;
+
+      // Physically remove every renderer created by QRCode.js and keep
+      // exactly one image. This avoids iPhone Safari showing both renderers.
+      q.innerHTML="";
+      const only=document.createElement("img");
+      only.src=src;
+      only.alt="QR code";
+      only.style.width="100%";
+      only.style.height="100%";
+      only.style.maxWidth="100%";
+      only.style.maxHeight="100%";
+      only.style.display="block";
+      only.style.margin="0";
+      only.style.padding="0";
+      only.style.objectFit="contain";
+      only.style.boxSizing="border-box";
+      q.appendChild(only);
+    }catch(e){}
+  };
+
+  // QRCode.js is normally synchronous, but run once again on the next frame
+  // for iPhone/WebKit implementations that populate the fallback image later.
+  convert();
+  requestAnimationFrame(convert);
+}
+
+
+function previewSpeakButtonEnabled(){
+  return (localStorage.getItem("qrPreviewSpeakButton")||"off")==="on";
+}
+
+const qrPrintCopiesById=new Map();
+
+function printCopiesSettingEnabled(){
+  return (localStorage.getItem("qrPrintCopiesSetting")||"off")==="on";
+}
+
+function getQrPrintCopies(record){
+  const id=String(record?.id||"");
+  if(!qrPrintCopiesById.has(id))return 1;
+  const n=Number(qrPrintCopiesById.get(id));
+  return Math.max(0,Math.min(20,Number.isFinite(n)?Math.round(n):1));
+}
+
+function setQrPrintCopies(record,count){
+  const id=String(record?.id||"");
+  if(!id)return;
+  const raw=Number(count);
+  const n=Math.max(0,Math.min(20,Number.isFinite(raw)?Math.round(raw):1));
+  qrPrintCopiesById.set(id,n);
+}
+
+function makePreviewCopiesControl(record){
+  const label=document.createElement("label");
+  label.className="qrPreviewCopiesControl";
+
+  const caption=document.createElement("span");
+  caption.textContent="枚数";
+  label.appendChild(caption);
+
+  const sel=document.createElement("select");
+  sel.setAttribute("aria-label",String(record?.id||"")+" の印刷枚数");
+  for(let i=0;i<=20;i++){
+    const op=document.createElement("option");
+    op.value=String(i);
+    op.textContent=i+"枚";
+    if(i===getQrPrintCopies(record))op.selected=true;
+    sel.appendChild(op);
+  }
+  sel.addEventListener("change",()=>{
+    setQrPrintCopies(record,sel.value);
+  });
+  label.appendChild(sel);
+  return label;
+}
+
+function loadPrintCopiesSetting(){
+  const sel=$("settingPrintCopies");
+  if(!sel)return;
+  sel.value=localStorage.getItem("qrPrintCopiesSetting")||"off";
+  sel.addEventListener("change",()=>{
+    localStorage.setItem("qrPrintCopiesSetting",sel.value==="on"?"on":"off");
+    if(qrPageSource.length){
+      renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+    }
+  });
+}
+
+function expandQrOutputItemsByCopies(items){
+  if(!printCopiesSettingEnabled())return items.slice();
+  const out=[];
+  items.forEach(item=>{
+    const count=getQrPrintCopies(item?.record);
+    for(let i=0;i<count;i++)out.push(item);
+  });
+  return out;
+}
+
+async function playRecordFromPreview(record){
+  if(!record)return;
+  const previous=currentRecord;
+  currentRecord=record;
+  try{
+    await playRecord();
+  }finally{
+    // Do not overwrite a record that may have been selected/scanned while playing.
+    if(currentRecord===record)currentRecord=previous;
+  }
+}
+
+function makePreviewSpeakButton(record){
+  const btn=document.createElement("button");
+  btn.type="button";
+  btn.className="secondary qrPreviewSpeakBtn";
+  btn.textContent="🔊 発音";
+  btn.setAttribute("aria-label",String(record?.english||record?.id||"")+" を再生");
+  btn.addEventListener("click",async e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    btn.disabled=true;
+    try{await playRecordFromPreview(record);}finally{btn.disabled=false;}
+  });
+  return btn;
+}
+
+function loadPreviewSpeakButtonSetting(){
+  const sel=$("settingPreviewSpeakButton");
+  if(!sel)return;
+  sel.value=localStorage.getItem("qrPreviewSpeakButton")||"off";
+  sel.addEventListener("change",()=>{
+    localStorage.setItem("qrPreviewSpeakButton",sel.value==="on"?"on":"off");
+    if(qrPageSource.length){
+      renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+    }
+  });
+}
+
+
+function updateQrPagerButtons(){
+  const atStart=qrPageStart<=0;
+  const atEnd=qrPageStart+qrPageSize>=qrPageSource.length;
+
+  ["prevQrPageBtn","prevQrPageBtnBottom"].forEach(id=>{
+    const el=$(id);
+    if(el)el.disabled=atStart;
+  });
+  ["nextQrPageBtn","nextQrPageBtnBottom"].forEach(id=>{
+    const el=$(id);
+    if(el)el.disabled=atEnd;
+  });
+}
+
+
+function scrollToQrPreviewTop(){
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const sheet=$("qrSheet");
+      if(!sheet)return;
+      const firstCard=sheet.querySelector(".qrCard");
+      const target=firstCard || sheet;
+      const rect=target.getBoundingClientRect();
+      const top=window.scrollY + rect.top - 16;
+      window.scrollTo({top:Math.max(0,top),behavior:"smooth"});
+    });
+  });
+}
+
+function goPrevQrPage(){
+  qrPageStart=Math.max(0,qrPageStart-qrPageSize);
+  renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  updateQrPagerButtons();
+}
+
+function goNextQrPage(){
+  if(qrPageStart+qrPageSize<qrPageSource.length){
+    qrPageStart+=qrPageSize;
+    renderQr(qrPageSource.slice(qrPageStart,qrPageStart+qrPageSize));
+  }
+  updateQrPagerButtons();
+}
+
+function renderQr(records){
+  const sheet=$("qrSheet");sheet.innerHTML="";
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+
+  records.forEach(r=>{
+    const item=document.createElement("div");
+    item.className="qrPreviewItem";
+    const card=document.createElement("div");card.className="qrCard";
+    item.appendChild(card);
+    const q=document.createElement("div");q.className="qrCodeWrap";card.appendChild(q);
+    const qrSize=getSizeSettings().qrSize;
+    new QRCode(q,{text:r.id,width:qrSize,height:qrSize,correctLevel:QRCode.CorrectLevel.M});
+    normalizePreviewQrToSingleImage(q);
+
+    if(showId){
+      const id=document.createElement("div");
+      id.className="qrId";
+      id.textContent=r.id;
+      card.appendChild(id);
+    }
+    if(showEnglish){
+      const en=document.createElement("div");
+      en.className="qrEnglish";
+      en.textContent=r.english;
+      card.appendChild(en);
+    }
+    if(showIpa&&r.ipa){
+      const ipa=document.createElement("div");
+      ipa.className="qrIpa";
+      ipa.textContent=r.ipa;
+      card.appendChild(ipa);
+    }
+    if(showJapanese&&r.japanese){
+      const ja=document.createElement("div");
+      ja.className="qrJapanese";
+      ja.textContent=r.japanese;
+      card.appendChild(ja);
+    }
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese)){
+      const jr=document.createElement("div");
+      jr.className="qrJapaneseRead";
+      jr.textContent=r.japaneseRead||r.japanese;
+      card.appendChild(jr);
+    }
+    const copiesOn=printCopiesSettingEnabled();
+    const speakOn=previewSpeakButtonEnabled();
+
+    if(copiesOn){
+      const controls=document.createElement("div");
+      controls.className="qrPreviewControls";
+      if(speakOn)controls.appendChild(makePreviewSpeakButton(r));
+      controls.appendChild(makePreviewCopiesControl(r));
+      item.appendChild(controls);
+    }else if(speakOn){
+      // OFF preserves the previous preview layout exactly.
+      item.appendChild(makePreviewSpeakButton(r));
+    }
+
+    sheet.appendChild(item);
+  });
+
+  const labels=[];
+  if(showEnglish)labels.push("英語");
+  if(showIpa)labels.push("発音記号");
+  if(showJapanese)labels.push("日本語");
+  if(showJapaneseRead)labels.push("日本語読み");
+  if(showId)labels.push("ID");
+  setStatus($("qrStatus"),records.length+"件作成しました（"+(labels.join("・")||"文字表示なし")+"）。");
+  requestAnimationFrame(applyMasterLayoutToAllRendered);
+
+  if(qrPageSource.length){
+    const start=qrPageStart+1;
+    const end=Math.min(qrPageStart+records.length,qrPageSource.length);
+    $("qrPageStatus").textContent=start+"～"+end+" / "+qrPageSource.length+"件";
+    $("prevQrPageBtn").disabled=qrPageStart===0;
+    $("nextQrPageBtn").disabled=qrPageStart+qrPageSize>=qrPageSource.length;
+  }else{
+    $("qrPageStatus").textContent="";
+    $("prevQrPageBtn").disabled=true;
+    $("nextQrPageBtn").disabled=true;
+  }
+}
+
+
+let flashRecords=[];
+let flashIndex=0;
+let flashBackShown=false;
+let flashSourceMode="search";
+let flashReaderSourceRecords=[];
+let flashReaderSourceLabel="";
+let flashShuffleEnabled=false;
+let flashCheckedIds=new Set();
+const FLASH_LAYOUT_KEY="flashLayoutV1";
+const FLASH_CHECKED_KEY_PREFIX="flashCheckedV1_";
+
+
+function flashCheckedStorageKey(){
+  return FLASH_CHECKED_KEY_PREFIX+activeCsvProfile;
+}
+function loadFlashCheckedIds(){
+  try{
+    const a=JSON.parse(localStorage.getItem(flashCheckedStorageKey())||"[]");
+    flashCheckedIds=new Set(Array.isArray(a)?a.map(String):[]);
+  }catch(e){
+    flashCheckedIds=new Set();
+  }
+  updateFlashCheckedCount();
+}
+function saveFlashCheckedIds(){
+  localStorage.setItem(flashCheckedStorageKey(),JSON.stringify([...flashCheckedIds]));
+  updateFlashCheckedCount();
+}
+function updateFlashCheckedCount(){
+  const el=$("flashCheckedCount");
+  if(el)el.textContent=`(${flashCheckedIds.size}件)`;
+}
+function currentFlashRecord(){
+  return flashRecords[flashIndex]||null;
+}
+function updateFlashCheckUi(){
+  const btn=$("flashCheckBtn");
+  if(!btn)return;
+  const r=currentFlashRecord();
+  const checked=!!(r && flashCheckedIds.has(String(r.id)));
+  btn.classList.toggle("flashCheckedOn",checked);
+  btn.setAttribute("aria-pressed",String(checked));
+  btn.textContent=checked?"✓ 済":"✓ チェック";
+  btn.disabled=!r;
+}
+function toggleCurrentFlashCheck(){
+  const r=currentFlashRecord();
+  if(!r)return;
+  const id=String(r.id||"");
+  if(!id)return;
+  if(flashCheckedIds.has(id))flashCheckedIds.delete(id);
+  else flashCheckedIds.add(id);
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+}
+function flashSideMemoText(r,side){
+  const cfg=getFlashSideConfig(side);
+  let top=flashFieldValue(r,cfg.top)||"（データなし）";
+  if(cfg.rows!==2)return top;
+  let bottom=flashFieldValue(r,cfg.bottom)||"（データなし）";
+  return `${top} ／ ${bottom}`;
+}
+
+
+function flashAccepted(btn){
+  return;
+}
+
+async function runSearchWithFeedback(btn,searchFn){
+  if(!btn || typeof searchFn!=="function")return;
+  const originalText=btn.dataset.originalSearchLabel || btn.textContent;
+  btn.dataset.originalSearchLabel=originalText;
+
+  const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
+  btn.dataset.searchFeedbackToken=token;
+  btn.disabled=true;
+  btn.textContent="検索中…";
+
+  try{
+    const result=await searchFn();
+    if(btn.dataset.searchFeedbackToken!==token)return;
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : null;
+    btn.textContent=count===null ? "✓ 検索しました" : `検索結果 ${count}件`;
+
+    setTimeout(()=>{
+      if(btn.dataset.searchFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1600);
+  }catch(err){
+    console.error(err);
+    if(btn.dataset.searchFeedbackToken!==token)return;
+    btn.textContent="検索エラー";
+    setTimeout(()=>{
+      if(btn.dataset.searchFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1400);
+  }
+}
+
+async function runSelectedCreateWithFeedback(btn,createFn){
+  if(!btn || typeof createFn!=="function")return;
+
+  const originalText=btn.dataset.originalSelectedLabel || btn.textContent;
+  btn.dataset.originalSelectedLabel=originalText;
+
+  const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
+  btn.dataset.selectedFeedbackToken=token;
+  btn.disabled=true;
+  btn.textContent="作成中…";
+
+  try{
+    const result=await createFn();
+    if(btn.dataset.selectedFeedbackToken!==token)return;
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : null;
+
+    // Zero means no selection; the inline warning is shown by the create function.
+    if(count===0){
+      btn.textContent=originalText;
+      btn.disabled=false;
+      return;
+    }
+
+    btn.textContent=count===null ? "✓ 作成しました" : `選択 ${count}件`;
+
+    setTimeout(()=>{
+      if(btn.dataset.selectedFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1600);
+  }catch(err){
+    console.error(err);
+    if(btn.dataset.selectedFeedbackToken!==token)return;
+    btn.textContent="作成エラー";
+    setTimeout(()=>{
+      if(btn.dataset.selectedFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1400);
+  }
+}
+
+async function runFlashSettingsApplyFeedback(btn,applyFn){
+  if(!btn || typeof applyFn!=="function")return;
+
+  const originalText=btn.dataset.originalApplyLabel || btn.textContent;
+  btn.dataset.originalApplyLabel=originalText;
+
+  const token=String(Date.now())+"_"+Math.random().toString(36).slice(2);
+  btn.dataset.applyFeedbackToken=token;
+  btn.disabled=true;
+  btn.textContent="反映中…";
+
+  try{
+    const result=await applyFn();
+    if(btn.dataset.applyFeedbackToken!==token)return;
+
+    const count=typeof result==="number" && Number.isFinite(result) ? result : 0;
+    btn.textContent=`${count}件に反映`;
+
+    setTimeout(()=>{
+      if(btn.dataset.applyFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1600);
+  }catch(err){
+    console.error(err);
+    if(btn.dataset.applyFeedbackToken!==token)return;
+    btn.textContent="反映エラー";
+    setTimeout(()=>{
+      if(btn.dataset.applyFeedbackToken!==token)return;
+      btn.textContent=originalText;
+      btn.disabled=false;
+    },1400);
+  }
+}
+
+
+
+
+
+function normalizeFlashCheckedIdsFromText(text){
+  const out=[];
+  const seen=new Set();
+  const raw=String(text||"").replace(/\r/g,"");
+  const lines=raw.split("\n");
+
+  for(const line of lines){
+    if(!line.trim())continue;
+
+    // CSV/TSV: first column is treated as ID. Plain-text ID-per-line also works.
+    let first=line;
+    if(line.includes("\t"))first=line.split("\t")[0];
+    else if(line.includes(","))first=line.split(",")[0];
+
+    first=String(first||"").trim().replace(/^"|"$/g,"");
+    if(!first)continue;
+    if(/^id$/i.test(first))continue;
+
+    const id=normalizeScannedId(first);
+    if(!isSupportedRecordId(id))continue;
+    if(!seen.has(id)){
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+async function applyCheckedIds(ids,sourceLabel="ID"){
+  const all=await getActiveProfileRecords();
+  const available=new Set(all.map(r=>String(r.id)));
+  const matched=ids.filter(id=>available.has(id));
+  const missing=ids.filter(id=>!available.has(id));
+
+  flashCheckedIds=new Set(matched);
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+  await buildFlashCheckedMemo();
+
+  const status=$("flashCheckedImportStatus");
+  if(status){
+    status.textContent=`${sourceLabel}：${matched.length}件をチェックに反映`
+      +(missing.length?`（現在のCSVにないID ${missing.length}件）`:"");
+  }
+  return matched;
+}
+
+async function importCheckedIdsFromTextarea(){
+  const ids=normalizeFlashCheckedIdsFromText($("flashCheckedIdInput")?.value||"");
+  if(!ids.length){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="有効なIDがありません。";
+    return;
+  }
+  await applyCheckedIds(ids,"貼り付けID");
+  flashAccepted($("flashLoadIdsBtn"));
+}
+
+async function importCheckedIdsFromCsv(){
+  const file=$("flashCheckedCsvInput")?.files?.[0];
+  if(!file){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVファイルを選択してください。";
+    return;
+  }
+  let text="";
+  try{
+    text=await readCsvFileText(file);
+  }catch(e){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVを読み込めませんでした。";
+    return;
+  }
+  const ids=normalizeFlashCheckedIdsFromText(text);
+  if(!ids.length){
+    if($("flashCheckedImportStatus"))$("flashCheckedImportStatus").textContent="CSVから有効なIDを見つけられませんでした。";
+    return;
+  }
+  await applyCheckedIds(ids,file.name);
+  flashAccepted($("flashLoadCheckedCsvBtn"));
+}
+
+async function buildFlashcardsFromCheckedIds(){
+  const all=await getActiveProfileRecords();
+  flashSourceMode="checked";
+  flashRecords=all
+    .filter(r=>flashCheckedIds.has(String(r.id)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+
+  if($("flashStatus")){
+    $("flashStatus").textContent=flashRecords.length
+      ? `チェック項目から ${flashRecords.length}件　CSV ${activeCsvProfile}`
+      : "チェック項目がありません。";
+  }
+  if($("flashCheckedImportStatus")){
+    $("flashCheckedImportStatus").textContent=flashRecords.length
+      ? `${flashRecords.length}件でフラッシュカードを作成しました。`
+      : "現在のCSVに一致するチェックIDがありません。";
+  }
+  if(flashRecords.length)flashAccepted($("flashBuildFromChecksBtn"));
+}
+
+async function getCheckedFlashRows(){
+  const all=await getActiveProfileRecords();
+  return all.filter(r=>flashCheckedIds.has(String(r.id)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)))
+    .map(r=>({
+      id:String(r.id||""),
+      front:flashSideMemoText(r,"front"),
+      back:flashSideMemoText(r,"back")
+    }));
+}
+
+async function buildFlashCheckedMemo(){
+  const tbody=$("flashCheckedTableBody");
+  if(!tbody)return [];
+  const rows=await getCheckedFlashRows();
+  tbody.innerHTML="";
+  if(!rows.length){
+    const tr=document.createElement("tr");
+    const td=document.createElement("td");
+    td.colSpan=3;
+    td.className="flashCheckedEmpty";
+    td.textContent="チェックしたカードはありません。";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }else{
+    for(const row of rows){
+      const tr=document.createElement("tr");
+      for(const value of [row.id,row.front,row.back]){
+        const td=document.createElement("td");
+        td.textContent=value;
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+  updateFlashCheckedCount();
+  return rows;
+}
+
+async function copyTextCompat(text){
+  if(!text)return;
+  try{
+    await navigator.clipboard.writeText(text);
+    return;
+  }catch(e){}
+  const ta=document.createElement("textarea");
+  ta.value=text;
+  ta.style.position="fixed";
+  ta.style.opacity="0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try{document.execCommand("copy");}catch(_){}
+  ta.remove();
+}
+
+async function copyFlashCheckedIds(){
+  const rows=await getCheckedFlashRows();
+  await copyTextCompat(rows.map(r=>r.id).join("\n"));
+}
+
+async function copyFlashCheckedMemo(){
+  const rows=await getCheckedFlashRows();
+  const tsv=[
+    ["ID","表","裏"].join("\t"),
+    ...rows.map(r=>[r.id,r.front,r.back].join("\t"))
+  ].join("\n");
+  await copyTextCompat(tsv);
+  await buildFlashCheckedMemo();
+}
+
+function csvEscape(v){
+  const s=String(v??"");
+  return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+}
+
+async function saveFlashCheckedMemoFile(){
+  const rows=await getCheckedFlashRows();
+  if(!rows.length)return;
+  const csv="\uFEFF"+[
+    ["ID","表","裏"].map(csvEscape).join(","),
+    ...rows.map(r=>[r.id,r.front,r.back].map(csvEscape).join(","))
+  ].join("\r\n");
+  const d=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  const stamp=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`flash_checked_${activeCsvProfile}_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function clearFlashChecks(){
+  flashCheckedIds.clear();
+  saveFlashCheckedIds();
+  updateFlashCheckUi();
+  await buildFlashCheckedMemo();
+}
+
+function flashFieldValue(r,key){
+  if(!r)return "";
+  if(key==="id")return r.id||"";
+  if(key==="japanese")return r.japanese||r.japaneseRead||"";
+  if(key==="japaneseRead")return r.japaneseRead||r.japanese||"";
+  if(key==="ipa")return r.ipa||"";
+  if(key==="comment")return r.comment||"";
+  if(key==="explanation")return r.explanation||"";
+  return r.english||"";
+}
+
+function getFlashSideConfig(side){
+  const front=side==="front";
+  return {
+    rows:Number($(front?"flashFrontRows":"flashBackRows")?.value||1)===2?2:1,
+    top:$(front?"flashFrontTopField":"flashBackTopField")?.value||"english",
+    bottom:$(front?"flashFrontBottomField":"flashBackBottomField")?.value||"explanation"
+  };
+}
+
+function updateFlashLayoutControls(){
+  for(const side of ["Front","Back"]){
+    const rows=Number($("flash"+side+"Rows")?.value||1);
+    const wrap=$("flash"+side+"BottomWrap");
+    const topLabel=$("flash"+side+"TopLabel");
+    wrap?.classList.toggle("flashHidden",rows!==2);
+    if(topLabel)topLabel.textContent=rows===2?"上段":"表示項目";
+  }
+}
+
+function saveFlashLayout(){
+  const data={
+    frontRows:$("flashFrontRows")?.value||"1",
+    frontTop:$("flashFrontTopField")?.value||"english",
+    frontBottom:$("flashFrontBottomField")?.value||"explanation",
+    backRows:$("flashBackRows")?.value||"1",
+    backTop:$("flashBackTopField")?.value||"japanese",
+    backBottom:$("flashBackBottomField")?.value||"explanation",
+    autoFont:$("flashAutoFont")?.checked!==false
+  };
+  localStorage.setItem(FLASH_LAYOUT_KEY,JSON.stringify(data));
+}
+
+function loadFlashLayout(){
+  const defaults={
+    frontRows:"1",
+    frontTop:"english",
+    frontBottom:"explanation",
+    backRows:"1",
+    backTop:"japanese",
+    backBottom:"explanation",
+    autoFont:true
+  };
+  let s={};
+  try{s=JSON.parse(localStorage.getItem(FLASH_LAYOUT_KEY)||"{}")||{};}catch(e){s={};}
+  const cfg={...defaults,...s};
+  $("flashFrontRows").value=cfg.frontRows;
+  $("flashFrontTopField").value=cfg.frontTop;
+  $("flashFrontBottomField").value=cfg.frontBottom;
+  $("flashBackRows").value=cfg.backRows;
+  $("flashBackTopField").value=cfg.backTop;
+  $("flashBackBottomField").value=cfg.backBottom;
+  if($("flashAutoFont"))$("flashAutoFont").checked=cfg.autoFont!==false;
+  updateFlashLayoutControls();
+}
+
+
+function flashAutoFontEnabled(){
+  return $("flashAutoFont")?.checked!==false;
+}
+
+function resetFlashPaneFont(pane){
+  if(!pane)return;
+  pane.style.fontSize="";
+  pane.classList.toggle("flashAutoFitActive",flashAutoFontEnabled());
+}
+
+function fitFlashPaneFont(pane){
+  if(!pane)return;
+  resetFlashPaneFont(pane);
+  if(!flashAutoFontEnabled() || pane.hidden)return;
+
+  // Start from computed CSS size and shrink only if the pane overflows.
+  const computed=parseFloat(getComputedStyle(pane).fontSize)||32;
+  let size=computed;
+  const minSize=14;
+  const fits=()=>pane.scrollHeight<=pane.clientHeight+1 && pane.scrollWidth<=pane.clientWidth+1;
+
+  // Let the browser finish wrapping before measuring.
+  if(fits())return;
+  while(size>minSize && !fits()){
+    size=Math.max(minSize,size-1);
+    pane.style.fontSize=size+"px";
+  }
+}
+
+function fitFlashcardFonts(){
+  requestAnimationFrame(()=>{
+    fitFlashPaneFont($("flashTop"));
+    fitFlashPaneFont($("flashBottom"));
+  });
+}
+
+function renderFlashcard(){
+  const r=flashRecords[flashIndex]||null;
+  if(!r){
+    if($("flashTop"))$("flashTop").textContent="対象カードなし";
+    if($("flashBottom")){$("flashBottom").textContent="";$("flashBottom").hidden=true;}
+    if($("flashMain"))$("flashMain").classList.add("flashOneRow");
+    if($("flashId"))$("flashId").textContent="";
+    if($("flashStatus"))$("flashStatus").textContent="0件";
+    $("flashFrontBtn")?.classList.remove("flashSideActive");
+    $("flashBackBtn")?.classList.remove("flashSideActive");
+    $("flashFrontBtn")?.setAttribute("aria-pressed","false");
+    $("flashBackBtn")?.setAttribute("aria-pressed","false");
+    updateFlashCheckUi();
+    resetFlashPaneFont($("flashTop"));resetFlashPaneFont($("flashBottom"));
+    return;
+  }
+
+  const cfg=getFlashSideConfig(flashBackShown?"back":"front");
+  let top=flashFieldValue(r,cfg.top);
+  let bottom=cfg.rows===2?flashFieldValue(r,cfg.bottom):"";
+  if(!top)top="（データなし）";
+  if(cfg.rows===2 && !bottom)bottom="（データなし）";
+
+  $("flashTop").textContent=top;
+  $("flashBottom").textContent=bottom;
+  $("flashBottom").hidden=cfg.rows!==2;
+  $("flashMain").classList.toggle("flashOneRow",cfg.rows===1);
+  $("flashMain").classList.toggle("flashTwoRows",cfg.rows===2);
+
+  // ID is a search key and small reference, independent of selected content.
+  $("flashId").textContent=r.id;
+    $("flashFrontBtn")?.classList.toggle("flashSideActive",!flashBackShown);
+  $("flashBackBtn")?.classList.toggle("flashSideActive",flashBackShown);
+  $("flashFrontBtn")?.setAttribute("aria-pressed",String(!flashBackShown));
+  $("flashBackBtn")?.setAttribute("aria-pressed",String(flashBackShown));
+  $("flashStatus").textContent=`${flashIndex+1} / ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  updateFlashCheckUi();
+  fitFlashcardFonts();
+}
+
+function flashMatchesSearch(r,terms){
+  if(!terms.length)return true;
+  const searchable=[
+    r.id,r.english,r.englishSpeak,r.ipa,r.japanese,r.japaneseRead,r.japaneseSpeak,
+    r.sound,r.mode,r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version,r.comment,r.explanation
+  ].map(v=>String(v??"").toLowerCase()).join(" ");
+  return terms.every(term=>searchable.includes(term));
+}
+
+async function buildFlashcardsFromSearch(){
+  const latestSelection=latestDataManagementSelection();
+  flashSourceMode="search";
+
+  const sourceText=String($("flashSearch")?.value||"");
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0;
+
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
+
+  if(latestSelection.size){
+    source=source.filter(r=>latestSelection.has(String(r.id||"")));
+  }
+
+  flashRecords=source
+    .filter(r=>matchesCommonSearchQuery(r,query))
+    .sort(compareRecordIds);
+
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+
+  if($("flashStatus")){
+    const scope=latestSelection.size?"チェック項目内":"全項目";
+    const filterNote=query.namespaceFilters.length
+      ? `（${query.namespaceFilters.map(f=>f.prefix+":").join(" / ")}）`
+      : hasSearch?"＋共通ID":"";
+    $("flashStatus").textContent=`${scope}のAND検索結果から ${flashRecords.length}件　CSV ${activeCsvProfile}${filterNote}`;
+  }
+  if(flashRecords.length)flashAccepted($("flashFromSearchBtn"));
+  return flashRecords.length;
+}
+
+async function buildFlashcardsFromSelected(){
+  const selectedNow=latestDataManagementSelection();
+  flashSourceMode="selected";
+
+  const all=await getRecordsForSelectedIds(selectedNow);
+  const fresh=all
+    .filter(r=>selectedNow.has(String(r.id||"")))
+    .sort(compareRecordIds);
+
+  flashRecords=[];
+  flashIndex=0;
+  flashBackShown=false;
+
+  if(!fresh.length){
+    renderFlashcard();
+    if($("flashSelectedStatus")){
+      setStatus($("flashSelectedStatus"),"データ管理で項目を選択してください。",false);
+    }
+    if($("flashStatus"))$("flashStatus").textContent="";
+    return 0;
+  }
+
+  if($("flashSelectedStatus"))$("flashSelectedStatus").textContent="";
+  flashRecords=fresh.map(r=>({...r}));
+  flashSelectionRevision=dataSelectionRevision;
+
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  renderFlashcard();
+
+  if($("flashStatus")){
+    $("flashStatus").textContent=`最新のチェック ${flashRecords.length}件から作成しました　CSV ${activeCsvProfile}`;
+  }
+  resetSelectionOnNextDataOpen=true;
+  return flashRecords.length;
+}
+
+async function loadFlashcards(){
+  if(!$("flashTop"))return 0;
+  if(flashSourceMode==="selected"){
+    await buildFlashcardsFromSelected();
+  }else if(flashSourceMode==="checked"){
+    await buildFlashcardsFromCheckedIds();
+  }else if(flashSourceMode==="reader"){
+    flashRecords=flashReaderSourceRecords.map(r=>({...r}));
+    if(flashShuffleEnabled)shuffleFlashRecordOrder();
+    flashIndex=0;
+    flashBackShown=false;
+    renderFlashcard();
+    if($("flashStatus"))$("flashStatus").textContent=`リーダー「${flashReaderSourceLabel||"表示中の内容"}」から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  }else{
+    await buildFlashcardsFromSearch();
+  }
+  return flashRecords.length;
+}
+function setFlashcardSide(side){
+  flashBackShown=side==="back";
+  renderFlashcard();
+}
+function flipFlashcard(){flashBackShown=!flashBackShown;renderFlashcard();}
+function flashControlBlink(btn){
+  if(!btn)return;
+  btn.classList.remove("flashNavAccepted");
+  void btn.offsetWidth;
+  btn.classList.add("flashNavAccepted");
+  setTimeout(()=>btn.classList.remove("flashNavAccepted"),260);
+}
+
+function flashNavAccepted(delta){
+  const btn=$(delta<0?"flashPrevBtn":"flashNextBtn");
+  flashControlBlink(btn);
+}
+
+function flashSpeakAccepted(){
+  flashControlBlink($("flashSpeakBtn"));
+}
+
+function stepFlashcard(delta){
+  if(!flashRecords.length)return;
+  flashIndex=(flashIndex+delta+flashRecords.length)%flashRecords.length;
+  flashBackShown=false;
+  renderFlashcard();
+  flashNavAccepted(delta);
+}
+function shuffleFlashRecordOrder(){
+  for(let i=flashRecords.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [flashRecords[i],flashRecords[j]]=[flashRecords[j],flashRecords[i]];
+  }
+}
+
+function updateFlashShuffleUi(){
+  const btn=$("flashShuffleToggleBtn");
+  if(!btn)return;
+  btn.innerHTML=flashShuffleEnabled
+    ? '<span>シャッフル</span><span class="flashShuffleState">ON</span>'
+    : '<span>シャッフル</span><span class="flashShuffleState">OFF</span>';
+  btn.classList.toggle("flashShuffleOn",flashShuffleEnabled);
+  btn.setAttribute("aria-pressed",String(flashShuffleEnabled));
+}
+
+function toggleFlashShuffle(){
+  flashShuffleEnabled=!flashShuffleEnabled;
+  if(flashShuffleEnabled && flashRecords.length>1){
+    const currentId=flashRecords[flashIndex]?.id||"";
+    shuffleFlashRecordOrder();
+    // Start at the first shuffled card, but avoid staying on the exact same first card
+    // when possible so ON is visibly effective.
+    flashIndex=0;
+    if(flashRecords.length>1 && flashRecords[0]?.id===currentId){
+      [flashRecords[0],flashRecords[1]]=[flashRecords[1],flashRecords[0]];
+    }
+    flashBackShown=false;
+    renderFlashcard();
+  }
+  updateFlashShuffleUi();
+}
+
+let flashFullscreenActive=false;
+
+function updateFlashFullscreenUi(){
+  const stage=$("flashCard")?.closest(".flashStageCard");
+  if(stage)stage.classList.toggle("flashFullscreenMode",flashFullscreenActive);
+
+  // Desktop can lock body for native/full-page fullscreen.
+  // Mobile keeps the control layout in place and only enlarges the card vertically.
+  document.body.classList.toggle(
+    "flashFullscreenBody",
+    flashFullscreenActive && !isTouchMobileFlash()
+  );
+
+  const btn=$("flashFullscreenBtn");
+  if(btn)btn.textContent=flashFullscreenActive?"拡大終了":"拡大";
+  fitFlashcardFonts();
+}
+
+function isTouchMobileFlash(){
+  return window.matchMedia?.("(max-width: 700px)").matches ||
+         /iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+}
+
+async function enterFlashFullscreen(){
+  flashFullscreenActive=true;
+  updateFlashFullscreenUi();
+
+  const stage=$("flashCard")?.closest(".flashStageCard");
+
+  // iPhone/mobile: enlarge only the card and scroll so the normal control row
+  // sits safely above Safari's bottom UI, not at the extreme bottom edge.
+  if(isTouchMobileFlash()){
+    setTimeout(()=>{
+      const controls=stage?.querySelector(".flashControlBar");
+      if(controls){
+        const rect=controls.getBoundingClientRect();
+        const safeTarget=window.innerHeight*0.68;
+        const currentCenter=rect.top+rect.height/2;
+        const delta=currentCenter-safeTarget;
+        window.scrollBy({top:delta,behavior:"auto"});
+      }
+      fitFlashcardFonts();
+    },100);
+    return;
+  }
+
+  // Desktop keeps the existing native fullscreen behavior.
+  try{
+    if(stage?.requestFullscreen && !document.fullscreenElement){
+      await stage.requestFullscreen();
+    }else if(stage?.webkitRequestFullscreen && !document.webkitFullscreenElement){
+      stage.webkitRequestFullscreen();
+    }
+  }catch(e){}
+  setTimeout(fitFlashcardFonts,120);
+}
+
+async function exitFlashFullscreen(){
+  flashFullscreenActive=false;
+  updateFlashFullscreenUi();
+  if(isTouchMobileFlash()){
+    const stage=$("flashCard")?.closest(".flashStageCard");
+    setTimeout(()=>{
+      const controls=stage?.querySelector(".flashControlBar");
+      if(controls){
+        const rect=controls.getBoundingClientRect();
+        const safeTarget=window.innerHeight*0.68;
+        const currentCenter=rect.top+rect.height/2;
+        const delta=currentCenter-safeTarget;
+        window.scrollBy({top:delta,behavior:"auto"});
+      }
+      fitFlashcardFonts();
+    },80);
+    return;
+  }
+  try{
+    if(document.fullscreenElement && document.exitFullscreen){
+      await document.exitFullscreen();
+    }else if(document.webkitFullscreenElement && document.webkitExitFullscreen){
+      document.webkitExitFullscreen();
+    }
+  }catch(e){}
+  setTimeout(fitFlashcardFonts,120);
+}
+
+async function toggleFlashFullscreen(){
+  if(flashFullscreenActive)await exitFlashFullscreen();
+  else await enterFlashFullscreen();
+}
+
+async function speakCurrentFlashcard(){
+  const r=flashRecords[flashIndex];
+  if(!r)return;
+  await playRecordFromPreview(r);
+}
+
+async function speakCurrentFlashcardEnglish(){
+  const r=flashRecords[flashIndex];
+  if(!r)return;
+  const previous=currentRecord;
+  currentRecord=r;
+  try{
+    await playRecord("english");
+  }finally{
+    if(currentRecord===r)currentRecord=previous;
+  }
+}
+
+function flashTouchSpeakMode(){
+  const v=$("flashTouchSpeak")?.value || localStorage.getItem("flashTouchSpeakMode") || "destination";
+  return v==="current" ? "current" : "destination";
+}
+
+function flashTouchSpeakPosition(){
+  return ($("flashTouchSpeakSide")?.value || localStorage.getItem("flashTouchSpeakSide") || "top")==="bottom"
+    ? "bottom"
+    : "top";
+}
+
+function updateFlashTouchGuideLabels(){
+  const speakTop=flashTouchSpeakPosition()==="top";
+  const prevTop=$("flashTouchPrevTop");
+  const prevBottom=$("flashTouchPrevBottom");
+  const nextTop=$("flashTouchNextTop");
+  const nextBottom=$("flashTouchNextBottom");
+  if(prevTop)prevTop.textContent=speakTop ? "前♪" : "前";
+  if(prevBottom)prevBottom.textContent=speakTop ? "前" : "前♪";
+  if(nextTop)nextTop.textContent=speakTop ? "次♪" : "次";
+  if(nextBottom)nextBottom.textContent=speakTop ? "次" : "次♪";
+}
+
+function updateFlashTouchSpeakHint(){
+  const hint=$("flashTouchSpeakHint");
+  const pos=flashTouchSpeakPosition();
+  const mode=flashTouchSpeakMode();
+  const spoken=mode==="current" ? "現在のカードを発音してから移動" : "移動先のカードを発音";
+  if(hint){
+    if(pos==="bottom"){
+      hint.textContent=`左右25%：上＝発音なしで移動／下＝${spoken}。中央50%＝表裏。`;
+    }else{
+      hint.textContent=`左右25%：上＝${spoken}／下＝発音なしで移動。中央50%＝表裏。`;
+    }
+  }
+  updateFlashTouchGuideLabels();
+}
+
+function loadFlashTouchSpeakSetting(){
+  const speakSel=$("flashTouchSpeak");
+  const sideSel=$("flashTouchSpeakSide");
+  if(speakSel){
+    const saved=localStorage.getItem("flashTouchSpeakMode");
+    speakSel.value=saved==="current" ? "current" : "destination";
+    speakSel.addEventListener("change",()=>{
+      localStorage.setItem("flashTouchSpeakMode",speakSel.value==="current" ? "current" : "destination");
+      updateFlashTouchSpeakHint();
+    });
+  }
+  if(sideSel){
+    sideSel.value=localStorage.getItem("flashTouchSpeakSide")||"top";
+    sideSel.addEventListener("change",()=>{
+      localStorage.setItem("flashTouchSpeakSide",sideSel.value==="bottom"?"bottom":"top");
+      updateFlashTouchSpeakHint();
+    });
+  }
+  updateFlashTouchSpeakHint();
+}
+
+document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async()=>{
+  // Preserve the latest visible checkbox state before leaving any tab.
+  syncVisibleDataSelection();
+
+  document.querySelectorAll(".tabBtn").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  $(b.dataset.target).classList.add("active");
+
+  if(b.dataset.target==="dataPanel"){
+    // After QR/flash was created from a selection, returning here starts
+    // a fresh selection round. Existing QR/flash output itself is untouched.
+    if(resetSelectionOnNextDataOpen){
+      resetDataManagementSelectionForNextRound();
+      resetSelectionOnNextDataOpen=false;
+    }
+    await renderPage();
+  }
+}));
+
+$("csvProfileSelect")?.addEventListener("change",async()=>{
+  await switchDataProfile($("csvProfileSelect").value);
+});
+$("flashFromSelectedBtn")?.addEventListener("click",()=>{
+  runSelectedCreateWithFeedback($("flashFromSelectedBtn"),buildFlashcardsFromSelected);
+});
+$("flashFromSearchBtn")?.addEventListener("click",()=>{
+  runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
+});
+$("flashReloadBtn")?.addEventListener("click",()=>{
+  runFlashSettingsApplyFeedback($("flashReloadBtn"),loadFlashcards);
+});
+$("flashPrevBtn")?.addEventListener("click",()=>stepFlashcard(-1));
+$("flashNextBtn")?.addEventListener("click",()=>stepFlashcard(1));
+$("flashFrontBtn")?.addEventListener("click",()=>setFlashcardSide("front"));
+$("flashBackBtn")?.addEventListener("click",()=>setFlashcardSide("back"));
+$("flashSpeakBtn")?.addEventListener("click",()=>{
+  flashSpeakAccepted();
+  speakCurrentFlashcard();
+});
+$("flashCheckBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleCurrentFlashCheck();});
+$("flashShuffleToggleBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashShuffle();});
+$("flashFullscreenBtn")?.addEventListener("click",e=>{e.stopPropagation();toggleFlashFullscreen();});
+["flashPrevBtn","flashNextBtn","flashFrontBtn","flashBackBtn","flashSpeakBtn","flashCheckBtn","flashShuffleToggleBtn"].forEach(id=>{
+  $(id)?.addEventListener("pointerdown",e=>e.stopPropagation());
+  $(id)?.addEventListener("click",e=>e.stopPropagation());
+});
+$("flashCard")?.addEventListener("click",e=>{
+  // Center 50% always flips front/back.
+  // Outer 25% zones navigate:
+  // upper half = navigate + English pronunciation when enabled;
+  // lower half = navigate without pronunciation.
+  const card=e.currentTarget;
+  const rect=card.getBoundingClientRect();
+  if(!rect.width || !rect.height)return;
+
+  let x=(e.clientX-rect.left)/rect.width;
+  let y=(e.clientY-rect.top)/rect.height;
+  x=Math.max(0,Math.min(1,x));
+  y=Math.max(0,Math.min(1,y));
+
+  if(x>=0.25 && x<=0.75){
+    flipFlashcard();
+    return;
+  }
+
+  const delta=x<0.25 ? -1 : 1;
+  const touchedHalf=y<0.5 ? "top" : "bottom";
+  const shouldSpeak=touchedHalf===flashTouchSpeakPosition();
+  const speakMode=flashTouchSpeakMode();
+
+  if(shouldSpeak && speakMode==="current"){
+    flashSpeakAccepted();
+    speakCurrentFlashcardEnglish();
+    stepFlashcard(delta);
+    return;
+  }
+
+  stepFlashcard(delta);
+
+  if(shouldSpeak && speakMode==="destination"){
+    setTimeout(()=>{
+      flashSpeakAccepted();
+      speakCurrentFlashcardEnglish();
+    },20);
+  }
+});
+$("flashCard")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"||e.key===" "){e.preventDefault();flipFlashcard();}
+  else if(e.key==="ArrowLeft"){e.preventDefault();stepFlashcard(-1);}
+  else if(e.key==="ArrowRight"){e.preventDefault();stepFlashcard(1);}
+});
+loadFlashTouchSpeakSetting();
+initIosKeyboardButtons();
+$("flashSearch")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    runSearchWithFeedback($("flashFromSearchBtn"),buildFlashcardsFromSearch);
+  }
+});
+
+document.addEventListener("fullscreenchange",()=>{
+  if(!document.fullscreenElement && flashFullscreenActive){
+    flashFullscreenActive=false;
+    updateFlashFullscreenUi();
+  }
+});
+document.addEventListener("webkitfullscreenchange",()=>{
+  if(!document.webkitFullscreenElement && flashFullscreenActive){
+    flashFullscreenActive=false;
+    updateFlashFullscreenUi();
+  }
+});
+document.addEventListener("keydown",e=>{
+  if(scannerCaptureSuspended())return;
+  if(e.key==="Escape" && flashFullscreenActive)exitFlashFullscreen();
+});
+window.addEventListener("resize",()=>{
+  if(flashFullscreenActive)setTimeout(fitFlashcardFonts,120);
+});
+window.addEventListener("orientationchange",()=>{
+  if(flashFullscreenActive)setTimeout(fitFlashcardFonts,180);
+});
+
+["flashFrontRows","flashFrontTopField","flashFrontBottomField","flashBackRows","flashBackTopField","flashBackBottomField","flashAutoFont"].forEach(id=>{
+  $(id)?.addEventListener("change",()=>{
+    updateFlashLayoutControls();
+    saveFlashLayout();
+    renderFlashcard();
+  });
+});
+
+$("flashLoadIdsBtn")?.addEventListener("click",importCheckedIdsFromTextarea);
+$("flashLoadCheckedCsvBtn")?.addEventListener("click",importCheckedIdsFromCsv);
+$("flashBuildFromChecksBtn")?.addEventListener("click",buildFlashcardsFromCheckedIds);
+$("flashBuildMemoBtn")?.addEventListener("click",async()=>{await buildFlashCheckedMemo();flashAccepted($("flashBuildMemoBtn"));});
+$("flashCopyIdsBtn")?.addEventListener("click",async()=>{await copyFlashCheckedIds();flashAccepted($("flashCopyIdsBtn"));});
+$("flashCopyMemoBtn")?.addEventListener("click",async()=>{await copyFlashCheckedMemo();flashAccepted($("flashCopyMemoBtn"));});
+$("flashSaveMemoBtn")?.addEventListener("click",async()=>{await saveFlashCheckedMemoFile();flashAccepted($("flashSaveMemoBtn"));});
+$("flashClearChecksBtn")?.addEventListener("click",async()=>{await clearFlashChecks();flashAccepted($("flashClearChecksBtn"));});
+$("replaceImportBtn").addEventListener("click",()=>importCsv(true));
+$("mergeImportBtn").addEventListener("click",()=>importCsv(false));
+$("exportBtn").addEventListener("click",exportCsv);
+$("numbersReplaceImportBtn")?.addEventListener("click",()=>importNumbersCsv(true));
+$("numbersMergeImportBtn")?.addEventListener("click",()=>importNumbersCsv(false));
+$("numbersExportBtn")?.addEventListener("click",exportNumbersCsv);
+$("wordsReplaceImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("W",true));
+$("wordsMergeImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("W",false));
+$("wordsExportBtn")?.addEventListener("click",()=>exportExtraCommonCsv("W"));
+$("phrasesReplaceImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("P",true));
+$("phrasesMergeImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("P",false));
+$("phrasesExportBtn")?.addEventListener("click",()=>exportExtraCommonCsv("P"));
+$("soundsReplaceImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("S",true));
+$("soundsMergeImportBtn")?.addEventListener("click",()=>importExtraCommonCsv("S",false));
+$("soundsExportBtn")?.addEventListener("click",()=>exportExtraCommonCsv("S"));
+$("startBtn").addEventListener("click",startScanner);
+$("cameraScanSingle").addEventListener("change",()=>{
+  if($("cameraScanSingle").checked)localStorage.setItem("cameraScanMode","single");
+});
+$("cameraScanContinuous").addEventListener("change",()=>{
+  if($("cameraScanContinuous").checked)localStorage.setItem("cameraScanMode","continuous");
+});$("stopBtn").addEventListener("click",stopScanner);
+$("manualLookupBtn").addEventListener("click",()=>lookup($("manualId").value,false));
+$("englishVoiceSelect").addEventListener("change",()=>{
+  localStorage.setItem("selectedEnglishVoice",$("englishVoiceSelect").value);
+});
+$("japaneseVoiceSelect").addEventListener("change",()=>{
+  localStorage.setItem("selectedJapaneseVoice",$("japaneseVoiceSelect").value);
+});
+$("showIpa").addEventListener("change",()=>{$("ipaDisplay").textContent=currentRecord&&$("showIpa").checked&&currentRecord.ipa?currentRecord.ipa:"";});
+$("playConfiguredBtn").addEventListener("click",()=>playRecord());
+$("playEnglishBtn").addEventListener("click",()=>playRecord("english"));
+$("playJapaneseBtn").addEventListener("click",()=>playRecord("japanese"));
+$("playBothBtn").addEventListener("click",()=>playRecord("both"));
+$("manualEnglishRate").addEventListener("change",()=>{if(currentRecord)currentRecord.englishRate=Number($("manualEnglishRate").value);});
+$("manualJapaneseRate").addEventListener("change",()=>{if(currentRecord)currentRecord.japaneseRate=Number($("manualJapaneseRate").value);});
+$("saveBtn").addEventListener("click",saveEditor);$("clearEditorBtn").addEventListener("click",clearEditor);
+async function executeDataSearch(){
+  dataSearchQuery=String($("searchText")?.value||"");
+  currentPage=0;
+
+  const matched=await filteredAll("searchText");
+
+  // A newly executed Data Management search starts with all matching records checked.
+  // Existing selections outside the current result set are left untouched.
+  let changed=false;
+  matched.forEach(r=>{
+    const id=String(r.id||"");
+    if(!id)return;
+    if(!selectedIds.has(id)){
+      selectedIds.add(id);
+      changed=true;
+    }
+  });
+  if(changed)markDataSelectionChanged();
+
+  await renderPage();
+  if($("editStatus")){
+    setStatus($("editStatus"),`${matched.length}件の検索結果をすべてチェックしました。`);
+  }
+  return matched.length;
+}
+
+populateDataColumnSettingControls();
+loadDataManagementViewSwitches();
+applyDataColumnSettingsToTable();
+$("applyDataColumnSettingsBtn")?.addEventListener("click",applyDataColumnSettingsFromControls);
+$("resetDataColumnSettingsBtn")?.addEventListener("click",resetDataColumnSettings);
+$("dataOperationToggle")?.addEventListener("change",()=>{
+  if($("dataOperationToggle")?.checked){
+    const settings=loadDataColumnSettings();
+    if((Number(settings.actions)||0)===0){
+      settings.actions=12;
+      saveDataColumnSettings(settings);
+      const sel=document.querySelector('[data-data-col-setting="actions"]');
+      if(sel)sel.value="12";
+      applyDataColumnSettingsToTable(settings);
+    }
+  }
+  saveDataManagementViewSwitches();
+});
+
+$("dataSearchBtn")?.addEventListener("click",()=>{
+  runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
+});
+$("searchText")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    runSearchWithFeedback($("dataSearchBtn"),executeDataSearch);
+  }
+});
+$("pageSize").addEventListener("change",()=>{currentPage=0;renderPage();});
+
+["searchText","qrSearch","flashSearch"].forEach(id=>{
+  const el=$(id);
+  if(!el)return;
+  const forceKeyboard=()=>{
+    suspendExternalScannerForTextEntry();
+    try{el.readOnly=false;}catch(e){}
+    setTimeout(()=>{
+      try{el.focus({preventScroll:true});}catch(e){
+        try{el.focus();}catch(_){}
+      }
+    },0);
+  };
+  el.addEventListener("click",forceKeyboard);
+  el.addEventListener("touchend",forceKeyboard,{passive:true});
+});
+
+
+$("selectAllFilteredBtn").addEventListener("click",async()=>{
+  const all=await filteredAll("searchText");
+  let changed=false;
+  all.forEach(r=>{
+    if(!selectedIds.has(r.id))changed=true;
+    selectedIds.add(r.id);
+  });
+  if(changed)markDataSelectionChanged();
+  await renderPage();
+  setStatus($("editStatus"),`${all.length}件をチェックしました。`);
+});
+
+$("clearAllFilteredBtn").addEventListener("click",async()=>{
+  const all=await filteredAll("searchText");
+  let changed=false;
+  all.forEach(r=>{
+    if(selectedIds.has(r.id))changed=true;
+    selectedIds.delete(r.id);
+  });
+  if(changed)markDataSelectionChanged();
+  await renderPage();
+  setStatus($("editStatus"),`${all.length}件のチェックを解除しました。`);
+});
+
+$("prevBtn").addEventListener("click",()=>{if(currentPage>0){currentPage--;renderPage();}});
+$("nextBtn").addEventListener("click",()=>{currentPage++;renderPage();});
+$("prevBtnBottom")?.addEventListener("click",()=>{if(currentPage>0){currentPage--;renderPage();}});
+$("nextBtnBottom")?.addEventListener("click",()=>{currentPage++;renderPage();});
+
+function flashQrActionAccepted(btn){
+  return;
+}
+
+async function buildQrFromSelected(){
+  qrPrintCopiesById.clear();
+  const selectedNow=latestDataManagementSelection();
+  const all=await getRecordsForSelectedIds(selectedNow);
+  const list=all
+    .filter(r=>selectedNow.has(String(r.id||"")))
+    .sort(compareRecordIds);
+
+  if(!list.length){
+    qrPageSource=[];
+    qrPageStart=0;
+    renderQr([]);
+    if($("qrSelectedStatus")){
+      setStatus($("qrSelectedStatus"),"データ管理で項目を選択してください。",false);
+    }
+    return 0;
+  }
+
+  if($("qrSelectedStatus"))$("qrSelectedStatus").textContent="";
+  qrPageSource=list.map(r=>({...r}));
+  qrPageSize=Number($("qrCount").value)||10;
+  qrPageStart=0;
+  qrSelectionRevision=dataSelectionRevision;
+
+  if($("qrSheet"))$("qrSheet").innerHTML="";
+  if($("printQrSheet"))$("printQrSheet").innerHTML="";
+  renderQr(qrPageSource.slice(0,qrPageSize));
+  setStatus($("qrStatus"),`最新のチェック ${qrPageSource.length}件からQRを作成しました。`);
+  resetSelectionOnNextDataOpen=true;
+  return qrPageSource.length;
+}
+
+$("makeSelectedQrBtn").addEventListener("click",()=>{
+  runSelectedCreateWithFeedback($("makeSelectedQrBtn"),buildQrFromSelected);
+});
+
+async function buildQrFromSearch(){
+  qrPrintCopiesById.clear();
+  const latestSelection=latestDataManagementSelection();
+  const sourceText=String($("qrSearch")?.value||"");
+  const query=parseCommonSearchQuery(sourceText);
+  const hasSearch=splitAndSearchTerms(sourceText).length>0;
+
+  let source=await getCommonSearchRecords(
+    hasSearch || query.namespaceFilters.length>0
+  );
+
+  if(latestSelection.size){
+    source=source.filter(r=>latestSelection.has(String(r.id||"")));
+  }
+
+  qrPageSource=source.filter(r=>matchesCommonSearchQuery(r,query));
+
+  qrPageSource.sort(compareRecordIds);
+  qrPageStart=0;
+  qrPageSize=Number($("qrCount").value)||10;
+  renderQr(qrPageSource.slice(0,qrPageSize));
+
+  const scope=latestSelection.size?"チェック項目内":"全項目";
+  const commonNote=query.namespaceFilters.length
+    ? `（${query.namespaceFilters.map(f=>f.prefix+":").join(" / ")}）`
+    : hasSearch?"（N/W/P/Sを含む共通検索）":"";
+  setStatus($("qrStatus"),`${scope}のAND検索結果 ${qrPageSource.length}件${commonNote}をID順で表示しています。`);
+  flashQrActionAccepted($("makeSearchQrBtn"));
+  return qrPageSource.length;
+}
+
+$("makeSearchQrBtn").addEventListener("click",()=>{
+  runSearchWithFeedback($("makeSearchQrBtn"),buildQrFromSearch);
+});
+$("qrSearch")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    runSearchWithFeedback($("makeSearchQrBtn"),buildQrFromSearch);
+  }
+});
+
+$("prevQrPageBtn").addEventListener("click",goPrevQrPage);
+$("nextQrPageBtn").addEventListener("click",goNextQrPage);
+$("prevQrPageBtnBottom").addEventListener("click",()=>{
+  goPrevQrPage();
+  scrollToQrPreviewTop();
+});
+$("nextQrPageBtnBottom").addEventListener("click",()=>{
+  goNextQrPage();
+  scrollToQrPreviewTop();
+});
+$("applySizeSettingsBtn").addEventListener("click",saveAndApplySizeSettings);
+$("resetSizeSettingsBtn").addEventListener("click",resetSizeSettings);
+$("useCameraModeBtn").addEventListener("click",()=>{
+  speakScanModeName("Camera");
+  setScanInputMode("camera");
+});
+$("startExternalScannerBtn").addEventListener("click",startExternalScanner);
+
+
+
+
+document.addEventListener("click",e=>{
+  const tab=e.target?.closest?.('[role="tab"],[data-tab],.tabBtn,.tabButton');
+  if(!tab)return;
+  setTimeout(()=>{
+    if(!isScannerTabActive()){
+      externalScannerArmed=false;
+      scannerTextEditing=true;
+      try{$("hidCaptureInput")?.blur();}catch(err){}
+      try{window.speechSynthesis?.cancel();}catch(err){}
+    }else if(scanInputMode==="external" && externalScannerStartedOnce){
+      const hid=$("hidCaptureInput");
+      if(hid)hid.disabled=false;
+      scannerTextEditing=false;
+      setTimeout(resumeExternalScannerFocus,120);
+    }
+  },30);
+},true);
+
+
+
+
+function requestIosSoftwareKeyboardFor(el){
+  if(!el)return;
+
+  // Stop HID capture first, while this is still the user's button tap.
+  suspendExternalScannerForTextEntry();
+
+  try{el.readOnly=false;}catch(e){}
+  try{el.disabled=false;}catch(e){}
+
+  // Do the important focus synchronously inside the trusted click gesture.
+  // A delayed focus alone is less reliable on iPhone Safari.
+  try{el.focus({preventScroll:true});}catch(e){
+    try{el.focus();}catch(_){}
+  }
+
+  try{
+    const len=String(el.value||"").length;
+    el.setSelectionRange(len,len);
+  }catch(e){}
+
+  // Do not immediately give focus back to the HID capture field.
+  scannerTextEditing=true;
+}
+
+function initIosKeyboardButtons(){
+  [
+    ["showIosKeyboardDataBtn","searchText"],
+    ["showIosKeyboardQrBtn","qrSearch"],
+    ["showIosKeyboardFlashBtn","flashSearch"]
+  ].forEach(([btnId,inputId])=>{
+    const btn=$(btnId), el=$(inputId);
+    if(!btn || !el)return;
+
+    btn.addEventListener("click",e=>{
+      e.preventDefault();
+      requestIosSoftwareKeyboardFor(el);
+    });
+  });
+}
+
+function scannerCaptureSuspended(){
+  if(scannerTextEditing)return true;
+  const a=document.activeElement;
+  return isUserTextEditingElement(a);
+}
+
+function isUserTextEditingElement(el){
+  if(!el || el.id==="hidCaptureInput")return false;
+  const tag=(el.tagName||"").toLowerCase();
+  if(tag==="textarea" || tag==="select" || el.isContentEditable)return true;
+  if(tag!=="input")return false;
+  const type=String(el.type||"text").toLowerCase();
+  return !["button","checkbox","radio","file","submit","reset","range","color","hidden"].includes(type);
+}
+
+function suspendExternalScannerForTextEntry(){
+  scannerTextEditing=true;
+  externalScannerArmed=false;
+  const hid=$("hidCaptureInput");
+  if(hid){
+    try{hid.blur();}catch(e){}
+    // iPhone Safari can immediately steal focus back to the HID capture field.
+    // Temporarily disabling it lets the software keyboard attach to the tapped field.
+    try{hid.disabled=true;}catch(e){}
+  }
+}
+
+function restoreExternalScannerAfterTextEntry(){
+  const hid=$("hidCaptureInput");
+  if(hid){
+    try{hid.disabled=false;}catch(e){}
+  }
+  scannerTextEditing=false;
+
+  // Only resume HID focus on the Reader tab.
+  if(scanInputMode==="external" && externalScannerStartedOnce && isScannerTabActive()){
+    setTimeout(resumeExternalScannerFocus,180);
+  }
+}
+
+// Run before the browser's normal focus processing so the iPhone keyboard
+// can open even immediately after a QR scan.
+document.addEventListener("pointerdown",e=>{
+  const target=e.target;
+  if(isUserTextEditingElement(target)){
+    // Disable/blur the hidden HID field before Safari performs its normal tap focus.
+    suspendExternalScannerForTextEntry();
+  }
+},true);
+
+document.addEventListener("touchstart",e=>{
+  const target=e.target;
+  if(isUserTextEditingElement(target)){
+    suspendExternalScannerForTextEntry();
+  }
+},{capture:true,passive:true});
+
+document.addEventListener("focusin",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  const el=e.target;
+  if(isUserTextEditingElement(el)){
+    suspendExternalScannerForTextEntry();
+  }
+});
+
+document.addEventListener("focusout",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  if(!isUserTextEditingElement(e.target))return;
+
+  setTimeout(()=>{
+    const a=document.activeElement;
+    if(isUserTextEditingElement(a)){
+      // User moved directly to another text/search field.
+      suspendExternalScannerForTextEntry();
+      return;
+    }
+    restoreExternalScannerAfterTextEntry();
+  },220);
+});
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden)setTimeout(resumeExternalScannerFocus,120);
+});
+window.addEventListener("focus",()=>setTimeout(resumeExternalScannerFocus,120));
+window.addEventListener("pageshow",()=>setTimeout(resumeExternalScannerFocus,120));
+
+
+$("useExternalScannerModeBtn").addEventListener("click",()=>{
+  speakScanModeName("Scanner");
+  setScanInputMode("external");
+});
+setupExternalScannerCapture();
+scanInputMode="none";
+externalScannerArmed=false;
+updateScanInputModeUi();
+
+document.addEventListener("click",e=>{
+  if(scanInputMode!=="external" || !externalScannerStartedOnce)return;
+  const el=e.target?.closest?.("button,[role='tab'],a");
+  if(!el)return;
+  if(el.id==="startExternalScannerBtn")return;
+  setTimeout(resumeExternalScannerFocus,180);
+});
+
+
+function qrDataUrlForPpt(id,size=600){
+  const holder=document.createElement("div");
+  holder.style.position="fixed";holder.style.left="-10000px";holder.style.top="-10000px";
+  document.body.appendChild(holder);
+  new QRCode(holder,{text:id,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
+  const canvas=holder.querySelector("canvas");
+  const img=holder.querySelector("img");
+  const data=canvas?canvas.toDataURL("image/png"):(img?.src||"");
+  holder.remove();
+  return data;
+}
+
+
+function getPreviewCardEditableItemsForPpt(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  const items = [];
+
+  cards.forEach((card, i)=>{
+    const cardRect = card.getBoundingClientRect();
+    if(!cardRect.width || !cardRect.height) return;
+
+    const item = {
+      record: qrPageSource[qrPageStart+i] || null,
+      cardWidthPx: cardRect.width,
+      cardHeightPx: cardRect.height,
+      border: null,
+      qr: null,
+      texts: []
+    };
+
+    const inner = card.querySelector(".masterOutputInner");
+    if(inner){
+      const r = inner.getBoundingClientRect();
+      item.border = {
+        left: ((r.left - cardRect.left) / cardRect.width) * 100,
+        top: ((r.top - cardRect.top) / cardRect.height) * 100,
+        width: (r.width / cardRect.width) * 100,
+        height: (r.height / cardRect.height) * 100
+      };
+    }
+
+    const qrEl = card.querySelector(".masterOutputInner .qrCodeWrap, .qrCodeWrap");
+    if(qrEl){
+      const r = qrEl.getBoundingClientRect();
+      if(r.width && r.height){
+        item.qr = {
+          left: ((r.left - cardRect.left) / cardRect.width) * 100,
+          top: ((r.top - cardRect.top) / cardRect.height) * 100,
+          width: (r.width / cardRect.width) * 100,
+          height: (r.height / cardRect.height) * 100
+        };
+      }
+    }
+
+    const defs = [
+      [".qrId","id"],
+      [".qrEnglish","english"],
+      [".qrIpa","ipa"],
+      [".qrJapanese","japanese"],
+      [".qrJapaneseRead","japaneseRead"]
+    ];
+
+    defs.forEach(([sel, key])=>{
+      const el = card.querySelector(sel);
+      if(!el) return;
+      const t = el.querySelector(".qrTextInner, .masterPlainText") || el;
+      const txt = (t.textContent || "").trim();
+      if(!txt) return;
+
+      const r = el.getBoundingClientRect();
+      if(!r.width || !r.height) return;
+
+      const cs = getComputedStyle(t);
+      const fontPx=parseFloat(cs.fontSize || "16");
+      const lineHeightPx=parseFloat(cs.lineHeight) || fontPx*1.18;
+      const textScrollW=Math.max(t.scrollWidth||0,t.getBoundingClientRect().width||0);
+      const textScrollH=Math.max(t.scrollHeight||0,t.getBoundingClientRect().height||0);
+      const boxClientW=Math.max(1,el.clientWidth||r.width);
+      const boxClientH=Math.max(1,el.clientHeight||r.height);
+      const lineCount=countRenderedTextLines(t);
+
+      item.texts.push({
+        key,
+        text: txt,
+        left: ((r.left - cardRect.left) / cardRect.width) * 100,
+        top: ((r.top - cardRect.top) / cardRect.height) * 100,
+        width: (r.width / cardRect.width) * 100,
+        height: (r.height / cardRect.height) * 100,
+        fontPx,
+        fontRatio: (fontPx / cardRect.width),
+        lineHeightPx,
+        lineCount,
+        renderedLines:getRenderedTextLines(t),
+        textOverflowing:(textScrollW>boxClientW+1 || textScrollH>boxClientH+1),
+        align: (cs.textAlign === "left" ? "left" : "center"),
+        bold: parseInt(cs.fontWeight || "400", 10) >= 600
+      });
+    });
+
+    items.push(item);
+  });
+
+  return items;
+}
+
+
+function pptInchesToEmu(v){
+  return Math.round(Number(v||0)*914400);
+}
+
+async function groupPptxCardsBySlide(pptArrayBuffer, groupsBySlide){
+  const zip=await JSZip.loadAsync(pptArrayBuffer);
+  const P="http://schemas.openxmlformats.org/presentationml/2006/main";
+  const A="http://schemas.openxmlformats.org/drawingml/2006/main";
+
+  for(let slideIndex=0;slideIndex<groupsBySlide.length;slideIndex++){
+    const groups=groupsBySlide[slideIndex]||[];
+    if(!groups.length)continue;
+
+    const path=`ppt/slides/slide${slideIndex+1}.xml`;
+    const file=zip.file(path);
+    if(!file)continue;
+
+    const xml=await file.async("string");
+    const doc=new DOMParser().parseFromString(xml,"application/xml");
+    if(doc.getElementsByTagName("parsererror").length)throw new Error("PPT slide XML parse error");
+
+    const spTree=doc.getElementsByTagNameNS(P,"spTree")[0];
+    if(!spTree)continue;
+
+    const objectNodes=Array.from(spTree.children).filter(el=>{
+      return el.localName!=="nvGrpSpPr" && el.localName!=="grpSpPr";
+    });
+
+    let cursor=0;
+    groups.forEach((g,gi)=>{
+      const members=objectNodes.slice(cursor,cursor+g.count);
+      cursor+=g.count;
+      if(!members.length)return;
+
+      const grp=doc.createElementNS(P,"p:grpSp");
+
+      const nv=doc.createElementNS(P,"p:nvGrpSpPr");
+      const cNvPr=doc.createElementNS(P,"p:cNvPr");
+      cNvPr.setAttribute("id",String(9000+gi));
+      cNvPr.setAttribute("name",g.name||`Card ${gi+1}`);
+      const cNvGrpSpPr=doc.createElementNS(P,"p:cNvGrpSpPr");
+      const nvPr=doc.createElementNS(P,"p:nvPr");
+      nv.appendChild(cNvPr);
+      nv.appendChild(cNvGrpSpPr);
+      nv.appendChild(nvPr);
+      grp.appendChild(nv);
+
+      const grpSpPr=doc.createElementNS(P,"p:grpSpPr");
+      const xfrm=doc.createElementNS(A,"a:xfrm");
+
+      const off=doc.createElementNS(A,"a:off");
+      off.setAttribute("x",String(pptInchesToEmu(g.x)));
+      off.setAttribute("y",String(pptInchesToEmu(g.y)));
+
+      const ext=doc.createElementNS(A,"a:ext");
+      ext.setAttribute("cx",String(pptInchesToEmu(g.w)));
+      ext.setAttribute("cy",String(pptInchesToEmu(g.h)));
+
+      // Keep child coordinates in the original slide coordinate system.
+      // This lets the group have card-sized selection handles without moving its members.
+      const chOff=doc.createElementNS(A,"a:chOff");
+      chOff.setAttribute("x",String(pptInchesToEmu(g.x)));
+      chOff.setAttribute("y",String(pptInchesToEmu(g.y)));
+
+      const chExt=doc.createElementNS(A,"a:chExt");
+      chExt.setAttribute("cx",String(pptInchesToEmu(g.w)));
+      chExt.setAttribute("cy",String(pptInchesToEmu(g.h)));
+
+      xfrm.appendChild(off);
+      xfrm.appendChild(ext);
+      xfrm.appendChild(chOff);
+      xfrm.appendChild(chExt);
+      grpSpPr.appendChild(xfrm);
+      grp.appendChild(grpSpPr);
+
+      spTree.insertBefore(grp,members[0]);
+      members.forEach(node=>grp.appendChild(node));
+    });
+
+    const outXml=new XMLSerializer().serializeToString(doc);
+    zip.file(path,outXml);
+  }
+
+  return await zip.generateAsync({
+    type:"blob",
+    mimeType:"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    compression:"DEFLATE"
+  });
+}
+
+function downloadPptBlob(blob,fileName){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=fileName;
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+    a.remove();
+  },500);
+}
+
+async function exportCurrentQrPageToPowerPoint(){
+  if(typeof PptxGenJS==="undefined"){
+    setStatus($("qrStatus"),"PowerPoint作成ライブラリを読み込めませんでした。",false);
+    return;
+  }
+  if(typeof JSZip==="undefined"){
+    setStatus($("qrStatus"),"PowerPointグループ化ライブラリを読み込めませんでした。",false);
+    return;
+  }
+
+  const items=getPreviewCardEditableItemsForPpt();
+  if(!items.length){
+    setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
+    return;
+  }
+
+  const spec=$("printRange")?.value||"";
+  let selected=items.slice();
+  if(spec.trim()){
+    const pos=parsePrintRange(spec,items.length);
+    if(!pos||!pos.length){
+      setStatus($("qrStatus"),"PPT範囲を確認してください。",false);
+      return;
+    }
+    selected=pos.map(n=>items[n-1]).filter(Boolean);
+  }
+
+  selected=expandQrOutputItemsByCopies(selected);
+
+  try{
+    const pptx=new PptxGenJS();
+    pptx.defineLayout({name:"A4P",width:8.267,height:11.693});
+    pptx.layout="A4P";
+    pptx.author="English QR Reader";
+    pptx.subject="Editable grouped QR cards";
+    pptx.title="QR Cards";
+    pptx.company="OpenAI";
+
+    const sw=8.267,sh=11.693;
+    const cols=2,rows=4,perSlide=8;
+    const gap=0.08,mx=0.15,my=0.15;
+    const cw=(sw-2*mx-gap*(cols-1))/cols;
+    const ch=(sh-2*my-gap*(rows-1))/rows;
+    const state=readMasterState();
+    const groupsBySlide=[];
+
+    for(let start=0;start<selected.length;start+=perSlide){
+      const slide=pptx.addSlide();
+      slide.background={color:"FFFFFF"};
+      const batch=selected.slice(start,start+perSlide);
+      const slideGroups=[];
+
+      batch.forEach((item,i)=>{
+        const col=i%cols;
+        const row=Math.floor(i/cols);
+        const x=mx+col*(cw+gap);
+        const y=my+row*(ch+gap);
+        let objectCount=0;
+
+        slide.addShape(pptx.ShapeType.rect,{
+          x,y,w:cw,h:ch,
+          line:{color:"FFFFFF",transparency:100,width:0},
+          fill:{color:"FFFFFF"}
+        });
+        objectCount++;
+
+        if(item.border&&state.border!=="off"){
+          slide.addShape(pptx.ShapeType.roundRect,{
+            x:x+cw*(item.border.left/100),
+            y:y+ch*(item.border.top/100),
+            w:cw*(item.border.width/100),
+            h:ch*(item.border.height/100),
+            rectRadius:0.03,
+            line:{color:masterBorderColor(state).replace("#","").toUpperCase(),width:masterBorderWidth(state)},
+            fill:{color:"FFFFFF",transparency:100}
+          });
+          objectCount++;
+        }
+
+        if(item.record&&item.record.id&&item.qr){
+          const qrData=qrDataUrlForPpt(item.record.id,900);
+          if(qrData){
+            slide.addImage({
+              data:qrData,
+              x:x+cw*(item.qr.left/100),
+              y:y+ch*(item.qr.top/100),
+              w:cw*(item.qr.width/100),
+              h:ch*(item.qr.height/100)
+            });
+            objectCount++;
+          }
+        }
+
+        item.texts.forEach(t=>{
+          const fontPt=Math.max(4,Math.min(40,t.fontRatio*cw*72));
+          slide.addText(String(t.text),{
+            x:x+cw*(t.left/100),
+            y:y+ch*(t.top/100),
+            w:cw*(t.width/100),
+            h:ch*(t.height/100),
+            fontFace:"Aptos",
+            fontSize:fontPt,
+            bold:!!t.bold,
+            color:"222222",
+            margin:0,
+            align:(t.align==="left"?"left":"center"),
+            valign:"mid",
+            breakLine:false,
+            fit:"shrink"
+          });
+          objectCount++;
+        });
+
+        slideGroups.push({
+          count:objectCount,
+          x,y,w:cw,h:ch,
+          name:`Card ${item.record?.id||start+i+1}`
+        });
+      });
+
+      groupsBySlide.push(slideGroups);
+    }
+
+    const raw=await pptx.write({outputType:"arraybuffer"});
+    const groupedBlob=await groupPptxCardsBySlide(raw,groupsBySlide);
+    const fileName=`${outputBaseFileName()}.pptx`;
+    downloadPptBlob(groupedBlob,fileName);
+    setStatus($("qrStatus"),`PowerPointを作成しました（1カードずつグループ化、A4縦・8枚固定、${selected.length}件）。`);
+  }catch(err){
+    console.error(err);
+    setStatus($("qrStatus"),"PowerPoint作成に失敗しました。",false);
+  }
+}
+
+$("pptBtn").addEventListener("click",exportCurrentQrPageToPowerPoint);
+
+
+function parsePrintRange(spec,total){
+  const s=String(spec||"").trim();
+  if(!s)return null;
+
+  const out=[];
+  const seen=new Set();
+
+  for(const rawPart of s.split(",")){
+    const part=rawPart.trim();
+    if(!part)continue;
+
+    let m=part.match(/^(\d+)\s*-\s*(\d+)$/);
+    if(m){
+      let a=Number(m[1]), b=Number(m[2]);
+      if(a>b)[a,b]=[b,a];
+      for(let n=a;n<=b;n++){
+        if(n>=1&&n<=total&&!seen.has(n)){seen.add(n);out.push(n);}
+      }
+      continue;
+    }
+
+    if(/^\d+$/.test(part)){
+      const n=Number(part);
+      if(n>=1&&n<=total&&!seen.has(n)){seen.add(n);out.push(n);}
+      continue;
+    }
+
+    throw new Error("印刷範囲の形式が正しくありません。");
+  }
+  return out;
+}
+
+function renderPrintQr(records){
+  const sheet=$("printQrSheet");
+  sheet.innerHTML="";
+
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+
+  const s=getSizeSettings();
+
+  records.forEach(r=>{
+    const card=document.createElement("div");
+    card.className="qrCard";
+
+    const q=document.createElement("div");
+    card.appendChild(q);
+    new QRCode(q,{text:r.id,width:s.qrSize,height:s.qrSize,correctLevel:QRCode.CorrectLevel.M});
+
+    if(showId){
+      const id=document.createElement("div");
+      id.className="qrId";
+      id.textContent=r.id;
+      id.style.fontSize=s.idSize+"rem";
+      card.appendChild(id);
+    }
+    if(showEnglish){
+      const en=document.createElement("div");
+      en.className="qrEnglish";
+      en.textContent=r.english;
+      en.style.fontSize=s.englishSize+"rem";
+      card.appendChild(en);
+    }
+    if(showIpa&&r.ipa){
+      const ipa=document.createElement("div");
+      ipa.className="qrIpa";
+      ipa.textContent=r.ipa;
+      ipa.style.fontSize=s.ipaSize+"rem";
+      card.appendChild(ipa);
+    }
+    if(showJapanese&&r.japanese){
+      const ja=document.createElement("div");
+      ja.className="qrJapanese";
+      ja.textContent=r.japanese;
+      ja.style.fontSize=s.japaneseSize+"rem";
+      card.appendChild(ja);
+    }
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese)){
+      const jr=document.createElement("div");
+      jr.className="qrJapaneseRead";
+      jr.textContent=r.japaneseRead||r.japanese;
+      jr.style.fontSize=s.japaneseReadSize+"rem";
+      card.appendChild(jr);
+    }
+    sheet.appendChild(card);
+  });
+}
+
+function prepareAndPrint(){
+  if(!qrPageSource.length){
+    setStatus($("qrStatus"),"先にQRコードを作成してください。",false);
+    return;
+  }
+
+  try{
+    const range=parsePrintRange($("printRange")?.value,qrPageSource.length);
+    let records;
+
+    if(range===null){
+      records=qrPageSource.slice().sort((a,b)=>String(a.id||"").localeCompare(String(b.id||"")));
+    }else{
+      if(!range.length){
+        setStatus($("qrStatus"),"印刷対象がありません。",false);
+        return;
+      }
+      records=range.map(n=>qrPageSource[n-1]).filter(Boolean);
+    }
+
+    renderPrintQr(records);
+    setTimeout(()=>window.print(),80);
+  }catch(err){
+    setStatus($("qrStatus"),err.message||"印刷範囲を確認してください。",false);
+  }
+}
+
+$("printBtn").addEventListener("click",printMasterCards);
+
+
+function attachMasterTextInteractions(wrap,card,leftInputId,topInputId,itemKey,widthInputId,heightInputId){
+  const handle=wrap.querySelector(".masterTextResizeHandle");
+  let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0,startH=0;
+
+  const updateNote=()=>{
+    const l=parseFloat(wrap.style.left)||0;
+    const t=parseFloat(wrap.style.top)||0;
+    const note=wrap.querySelector(".masterTextPositionNote");
+    if(note)note.textContent=`中心X ${l.toFixed(1)}% / 中心Y ${t.toFixed(1)}%`;
+    if($(leftInputId))$(leftInputId).value=l.toFixed(1);
+    if($(topInputId))$(topInputId).value=t.toFixed(1);
+  };
+
+  const move=e=>{
+    if(!mode)return;
+    const r=card.getBoundingClientRect();
+    const dx=(e.clientX-startX)/r.width*100;
+    const dy=(e.clientY-startY)/r.height*100;
+    if(mode==="drag"){
+      const w=parseFloat(wrap.style.width)||40;
+      const h=parseFloat(wrap.style.height)||10;
+      const nl=Math.max(w/2,Math.min(100-w/2,startLeft+dx));
+      const nt=Math.max(h/2,Math.min(100-h/2,startTop+dy));
+      wrap.style.left=nl+"%";
+      wrap.style.top=nt+"%";
+      updateNote();
+    }else{
+      const nw=Math.max(12,Math.min(90,startW+dx));
+      const nh=Math.max(5,Math.min(70,startH+dy));
+      wrap.style.width=nw+"%";
+      wrap.style.height=nh+"%";
+      if($(widthInputId))$(widthInputId).value=nw.toFixed(1);
+      if($(heightInputId))$(heightInputId).value=nh.toFixed(1);
+      const state=readMasterState();
+      if(state[itemKey]){
+        state[itemKey].w=Number(nw.toFixed(2));
+        state[itemKey].h=Number(nh.toFixed(2));
+        localStorage.setItem("masterCardCurrentState",JSON.stringify(state));
+      }
+    }
+  };
+
+  const up=()=>{
+    mode="";
+    wrap.classList.remove("dragging");
+    window.removeEventListener("pointermove",move);
+    window.removeEventListener("pointerup",up);
+    try{updateMasterPreview();applyMasterLayoutToAllRendered();setTimeout(()=>{updateMasterPreview();applyMasterLayoutToAllRendered();},30);}catch{}
+  };
+
+  wrap.addEventListener("pointerdown",e=>{
+    if(e.target===handle)return;
+    e.preventDefault();
+    mode="drag";
+    wrap.classList.add("dragging");
+    startX=e.clientX; startY=e.clientY;
+    startLeft=parseFloat(wrap.style.left)||0;
+    startTop=parseFloat(wrap.style.top)||0;
+    wrap.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+  });
+
+  handle?.addEventListener("pointerdown",e=>{
+    e.preventDefault();e.stopPropagation();
+    mode="resize";
+    startX=e.clientX; startY=e.clientY;
+    startW=parseFloat(wrap.style.width)||40;
+    startH=parseFloat(wrap.style.height)||10;
+    handle.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+  });
+}
+
+
+const MASTER_DEFAULT_VERSION="2026-10-13-layout-7";
+const MASTER_BORDER_PRESET_COLORS=["#b8bec7","#111827","#2563eb","#dc2626","#16a34a","#ea580c","#7c3aed"];
+const MASTER_DEFAULT_STATE={
+  marginX:3,marginY:3,border:"on",borderColor:"#b8bec7",borderWidth:1,
+  qr:{size:100,x:15,y:20},
+  id:{size:1,x:50,y:10,align:"center",autoFit:"on",w:35,h:10},
+  english:{size:5,x:50,y:47,align:"center",autoFit:"on",w:90,h:25},
+  ipa:{size:1.5,x:50,y:62.5,align:"center",autoFit:"on",w:90,h:10},
+  japanese:{size:1.5,x:50,y:75,align:"center",autoFit:"on",w:90,h:15},
+  japaneseRead:{size:1.5,x:50,y:90,align:"center",autoFit:"on",w:90,h:15}
+};
+
+function normalizeMasterHexColor(v,fallback=MASTER_DEFAULT_STATE.borderColor){
+  const raw=String(v==null?"":v).trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+  if(/^[0-9a-fA-F]{6}$/.test(raw)) return ("#"+raw).toLowerCase();
+  return String(fallback||MASTER_DEFAULT_STATE.borderColor).toLowerCase();
+}
+function isMasterPresetColor(v){
+  const color=normalizeMasterHexColor(v);
+  return MASTER_BORDER_PRESET_COLORS.includes(color);
+}
+function setMasterBorderCustomVisibility(){
+  const wrap=$("masterBorderCustomWrap");
+  if(!wrap) return;
+  const isCustom=$("masterBorderColor")?.value==="__custom__";
+  wrap.classList.toggle("isHidden",!isCustom);
+}
+function getMasterBorderColorControlValue(fallback=MASTER_DEFAULT_STATE.borderColor){
+  const select=$("masterBorderColor");
+  if(select?.value==="__custom__"){
+    return normalizeMasterHexColor($("masterBorderColorCustomHex")?.value||$("masterBorderColorCustomPicker")?.value||fallback,fallback);
+  }
+  return normalizeMasterHexColor(select?.value||fallback,fallback);
+}
+function syncMasterBorderColorControls(color,forceCustom=false){
+  const normalized=normalizeMasterHexColor(color);
+  const picker=$("masterBorderColorCustomPicker");
+  const hex=$("masterBorderColorCustomHex");
+  const select=$("masterBorderColor");
+  if(picker) picker.value=normalized;
+  if(hex) hex.value=normalized.toUpperCase();
+  if(select){
+    select.value=(!forceCustom && isMasterPresetColor(normalized)) ? normalized : "__custom__";
+  }
+  setMasterBorderCustomVisibility();
+}
+
+function readMasterState(){
+  const num=(id,def)=>{const n=Number($(id)?.value);return Number.isFinite(n)?n:def;};
+  let previous={};
+  try{previous=JSON.parse(localStorage.getItem("masterCardCurrentState")||"{}")}catch{}
+
+  const prev=(k,key,def)=>{
+    const n=Number(previous?.[k]?.[key]);
+    return Number.isFinite(n)?n:def;
+  };
+
+  return {
+    marginX:num("masterMarginX",8),marginY:num("masterMarginY",8),
+    border:$("masterMarginGuide")?.value||"on",
+    borderColor:getMasterBorderColorControlValue(previous?.borderColor||MASTER_DEFAULT_STATE.borderColor),
+    borderWidth:num("masterBorderWidth",Number(previous?.borderWidth)||MASTER_DEFAULT_STATE.borderWidth),
+    qr:{size:num("masterMirror_settingQrSize",132),x:num("masterQrCenterX",50),y:num("masterQrCenterY",50)},
+    id:{size:num("masterMirror_settingIdSize",1.05),x:num("masterIdLeft",20),y:num("masterIdTop",12),align:$("masterIdAlign")?.value||"center",autoFit:$("masterIdAutoFit")?.value||"on",w:num("masterIdWidth",prev("id","w",36)),h:num("masterIdHeight",prev("id","h",9))},
+    english:{size:num("masterMirror_settingEnglishSize",1.18),x:num("masterEnglishLeft",32),y:num("masterEnglishTop",24),align:$("masterEnglishAlign")?.value||"center",autoFit:$("masterEnglishAutoFit")?.value||"on",w:num("masterEnglishWidth",prev("english","w",55)),h:num("masterEnglishHeight",prev("english","h",13))},
+    ipa:{size:num("masterMirror_settingIpaSize",1.05),x:num("masterIpaLeft",32),y:num("masterIpaTop",38),align:$("masterIpaAlign")?.value||"center",autoFit:$("masterIpaAutoFit")?.value||"on",w:num("masterIpaWidth",prev("ipa","w",55)),h:num("masterIpaHeight",prev("ipa","h",10))},
+    japanese:{size:num("masterMirror_settingJapaneseSize",1.12),x:num("masterJapaneseLeft",32),y:num("masterJapaneseTop",55),align:$("masterJapaneseAlign")?.value||"center",autoFit:$("masterJapaneseAutoFit")?.value||"on",w:num("masterJapaneseWidth",prev("japanese","w",55)),h:num("masterJapaneseHeight",prev("japanese","h",12))},
+    japaneseRead:{size:num("masterMirror_settingJapaneseReadSize",1.12),x:num("masterJapaneseReadLeft",32),y:num("masterJapaneseReadTop",70),align:$("masterJapaneseReadAlign")?.value||"center",autoFit:$("masterJapaneseReadAutoFit")?.value||"on",w:num("masterJapaneseReadWidth",prev("japaneseRead","w",55)),h:num("masterJapaneseReadHeight",prev("japaneseRead","h",12))}
+  };
+}
+
+function applyMasterStateToControls(s){
+  const set=(id,v)=>{if($(id)!=null)$(id).value=String(v);};
+  set("masterMarginX",s.marginX);set("masterMarginY",s.marginY);set("masterMarginGuide",s.border);
+  syncMasterBorderColorControls(s.borderColor||MASTER_DEFAULT_STATE.borderColor,!isMasterPresetColor(s.borderColor||MASTER_DEFAULT_STATE.borderColor));
+  set("masterBorderWidth",s.borderWidth||MASTER_DEFAULT_STATE.borderWidth);
+  set("masterMirror_settingQrSize",s.qr.size);set("masterQrCenterX",s.qr.x);set("masterQrCenterY",s.qr.y);
+  const map={id:"Id",english:"English",ipa:"Ipa",japanese:"Japanese",japaneseRead:"JapaneseRead"};
+  const sizeIds={id:"masterMirror_settingIdSize",english:"masterMirror_settingEnglishSize",ipa:"masterMirror_settingIpaSize",japanese:"masterMirror_settingJapaneseSize",japaneseRead:"masterMirror_settingJapaneseReadSize"};
+  for(const [k,suffix] of Object.entries(map)){
+    const v=s[k]||MASTER_DEFAULT_STATE[k];
+    set(sizeIds[k],v.size);set("master"+suffix+"Left",v.x);set("master"+suffix+"Top",v.y);
+    set("master"+suffix+"Align",v.align);set("master"+suffix+"AutoFit",v.autoFit||"on");set("master"+suffix+"Width",v.w);set("master"+suffix+"Height",v.h);
+  }
+}
+
+function fitTextBox(box,baseRem,enabled){
+  const text=box.querySelector(".qrTextInner")||box.querySelector(".masterPlainText")||box.firstElementChild;
+  if(!text)return;
+  fitMasterPlainText(box,text,baseRem,enabled);
+}
+
+function fitMasterPlainText(box,text,baseRem,enabled){
+  const minRem=0.55;
+  const requested=Math.max(minRem,Number(baseRem)||1);
+
+  // Always allow natural wrapping first.
+  text.style.display="block";
+  text.style.width="100%";
+  text.style.height="auto";
+  text.style.maxWidth="100%";
+  text.style.whiteSpace="normal";
+  text.style.wordBreak="normal";
+  text.style.overflowWrap="break-word";
+  text.style.hyphens="auto";
+  text.style.lineHeight="1.18";
+  text.style.boxSizing="border-box";
+  text.style.visibility="visible";
+  text.style.opacity="1";
+  text.style.overflow="visible";
+  text.style.fontSize=requested+"rem";
+
+  // Keep vertical centering with the outer box, not with the text itself.
+  box.style.display="flex";
+  box.style.alignItems="center";
+  box.style.overflow="hidden";
+
+  if(!enabled)return;
+
+  const fitNow=()=>{
+    const cs=getComputedStyle(box);
+    const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+    const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+    const availableW=Math.max(8,box.clientWidth-padX);
+    const availableH=Math.max(8,box.clientHeight-padY);
+
+    let size=requested;
+    let guard=0;
+    text.style.fontSize=size+"rem";
+
+    // Measure the fully wrapped text after each size change.
+    while(guard<60){
+      const rect=text.getBoundingClientRect();
+      const tooWide=Math.max(text.scrollWidth,rect.width)>availableW+1;
+      const tooTall=Math.max(text.scrollHeight,rect.height)>availableH+1;
+      if(!tooWide&&!tooTall)break;
+      if(size<=minRem+0.001)break;
+
+      size=Math.max(minRem,size*0.94);
+      text.style.fontSize=size+"rem";
+      // force layout measurement after font-size change
+      void text.offsetHeight;
+      guard++;
+    }
+  };
+
+  // Two frames ensures the resized card has its final pixel dimensions.
+  requestAnimationFrame(()=>requestAnimationFrame(fitNow));
+}
+
+function masterBorderColor(state=readMasterState()){
+  const c=String(state?.borderColor||MASTER_DEFAULT_STATE.borderColor||"#b8bec7").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(c)?c:"#b8bec7";
+}
+function masterBorderWidth(state=readMasterState()){
+  const n=Number(state?.borderWidth);
+  return Math.max(1,Math.min(5,Number.isFinite(n)?n:1));
+}
+function masterBorderCss(state=readMasterState()){
+  return state?.border==="off" ? "1px solid transparent" : `${masterBorderWidth(state)}px solid ${masterBorderColor(state)}`;
+}
+
+function applyMasterLayoutToCard(card,state=readMasterState()){
+  if(!card)return;
+
+  // Restore original children if this card was already transformed.
+  const existingInner=card.querySelector(":scope > .masterOutputInner");
+  if(existingInner){
+    const children=[...existingInner.children];
+    children.forEach(ch=>card.appendChild(ch));
+    existingInner.remove();
+  }
+
+  card.style.position="relative";
+  card.style.aspectRatio="297/210";
+  card.style.overflow="hidden";
+  card.style.background="#fff";
+  card.style.boxSizing="border-box";
+  card.style.border="0";
+
+  // This matches master preview: margin defines the actual outer card edge.
+  const inner=document.createElement("div");
+  inner.className="masterOutputInner";
+  inner.style.position="absolute";
+  inner.style.left=state.marginX+"%";
+  inner.style.right=state.marginX+"%";
+  inner.style.top=state.marginY+"%";
+  inner.style.bottom=state.marginY+"%";
+  inner.style.boxSizing="border-box";
+  inner.style.background="#fff";
+  inner.style.overflow="hidden";
+  inner.style.border=masterBorderCss(state);
+  inner.style.borderRadius="14px";
+
+  const movable=[...card.children].filter(el=>el!==inner);
+  movable.forEach(el=>inner.appendChild(el));
+  card.appendChild(inner);
+
+  const qr=inner.querySelector(".qrCodeWrap");
+  if(qr){
+    const pct=Math.max(8,Math.min(60,(Number(state.qr.size||132)/132)*28));
+
+    qr.style.position="absolute";
+    qr.style.left=state.qr.x+"%";
+    qr.style.top=state.qr.y+"%";
+    qr.style.width=pct+"%";
+    qr.style.aspectRatio="1 / 1";
+    qr.style.transform="translate(-50%,-50%)";
+    qr.style.margin="0";
+    qr.style.padding="0";
+    qr.style.boxSizing="border-box";
+    qr.style.overflow="hidden";
+    qr.style.lineHeight="0";
+
+    const qrPrimary=qr.querySelector("img,canvas");
+    qr.querySelectorAll("img,canvas").forEach(el=>{
+      el.style.width="100%";
+      el.style.height="100%";
+      el.style.maxWidth="100%";
+      el.style.maxHeight="100%";
+      el.style.display=(el===qrPrimary)?"block":"none";
+      el.style.margin="0";
+      el.style.padding="0";
+      el.style.objectFit="contain";
+      el.style.boxSizing="border-box";
+    });
+
+    const table=qr.querySelector("table");
+    if(table){
+      table.style.width="100%";
+      table.style.height="100%";
+      table.style.margin="0";
+      table.style.borderCollapse="collapse";
+    }
+  }
+
+  const defs=[
+    [".qrId",state.id],
+    [".qrEnglish",state.english],
+    [".qrIpa",state.ipa],
+    [".qrJapanese",state.japanese],
+    [".qrJapaneseRead",state.japaneseRead]
+  ];
+
+  defs.forEach(([sel,v])=>{
+    const el=inner.querySelector(sel);
+    if(!el)return;
+
+    el.classList.add("qrTextBox");
+    el.style.position="absolute";
+    el.style.left=v.x+"%";
+    el.style.top=v.y+"%";
+    el.style.width=v.w+"%";
+    el.style.height=v.h+"%";
+    el.style.transform="translate(-50%,-50%)";
+    el.style.boxSizing="border-box";
+    el.style.margin="0";
+    el.style.padding="0";
+    el.style.display="flex";
+    el.style.alignItems="center";
+    el.style.justifyContent=v.align==="left"?"flex-start":"center";
+    el.style.textAlign=v.align;
+    el.style.overflow="hidden";
+
+    let innerText=el.querySelector(":scope > .qrTextInner");
+    if(!innerText){
+      const txt=el.textContent;
+      el.textContent="";
+      innerText=document.createElement("div");
+      innerText.className="qrTextInner";
+      innerText.textContent=txt;
+      el.appendChild(innerText);
+    }
+
+    innerText.style.width="100%";
+    innerText.style.height="auto";
+    innerText.style.display="block";
+    innerText.style.boxSizing="border-box";
+    innerText.style.padding="2px 4px";
+    innerText.style.lineHeight="1.18";
+    innerText.style.whiteSpace="normal";
+    innerText.style.wordBreak="normal";
+    innerText.style.overflowWrap="break-word";
+    innerText.style.hyphens="auto";
+    innerText.style.textAlign=v.align;
+    innerText.style.color="#222";
+    if(sel===".qrEnglish")innerText.style.fontWeight="700";
+
+    requestAnimationFrame(()=>{
+      const px=masterFontPxForCard(card,v);
+      fitMasterPlainText(el,innerText,px/16,v.autoFit==="on");
+    });
+  });
+}
+
+function applyMasterLayoutToAllRendered(){
+  const state=readMasterState();
+  ["qrSheet","printQrSheet"].forEach(id=>{
+    const sheet=$(id);if(!sheet)return;
+    sheet.classList.add("masterLayoutSheet");
+    sheet.querySelectorAll(".qrCard").forEach(c=>applyMasterLayoutToCard(c,state));
+  });
+}
+
+
+function installBundledMasterDefault(){
+  try{
+    const currentVersion=localStorage.getItem("masterCardBundledDefaultVersion")||"";
+    if(currentVersion!==MASTER_DEFAULT_VERSION){
+      localStorage.setItem("masterCardDefaultState",JSON.stringify(MASTER_DEFAULT_STATE));
+      localStorage.setItem("masterCardCurrentState",JSON.stringify(MASTER_DEFAULT_STATE));
+      localStorage.setItem("masterCardBundledDefaultVersion",MASTER_DEFAULT_VERSION);
+    }
+  }catch{}
+}
+
+function resetMasterToBundledDefault(){
+  try{
+    localStorage.setItem("masterCardDefaultState",JSON.stringify(MASTER_DEFAULT_STATE));
+    localStorage.setItem("masterCardCurrentState",JSON.stringify(MASTER_DEFAULT_STATE));
+    localStorage.setItem("masterCardBundledDefaultVersion",MASTER_DEFAULT_VERSION);
+  }catch{}
+  applyMasterStateToControls(MASTER_DEFAULT_STATE);
+  updateMasterPreview();
+  applyMasterLayoutToAllRendered();
+  setStatus($("qrStatus"),"マスターカード設定を初期配置に戻しました。");
+}
+
+function saveMasterDefault(){
+  const state=readMasterState();
+  localStorage.setItem("masterCardDefaultState",JSON.stringify(state));
+  localStorage.setItem("masterCardCurrentState",JSON.stringify(state));
+  setStatus($("qrStatus"),"現在のマスターカード設定をDefaultとして保存しました。");
+}
+
+function loadSavedMasterState(){
+  let s=null;
+  try{s=JSON.parse(localStorage.getItem("masterCardCurrentState")||localStorage.getItem("masterCardDefaultState")||"null")}catch{}
+  if(!s)s=MASTER_DEFAULT_STATE;
+  applyMasterStateToControls({...MASTER_DEFAULT_STATE,...s});
+}
+
+function createMasterTextObject(card,src,selector,itemKey,leftId,topId,alignId,autoFitId,sizeId,widthId,heightId,defaultLeft,defaultTop,defaultWidth,defaultHeight){
+  const el=src.querySelector(selector);
+  if(!el)return;
+
+  const savedState=readMasterState();
+  const saved=savedState[itemKey]||{};
+
+  const wrap=document.createElement("div");
+  wrap.className="masterTextObject";
+
+  const cx=Math.max(0,Math.min(100,Number($(leftId)?.value)||defaultLeft));
+  const cy=Math.max(0,Math.min(100,Number($(topId)?.value)||defaultTop));
+  const boxW=Math.max(12,Math.min(90,Number($(widthId)?.value)||Number(saved.w)||defaultWidth));
+  const boxH=Math.max(5,Math.min(70,Number($(heightId)?.value)||Number(saved.h)||defaultHeight));
+
+  wrap.style.left=cx+"%";
+  wrap.style.top=cy+"%";
+  wrap.style.width=boxW+"%";
+  wrap.style.height=boxH+"%";
+  wrap.style.transform="translate(-50%,-50%)";
+
+  const content=document.createElement("div");
+  content.className="masterTextContent";
+
+  const text=document.createElement("div");
+  text.className="masterPlainText";
+  text.textContent=el.textContent||"";
+  text.style.width="100%";
+  text.style.height="100%";
+  text.style.display="flex";
+  text.style.alignItems="center";
+  text.style.boxSizing="border-box";
+  text.style.padding="2px 4px";
+  text.style.lineHeight="1.2";
+  text.style.whiteSpace="normal";
+  text.style.wordBreak="normal";
+  text.style.overflowWrap="break-word";
+  text.style.hyphens="auto";
+  text.style.color="#222";
+
+  const align=$(alignId)?.value||"center";
+  text.style.textAlign=align;
+  text.style.justifyContent=align==="left"?"flex-start":"center";
+
+  const size=Number($(sizeId)?.value)||1;
+  text.style.fontSize=size+"rem";
+  if(selector===".qrEnglish")text.style.fontWeight="700";
+
+  content.appendChild(text);
+  wrap.appendChild(content);
+
+  const note=document.createElement("div");
+  note.className="masterTextPositionNote";
+  note.textContent=`中心X ${cx.toFixed(1)}% / 中心Y ${cy.toFixed(1)}%`;
+  wrap.appendChild(note);
+
+  const handle=document.createElement("div");
+  handle.className="masterTextResizeHandle";
+  wrap.appendChild(handle);
+
+  card.appendChild(wrap);
+
+  requestAnimationFrame(()=>{
+    fitMasterPlainText(content,text,size,($(autoFitId)?.value||"on")==="on");
+  });
+
+  attachMasterTextInteractions(wrap,card,leftId,topId,itemKey,widthId,heightId);
+}
+
+function attachMasterQrInteractions(wrap,card){
+  const handle=wrap.querySelector("#masterQrResizeHandle");
+  let mode="",startX=0,startY=0,startLeft=0,startTop=0,startW=0;
+
+  const pct=(px,total)=>total?px/total*100:0;
+  const updateNote=()=>{
+    const l=parseFloat(wrap.style.left)||0;
+    const t=parseFloat(wrap.style.top)||0;
+    const note=wrap.querySelector("#masterQrPositionNote");
+    if(note)note.textContent=`中心X ${l.toFixed(1)}% / 中心Y ${t.toFixed(1)}%`;
+    if($("masterQrCenterX"))$("masterQrCenterX").value=l.toFixed(1);
+    if($("masterQrCenterY"))$("masterQrCenterY").value=t.toFixed(1);
+  };
+
+  const pointerMove=e=>{
+    if(!mode)return;
+    const r=card.getBoundingClientRect();
+    if(mode==="drag"){
+      const dx=pct(e.clientX-startX,r.width);
+      const dy=pct(e.clientY-startY,r.height);
+      const w=parseFloat(wrap.style.width)||28;
+      const h=w*(r.width/r.height);
+      const nl=Math.max(w/2,Math.min(100-w/2,startLeft+dx));
+      const nt=Math.max(h/2,Math.min(100-h/2,startTop+dy));
+      wrap.style.left=nl+"%";
+      wrap.style.top=nt+"%";
+      updateNote();
+    }else if(mode==="resize"){
+      const dx=pct(e.clientX-startX,r.width);
+      const nw=Math.max(8,Math.min(60,startW+dx));
+      wrap.style.width=nw+"%";
+
+      // Synchronize with existing QR-size setting.
+      const px=Math.round(132*nw/28);
+      const bounded=Math.max(80,Math.min(220,px));
+      if($("settingQrSize"))$("settingQrSize").value=bounded;
+      const settings=getSizeSettings();
+      settings.qrSize=bounded;
+      localStorage.setItem("qrCardSizeSettings",JSON.stringify(settings));
+      applySizeSettingsToCss(settings);
+    }
+  };
+
+  const pointerUp=()=>{
+    mode="";
+    wrap.classList.remove("dragging");
+    window.removeEventListener("pointermove",pointerMove);
+    window.removeEventListener("pointerup",pointerUp);
+  };
+
+  wrap.addEventListener("pointerdown",e=>{
+    if(e.target===handle)return;
+    e.preventDefault();
+    mode="drag";
+    wrap.classList.add("dragging");
+    startX=e.clientX;startY=e.clientY;
+    startLeft=parseFloat(wrap.style.left)||0;
+    startTop=parseFloat(wrap.style.top)||0;
+    wrap.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",pointerMove);
+    window.addEventListener("pointerup",pointerUp);
+  });
+
+  handle?.addEventListener("pointerdown",e=>{
+    e.preventDefault();e.stopPropagation();
+    mode="resize";
+    startX=e.clientX;startY=e.clientY;
+    startW=parseFloat(wrap.style.width)||28;
+    handle.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove",pointerMove);
+    window.addEventListener("pointerup",pointerUp);
+  });
+}
+
+function updateMasterPreview(){
+ const host=$("masterPreviewCard");if(!host)return;host.innerHTML="";
+ const src=$("qrSheet")?.querySelector(".qrCard");
+ if(!src){
+   host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667085;font-size:.9rem;padding:20px;text-align:center">QRカードを作成すると、ここにプレビューが表示されます。</div>';
+   return;
+ }
+
+ const mx=Math.max(0,Math.min(45,Number($("masterMarginX")?.value)||0));
+ const my=Math.max(0,Math.min(45,Number($("masterMarginY")?.value)||0));
+ const borderOn=$("masterMarginGuide")?.value!=="off";
+ const borderColor=getMasterBorderColorControlValue(MASTER_DEFAULT_STATE.borderColor);
+ const borderWidth=Math.max(1,Math.min(5,Number($("masterBorderWidth")?.value)||MASTER_DEFAULT_STATE.borderWidth));
+
+ const card=document.createElement("div");
+ card.id="masterCardInner";
+ card.style.position="absolute";
+ card.style.left=mx+"%";
+ card.style.right=mx+"%";
+ card.style.top=my+"%";
+ card.style.bottom=my+"%";
+ card.style.border=borderOn?`${borderWidth}px solid ${borderColor}`:"1px solid transparent";
+ card.style.borderRadius="14px";
+ card.style.background="#fff";
+ card.style.boxSizing="border-box";
+ card.style.overflow="hidden";
+ host.appendChild(card);
+
+ const qrSource=src.querySelector("canvas,img");
+ if(qrSource){
+   const wrap=document.createElement("div");
+   wrap.className="masterQrObject";
+   wrap.id="masterQrObject";
+
+   let qrEl;
+   if(qrSource.tagName==="CANVAS"){
+     qrEl=document.createElement("img");
+     try{qrEl.src=qrSource.toDataURL("image/png")}catch{}
+   }else{
+     qrEl=qrSource.cloneNode(true);
+   }
+   wrap.appendChild(qrEl);
+
+   const note=document.createElement("div");
+   note.className="masterQrPositionNote";
+   note.id="masterQrPositionNote";
+   wrap.appendChild(note);
+
+   const handle=document.createElement("div");
+   handle.className="masterQrResizeHandle";
+   handle.id="masterQrResizeHandle";
+   wrap.appendChild(handle);
+
+   card.appendChild(wrap);
+
+   const left=Math.max(0,Math.min(100,Number($("masterQrCenterX")?.value)||50));
+   const top=Math.max(0,Math.min(100,Number($("masterQrCenterY")?.value)||50));
+   const sizePct=Math.max(8,Math.min(60,((Number($("masterMirror_settingQrSize")?.value)||132)/132)*28));
+
+   wrap.style.left=left+"%";
+   wrap.style.top=top+"%";
+   wrap.style.transform="translate(-50%,-50%)";
+   wrap.style.width=sizePct+"%";
+   wrap.style.aspectRatio="1/1";
+   note.textContent=`中心X ${left.toFixed(1)}% / 中心Y ${top.toFixed(1)}%`;
+
+   attachMasterQrInteractions(wrap,card);
+ }
+
+ createMasterTextObject(card,src,".qrId","id","masterIdLeft","masterIdTop","masterIdAlign","masterIdAutoFit","masterMirror_settingIdSize","masterIdWidth","masterIdHeight",20,12,36,9);
+ createMasterTextObject(card,src,".qrEnglish","english","masterEnglishLeft","masterEnglishTop","masterEnglishAlign","masterEnglishAutoFit","masterMirror_settingEnglishSize","masterEnglishWidth","masterEnglishHeight",32,24,55,13);
+ createMasterTextObject(card,src,".qrIpa","ipa","masterIpaLeft","masterIpaTop","masterIpaAlign","masterIpaAutoFit","masterMirror_settingIpaSize","masterIpaWidth","masterIpaHeight",32,38,55,10);
+ createMasterTextObject(card,src,".qrJapanese","japanese","masterJapaneseLeft","masterJapaneseTop","masterJapaneseAlign","masterJapaneseAutoFit","masterMirror_settingJapaneseSize","masterJapaneseWidth","masterJapaneseHeight",32,55,55,12);
+ createMasterTextObject(card,src,".qrJapaneseRead","japaneseRead","masterJapaneseReadLeft","masterJapaneseReadTop","masterJapaneseReadAlign","masterJapaneseReadAutoFit","masterMirror_settingJapaneseReadSize","masterJapaneseReadWidth","masterJapaneseReadHeight",32,70,55,12);
+}
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderWidth","masterQrCenterX","masterQrCenterY","masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop","masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop","masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign","masterIdWidth","masterIdHeight","masterEnglishWidth","masterEnglishHeight","masterIpaWidth","masterIpaHeight","masterJapaneseWidth","masterJapaneseHeight","masterJapaneseReadWidth","masterJapaneseReadHeight"].forEach(id=>{$(id)?.addEventListener("input",updateMasterPreview);$(id)?.addEventListener("change",updateMasterPreview)});
+const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSheet"))masterPreviewObserver.observe($("qrSheet"),{childList:true,subtree:true});setTimeout(updateMasterPreview,0);
+
+$("masterBorderColor")?.addEventListener("change",()=>{
+  if($("masterBorderColor")?.value!=="__custom__"){
+    syncMasterBorderColorControls($("masterBorderColor")?.value||MASTER_DEFAULT_STATE.borderColor,false);
+  }else{
+    setMasterBorderCustomVisibility();
+  }
+  updateMasterPreview();
+});
+$("masterBorderColorCustomPicker")?.addEventListener("input",()=>{
+  syncMasterBorderColorControls($("masterBorderColorCustomPicker")?.value||MASTER_DEFAULT_STATE.borderColor,true);
+  updateMasterPreview();
+});
+$("masterBorderColorCustomHex")?.addEventListener("input",()=>{
+  const raw=$("masterBorderColorCustomHex")?.value||"";
+  $("masterBorderColor") && ($("masterBorderColor").value="__custom__");
+  setMasterBorderCustomVisibility();
+  if(/^#?[0-9a-fA-F]{6}$/.test(raw.trim())){
+    const normalized=normalizeMasterHexColor(raw,MASTER_DEFAULT_STATE.borderColor);
+    $("masterBorderColorCustomPicker") && ($("masterBorderColorCustomPicker").value=normalized);
+  }
+  updateMasterPreview();
+});
+$("masterBorderColorCustomHex")?.addEventListener("change",()=>{
+  syncMasterBorderColorControls($("masterBorderColorCustomHex")?.value||MASTER_DEFAULT_STATE.borderColor,true);
+  updateMasterPreview();
+});
+
+
+
+
+["masterMarginX","masterMarginY","masterMarginGuide","masterBorderColor","masterBorderColorCustomPicker","masterBorderColorCustomHex","masterBorderWidth","masterQrCenterX","masterQrCenterY",
+ "masterMirror_settingQrSize","masterMirror_settingIdSize","masterMirror_settingEnglishSize",
+ "masterMirror_settingIpaSize","masterMirror_settingJapaneseSize","masterMirror_settingJapaneseReadSize",
+ "masterIdLeft","masterIdTop","masterEnglishLeft","masterEnglishTop","masterIpaLeft","masterIpaTop",
+ "masterJapaneseLeft","masterJapaneseTop","masterJapaneseReadLeft","masterJapaneseReadTop",
+ "masterIdAlign","masterEnglishAlign","masterIpaAlign","masterJapaneseAlign","masterJapaneseReadAlign",
+ "masterIdAutoFit","masterEnglishAutoFit","masterIpaAutoFit","masterJapaneseAutoFit","masterJapaneseReadAutoFit"
+].forEach(id=>{
+  $(id)?.addEventListener("input",()=>{
+    localStorage.setItem("masterCardCurrentState",JSON.stringify(readMasterState()));
+    updateMasterPreview();applyMasterLayoutToAllRendered();
+  });
+  $(id)?.addEventListener("change",()=>{
+    localStorage.setItem("masterCardCurrentState",JSON.stringify(readMasterState()));
+    updateMasterPreview();applyMasterLayoutToAllRendered();
+  });
+});
+$("saveMasterDefaultBtn")?.addEventListener("click",saveMasterDefault);
+$("resetMasterDefaultBtn")?.addEventListener("click",resetMasterToBundledDefault);
+setTimeout(()=>{installBundledMasterDefault();
+loadSavedMasterState();updateMasterPreview();applyMasterLayoutToAllRendered();},0);
+
+const lowerPreviewObserver=new MutationObserver(()=>applyMasterLayoutToAllRendered());
+if($("printQrSheet"))lowerPreviewObserver.observe($("printQrSheet"),{childList:true,subtree:true});
+
+
+function syncLegacySizeFromMaster(){
+ const s=readMasterState();
+ const pairs={
+  settingQrSize:s.qr.size,settingIdSize:s.id.size,settingEnglishSize:s.english.size,
+  settingIpaSize:s.ipa.size,settingJapaneseSize:s.japanese.size,settingJapaneseReadSize:s.japaneseRead.size
+ };
+ Object.entries(pairs).forEach(([id,v])=>{if($(id))$(id).value=v;});
+ try{saveAndApplySizeSettings();}catch{}
+}
+["masterMirror_settingQrSize","masterMirror_settingIdSize","masterMirror_settingEnglishSize",
+ "masterMirror_settingIpaSize","masterMirror_settingJapaneseSize","masterMirror_settingJapaneseReadSize"
+].forEach(id=>$(id)?.addEventListener("change",syncLegacySizeFromMaster));
+
+
+
+
+async function previewCardToImageDataUrl(card, scale=2){
+  if(!card) return null;
+
+  const srcRect = card.getBoundingClientRect();
+  const width = Math.max(1, Math.round(srcRect.width || 800));
+  const height = Math.max(1, Math.round(srcRect.height || 566));
+
+  const clone = card.cloneNode(true);
+  clone.style.margin = "0";
+  clone.style.width = width + "px";
+  clone.style.height = height + "px";
+  clone.style.boxSizing = "border-box";
+  clone.style.background = "#ffffff";
+  clone.querySelectorAll("canvas").forEach(cv=>{
+    try{
+      const img = document.createElement("img");
+      img.src = cv.toDataURL("image/png");
+      img.style.width = cv.style.width || "100%";
+      img.style.height = cv.style.height || "100%";
+      img.style.display = "block";
+      img.style.maxWidth = "100%";
+      img.style.maxHeight = "100%";
+      cv.replaceWith(img);
+    }catch(e){}
+  });
+
+  const css = `
+    *{box-sizing:border-box;}
+    body{margin:0;padding:0;background:#fff;}
+    .qrCard,.printMasterCard{position:relative;overflow:hidden;background:#fff;}
+    .masterOutputInner{position:absolute;background:#fff;overflow:hidden;}
+    .qrTextBox{position:absolute;display:flex;align-items:center;overflow:hidden;}
+    .qrTextInner,.masterPlainText{
+      width:100%;
+      line-height:1.18;
+      white-space:normal;
+      word-break:normal;
+      overflow-wrap:break-word;
+      color:#222;
+      font-family:Arial,"Helvetica Neue",sans-serif;
+    }
+    img{display:block;max-width:100%;max-height:100%;}
+  `;
+
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width*scale}" height="${height*scale}" viewBox="0 0 ${width} ${height}">
+    <foreignObject x="0" y="0" width="${width}" height="${height}">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#fff;">
+        <style>${css}
+/* v4.5.0 Reader prototype: long-form reading and pronunciation study */
+.readerStudyToolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:12px;}
+.readerStudyToolbar>button{flex:1 1 150px;}
+.readerStudyToolbar>label{flex:1 1 150px;}
+.readerStudyOptions{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+.readerStudyOptions label{display:flex;align-items:center;gap:7px;font-weight:650;}
+.readerStudyOptions label span{margin:0;}
+.readerStudyDoc{display:flex;flex-direction:column;gap:12px;margin-top:14px;}
+.readerStudySectionTitle{font-size:1.08rem;font-weight:800;margin:2px 0 0;padding:10px 12px;background:#f1f3f6;border-radius:12px;}
+.readerStudyRow{background:#fff;border:1px solid #d9dee7;border-radius:15px;padding:14px;scroll-margin-top:12px;transition:box-shadow .15s,border-color .15s;}
+.readerStudyRow.isReading{border-color:#111;box-shadow:0 0 0 2px #111 inset;}
+.readerStudyTop{display:flex;gap:10px;align-items:flex-start;}
+.readerStudySpeak{flex:0 0 auto;padding:9px 11px;min-width:48px;}
+ .readerStudyStar{flex:0 0 auto;padding:7px 9px;min-width:42px;background:#f8fafc;color:#667085;border:1px solid #d0d5dd;font-size:.82rem;font-weight:700;}
+.readerStudyStar.active{background:#eef2f6;color:#344054;border:1px solid #98a2b3;font-weight:750;}
+.readerStudyTexts{flex:1 1 auto;min-width:0;}
+.readerStudyEnglish{font-size:1.38rem;font-weight:780;line-height:1.5;overflow-wrap:anywhere;}
+.readerStudyJapanese{font-size:1.05rem;color:#4b5563;line-height:1.55;margin-top:6px;}
+.readerStudyExplanation{margin-top:10px;border-top:1px solid #e5e7eb;padding-top:9px;}
+.readerStudyExplanation summary{cursor:pointer;font-weight:700;color:#374151;}
+.readerStudyExplanationBody{white-space:pre-wrap;line-height:1.55;color:#444;margin-top:7px;font-size:.94rem;}
+.readerStudyQr{margin-top:10px;display:flex;align-items:center;gap:10px;}
+.readerStudyQrBox{width:76px;height:76px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid #e5e7eb;border-radius:8px;background:#fff;}
+.readerStudyQrBox canvas,.readerStudyQrBox img{width:68px!important;height:68px!important;}
+.readerStudyId{font-size:.8rem;color:#6b7280;}
+.readerStudyStatus{min-height:1.4em;font-weight:650;margin:10px 0 0;}
+
+.readerSetManager{margin-top:12px;}
+.readerSetManagerTitle{font-weight:800;margin-bottom:8px;}
+.readerSetImportRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+.readerSetSearchGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-items:end;margin-top:10px;}
+.readerSetSearchGrid #readerSetLoadBtn{grid-column:1/-1;width:100%;margin-top:8px;min-height:46px;}
+.readerSetSearchGrid label{display:flex;flex-direction:column;gap:5px;font-weight:700;}
+.readerSetSearchGrid input,.readerSetSearchGrid select{width:100%;box-sizing:border-box;padding:10px 11px;background:#fff;}
+.readerSetMeta{font-size:.86rem;color:#667085;line-height:1.5;margin-top:8px;}
+.readerStudySetTitle{font-size:1.35rem;font-weight:850;line-height:1.3;margin:0 0 4px;}
+.readerStudyDocMeta{font-size:.84rem;color:#667085;margin-bottom:9px;}
+.readerStudyMissing{border-color:#b42318;background:#fff7f6;}
+.readerStudyMissing .readerStudyEnglish{color:#b42318;}
+@media(max-width:640px){.readerSetImportRow{grid-template-columns:1fr}.readerSetSearchGrid{grid-template-columns:1fr 1fr}.readerStudySetTitle{font-size:1.2rem}}
+@media(max-width:650px){
+  .readerStudyRow{padding:12px;}
+  .readerStudyEnglish{font-size:1.26rem;}
+  .readerStudyTop{gap:8px;}
+  .readerStudySpeak{padding:7px 9px;min-width:42px;}
+  .readerStudyStar{padding:6px 8px;min-width:40px;}
+}
+
+</style>
+        ${serialized}
+      </div>
+    </foreignObject>
+  </svg>`;
+
+  const svgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
+  return await new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const canvas = document.createElement("canvas");
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL("image/png"));
+      }catch(e){
+        resolve(svgDataUrl);
+      }
+    };
+    img.onerror = ()=>resolve(svgDataUrl);
+    img.src = svgDataUrl;
+  });
+}
+
+async function getPreviewCardImagesForOutput(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  if(!cards.length) return [];
+  const urls = [];
+  for(const card of cards){
+    const url = await previewCardToImageDataUrl(card, 2);
+    if(url) urls.push(url);
+  }
+  return urls;
+}
+
+async function getPreviewCardImageItemsForOutput(){
+  const cards = [...document.querySelectorAll("#qrSheet .qrCard")];
+  const items = [];
+  for(let i=0;i<cards.length;i++){
+    const card = cards[i];
+    const url = await previewCardToImageDataUrl(card, 2);
+
+    let qrBox = null;
+    const qrEl = card.querySelector(".masterOutputInner .qrCodeWrap, .qrCodeWrap");
+    if(qrEl){
+      const cardRect = card.getBoundingClientRect();
+      const qrRect = qrEl.getBoundingClientRect();
+      if(cardRect.width > 0 && cardRect.height > 0 && qrRect.width > 0 && qrRect.height > 0){
+        qrBox = {
+          left: ((qrRect.left - cardRect.left) / cardRect.width) * 100,
+          top: ((qrRect.top - cardRect.top) / cardRect.height) * 100,
+          width: (qrRect.width / cardRect.width) * 100,
+          height: (qrRect.height / cardRect.height) * 100
+        };
+      }
+    }
+
+    items.push({
+      url,
+      record: qrPageSource[i] || null,
+      qrBox
+    });
+  }
+  return items;
+}
+
+
+function masterFontPxForCard(card,v){
+  const inner=card.querySelector(".masterOutputInner")||card;
+  const w=inner.getBoundingClientRect().width||620;
+  // Master preview reference width is approximately 620 px.
+  return Math.max(5,(Number(v.size)||1)*16*(w/620));
+}
+
+function buildMasterPrintSheet(records){
+  const sheet=$("printQrSheet");
+  if(!sheet)return;
+  sheet.innerHTML="";
+
+  const state=readMasterState();
+  const showEnglish=$("qrShowEnglish")?.checked!==false;
+  const showIpa=$("qrShowIpa")?.checked!==false;
+  const showJapanese=$("qrShowJapanese")?.checked===true;
+  const showJapaneseRead=$("qrShowJapaneseRead")?.checked!==false;
+  const showId=$("qrShowId")?.checked!==false;
+
+  records.forEach(r=>{
+    const card=document.createElement("div");
+    card.className="printMasterCard";
+    card.style.position="relative";
+    card.style.aspectRatio="297 / 210";
+    card.style.overflow="hidden";
+    card.style.background="#fff";
+    card.style.boxSizing="border-box";
+
+    const inner=document.createElement("div");
+    inner.className="masterOutputInner";
+    inner.style.position="absolute";
+    inner.style.left=state.marginX+"%";
+    inner.style.right=state.marginX+"%";
+    inner.style.top=state.marginY+"%";
+    inner.style.bottom=state.marginY+"%";
+    inner.style.boxSizing="border-box";
+    inner.style.background="#fff";
+    inner.style.overflow="hidden";
+    inner.style.border=masterBorderCss(state);
+    inner.style.borderRadius="14px";
+    card.appendChild(inner);
+
+    const q=document.createElement("div");
+    q.className="qrCodeWrap";
+    q.style.position="absolute";
+    q.style.left=state.qr.x+"%";
+    q.style.top=state.qr.y+"%";
+    q.style.width=Math.max(8,Math.min(60,(state.qr.size/132)*28))+"%";
+    q.style.aspectRatio="1/1";
+    q.style.transform="translate(-50%,-50%)";
+    q.style.lineHeight="0";
+    inner.appendChild(q);
+    new QRCode(q,{
+      text:r.id,
+      width:600,height:600,
+      correctLevel:QRCode.CorrectLevel.M
+    });
+    q.querySelectorAll("canvas,img").forEach(el=>{
+      el.style.width="100%";
+      el.style.height="100%";
+      el.style.display="block";
+    });
+
+    const addText=(cls,txt,v,bold=false)=>{
+      if(!txt)return;
+      const box=document.createElement("div");
+      box.className="qrTextBox "+cls;
+      box.style.position="absolute";
+      box.style.left=v.x+"%";
+      box.style.top=v.y+"%";
+      box.style.width=v.w+"%";
+      box.style.height=v.h+"%";
+      box.style.transform="translate(-50%,-50%)";
+      box.style.display="flex";
+      box.style.alignItems="center";
+      box.style.justifyContent=v.align==="left"?"flex-start":"center";
+      box.style.textAlign=v.align;
+      box.style.overflow="hidden";
+      box.style.boxSizing="border-box";
+
+      const t=document.createElement("div");
+      t.className="qrTextInner";
+      t.textContent=txt;
+      t.style.width="100%";
+      t.style.boxSizing="border-box";
+      t.style.padding="2px 4px";
+      t.style.whiteSpace="normal";
+      t.style.wordBreak="normal";
+      t.style.overflowWrap="break-word";
+      t.style.lineHeight="1.18";
+      t.style.fontWeight=bold?"700":"400";
+      t.style.color="#222";
+      box.appendChild(t);
+      inner.appendChild(box);
+      requestAnimationFrame(()=>{
+      const px=masterFontPxForCard(card,v);
+      const rem=px/16;
+      fitMasterPlainText(box,t,rem,v.autoFit==="on");
+    });
+    };
+
+    if(showId)addText("qrId",r.id,state.id,false);
+    if(showEnglish)addText("qrEnglish",r.english,state.english,true);
+    if(showIpa&&r.ipa)addText("qrIpa",r.ipa,state.ipa,false);
+    if(showJapanese&&r.japanese)addText("qrJapanese",r.japanese,state.japanese,false);
+    if(showJapaneseRead&&(r.japaneseRead||r.japanese))addText("qrJapaneseRead",r.japaneseRead||r.japanese,state.japaneseRead,false);
+
+    sheet.appendChild(card);
+  });
+}
+function applyDynamicPrintLayout(){
+  let style=$("dynamicPrintPageStyle");
+  if(!style){
+    style=document.createElement("style");
+    style.id="dynamicPrintPageStyle";
+    document.head.appendChild(style);
+  }
+  style.textContent='@media print{'+
+    '@page{size:A4 portrait;margin:8mm;}'+
+    '#printQrSheet{display:grid!important;width:100%!important;margin:0!important;padding:0!important;grid-template-columns:repeat(2,1fr)!important;grid-template-rows:repeat(4,1fr)!important;gap:3mm!important;}'+
+    '#printQrSheet .directPrintCard{position:relative!important;aspect-ratio:297/210!important;width:100%!important;overflow:hidden!important;break-inside:avoid!important;page-break-inside:avoid!important;background:#fff!important;}'+
+    '#printQrSheet .directPrintQr{position:absolute!important;object-fit:contain!important;max-width:none!important;max-height:none!important;}'+
+    '#printQrSheet .directPrintText{position:absolute!important;box-sizing:border-box!important;}'+
+    '#printQrSheet .directPrintTextInner{display:block!important;width:100%!important;height:auto!important;line-height:1.12!important;margin:0!important;}'+
+    '#printQrSheet .directPrintTextLine{display:block!important;width:100%!important;white-space:pre!important;margin:0!important;padding:0!important;}'+
+    '}';
+}
+
+const PRINT_OVERRIDE_KEY="printCardOverridesSessionV1";
+let printAdjustEditingId="";
+let printPrecheckItemsCache=[];
+function getPrintOverrides(){try{return JSON.parse(sessionStorage.getItem(PRINT_OVERRIDE_KEY)||"{}")||{};}catch(e){return {};}}
+function savePrintOverrides(v){try{sessionStorage.setItem(PRINT_OVERRIDE_KEY,JSON.stringify(v||{}));}catch(e){}}
+function getPrintOverride(id){return id?(getPrintOverrides()[id]||null):null;}
+function labelForPrintKey(k){return ({id:"ID",english:"英語",ipa:"発音記号",japanese:"日本語",japaneseRead:"日本語読み"})[k]||k;}
+function rectsOverlap(a,b,pad=0){const ax1=a.left+pad,ay1=a.top+pad,ax2=a.left+a.width-pad,ay2=a.top+a.height-pad,bx1=b.left+pad,by1=b.top+pad,bx2=b.left+b.width-pad,by2=b.top+b.height-pad;return ax1<bx2&&ax2>bx1&&ay1<by2&&ay2>by1;}
+function applyPrintOverrideToItem(item){
+  if(!item?.record?.id)return item;
+  const ov=getPrintOverride(item.record.id); if(!ov)return item;
+  const state=readMasterState();
+  return {...item,texts:(item.texts||[]).map(t=>{const x=ov[t.key];if(!x)return {...t};const base=state[t.key]||{},bs=Number(base.size)||1,ns=Number(x.size)||bs;return {...t,top:Number.isFinite(Number(x.y))?Number(x.y):t.top,height:Number.isFinite(Number(x.h))?Number(x.h):t.height,fontRatio:t.fontRatio*(ns/bs)};})};
+}
+function checkPrintItem(item){
+  const issues=[],a=applyPrintOverrideToItem(item); if(!a)return issues;
+  const texts=a.texts||[],b=a.border||{left:0,top:0,width:100,height:100},br=b.left+b.width,bb=b.top+b.height;
+
+  texts.forEach(t=>{
+    if(t.left<b.left-.5||t.top<b.top-.5||t.left+t.width>br+.5||t.top+t.height>bb+.5){
+      issues.push(labelForPrintKey(t.key)+"：枠外にはみ出す可能性");
+    }
+    if(t.textOverflowing){
+      issues.push(labelForPrintKey(t.key)+"：文字が枠内に収まっていません");
+    }
+  });
+
+  for(let i=0;i<texts.length;i++){
+    for(let j=i+1;j<texts.length;j++){
+      if(rectsOverlap(texts[i],texts[j],.35)){
+        issues.push(labelForPrintKey(texts[i].key)+" と "+labelForPrintKey(texts[j].key)+" が重なる可能性");
+      }
+    }
+  }
+  if(a.qr)texts.forEach(t=>{
+    if(rectsOverlap(a.qr,t,.8))issues.push("QR と "+labelForPrintKey(t.key)+" が重なる可能性");
+  });
+  return [...new Set(issues)];
+}
+async function runPrintPrecheck(){
+  const panel=$("printPrecheckPanel"),summary=$("printPrecheckSummary"),list=$("printPrecheckList");
+  if(!panel||!summary||!list)return;
+
+  panel.hidden=false;
+  $("printCardAdjustEditor").hidden=true;
+  list.innerHTML="";
+  summary.textContent="確認中…";
+
+  // Re-apply the master layout and wait until all requestAnimationFrame
+  // based auto-font fitting has completed before measuring.
+  applyMasterLayoutToAllRendered();
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+
+  const items=getPreviewCardEditableItemsForPpt();
+  printPrecheckItemsCache=items;
+  if(!items.length){
+    summary.textContent="先にQRコードを表示してください。";
+    return;
+  }
+
+  let bad=0;
+  items.forEach((item,i)=>{
+    const issues=checkPrintItem(item);
+    if(!issues.length)return;
+    bad++;
+
+    const row=document.createElement("div");
+    row.className="printIssueCard";
+    const top=document.createElement("div");
+    top.className="printIssueTop";
+    const id=document.createElement("div");
+    id.className="printIssueId";
+    id.textContent=item.record?.id||("カード"+(i+1));
+
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.className="secondary printAdjustOpenBtn";
+    btn.dataset.cardIndex=String(i);
+    btn.textContent=getPrintOverride(item.record?.id)?"個別調整を再編集":"このカードを調整";
+
+    top.append(id,btn);
+    row.appendChild(top);
+
+    const detail=document.createElement("div");
+    detail.className="printIssueText";
+    detail.textContent=issues.join(" / ");
+    row.appendChild(detail);
+    list.appendChild(row);
+  });
+
+  summary.textContent=bad===0
+    ? "問題候補は見つかりませんでした（"+items.length+"件チェック）。"
+    : items.length+"件中、要確認 "+bad+"件です。";
+}
+function openPrintCardAdjustEditor(item){
+  if(!item?.record?.id)return;
+  printAdjustEditingId=item.record.id;
+  const editor=$("printCardAdjustEditor"),rows=$("printAdjustRows"); if(!editor||!rows)return;
+  editor.hidden=false;$("printAdjustCardTitle").textContent=item.record.id+" の個別調整";rows.innerHTML="";
+  const state=readMasterState(),ov=getPrintOverride(item.record.id)||{};
+  ["english","ipa","japanese","japaneseRead"].forEach(k=>{
+    const base=state[k];if(!base)return;const v=ov[k]||{},row=document.createElement("div");
+    row.className="printAdjustRow";
+    row.innerHTML='<div class="printAdjustName">'+labelForPrintKey(k)+'</div><label><span>中心Y（%）</span><input data-print-key="'+k+'" data-field="y" type="number" step="0.5" min="0" max="100" value="'+(v.y??base.y)+'"></label><label><span>文字サイズ</span><input data-print-key="'+k+'" data-field="size" type="number" step="0.1" min="0.5" max="8" value="'+(v.size??base.size)+'"></label><label><span>枠高さ（%）</span><input data-print-key="'+k+'" data-field="h" type="number" step="0.5" min="5" max="70" value="'+(v.h??base.h)+'"></label>';
+    rows.appendChild(row);
+  });
+}
+function saveCurrentPrintCardAdjust(){
+  if(!printAdjustEditingId)return;
+  const all=getPrintOverrides(),ov={};
+  document.querySelectorAll("#printAdjustRows input[data-print-key]").forEach(inp=>{const k=inp.dataset.printKey,f=inp.dataset.field;if(!ov[k])ov[k]={};ov[k][f]=Number(inp.value);});
+  all[printAdjustEditingId]=ov;savePrintOverrides(all);$("printCardAdjustEditor").hidden=true;runPrintPrecheck();
+}
+function resetCurrentPrintCardAdjust(){if(!printAdjustEditingId)return;const all=getPrintOverrides();delete all[printAdjustEditingId];savePrintOverrides(all);$("printCardAdjustEditor").hidden=true;runPrintPrecheck();}
+$("printPrecheckBtn")?.addEventListener("click",runPrintPrecheck);
+$("printPrecheckList")?.addEventListener("click",e=>{
+  const btn=e.target.closest(".printAdjustOpenBtn");
+  if(!btn)return;
+  e.preventDefault();
+  e.stopPropagation();
+  const idx=Number(btn.dataset.cardIndex);
+  const item=printPrecheckItemsCache[idx];
+  if(item)openPrintCardAdjustEditor(item);
+});
+$("closePrintPrecheckBtn")?.addEventListener("click",()=>{$("printPrecheckPanel").hidden=true;});
+$("savePrintCardAdjustBtn")?.addEventListener("click",saveCurrentPrintCardAdjust);
+$("resetPrintCardAdjustBtn")?.addEventListener("click",resetCurrentPrintCardAdjust);
+$("cancelPrintCardAdjustBtn")?.addEventListener("click",()=>{$("printCardAdjustEditor").hidden=true;});
+
+
+function isIPhoneSafariForPrint(){
+  const ua=navigator.userAgent||"";
+  const isIPhone=/iPhone/i.test(ua);
+  const isWebKit=/WebKit/i.test(ua);
+  const isOtherIOSBrowser=/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  return isIPhone && isWebKit && !isOtherIOSBrowser;
+}
+
+function iPhonePrintFontScale(){
+  if(!isIPhoneSafariForPrint())return 1;
+
+  // On iPhone Safari the two-column A4 print sheet is laid out in the
+  // on-screen CSS viewport before the print transform is applied.
+  // Scale text from the desktop A4 reference width to the actual
+  // two-column card width available in the iPhone viewport.
+  const viewport=Math.max(320,Math.min(window.innerWidth||390,500));
+  const horizontalPagePadding=32; // approximate page-side breathing room in CSS px
+  const columnGap=12;
+  const cardCssWidth=Math.max(120,(viewport-horizontalPagePadding-columnGap)/2);
+  const desktopReference=(95.5/25.4)*96;
+  return Math.max(0.42,Math.min(1,cardCssWidth/desktopReference));
+}
+
+
+function fitIPhonePrintTextBoxes(){
+  if(!isIPhoneSafariForPrint())return;
+  document.querySelectorAll('#printQrSheet .directPrintText[data-iphone-print-autofit="1"]').forEach(box=>{
+    const text=box.querySelector(".directPrintTextInner");
+    if(!text)return;
+
+    let size=parseFloat(text.style.fontSize)||0;
+    if(!size || box.clientWidth<=0 || box.clientHeight<=0)return;
+
+    let guard=0;
+    while(guard<24 && size>5){
+      const h=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+      const lineEls=[...text.querySelectorAll(".directPrintTextLine")];
+      const w=lineEls.length
+        ? Math.max(...lineEls.map(el=>Math.max(el.scrollWidth,el.getBoundingClientRect().width)))
+        : Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+
+      if(w<=box.clientWidth-1 && h<=box.clientHeight-1)break;
+
+      size=Math.max(5,size*0.995);
+      text.style.fontSize=size+"px";
+      void text.offsetHeight;
+      guard++;
+    }
+  });
+}
+
+function countRenderedTextLines(textEl){
+  if(!textEl || !textEl.firstChild)return 1;
+  try{
+    const range=document.createRange();
+    range.selectNodeContents(textEl);
+    const rects=[...range.getClientRects()].filter(r=>r.width>0.5 && r.height>0.5);
+    if(!rects.length)return 1;
+
+    // Group rects by visual line using their vertical center.
+    const centers=[];
+    rects.forEach(r=>{
+      const cy=r.top+r.height/2;
+      const tolerance=Math.max(1.5,r.height*0.35);
+      if(!centers.some(v=>Math.abs(v-cy)<=tolerance))centers.push(cy);
+    });
+    return Math.max(1,centers.length);
+  }catch(e){
+    const cs=getComputedStyle(textEl);
+    const fs=parseFloat(cs.fontSize)||16;
+    const lh=parseFloat(cs.lineHeight)||fs*1.12;
+    return Math.max(1,Math.round((textEl.scrollHeight||lh)/Math.max(1,lh)));
+  }
+}
+
+function getRenderedTextLines(textEl){
+  const raw=String(textEl?.textContent||"");
+  if(!raw)return [""];
+
+  try{
+    const node=textEl.firstChild;
+    if(!node || node.nodeType!==Node.TEXT_NODE)return [raw];
+
+    const lines=[];
+    let current="";
+    let currentCenter=null;
+
+    for(let i=0;i<raw.length;i++){
+      const range=document.createRange();
+      range.setStart(node,i);
+      range.setEnd(node,i+1);
+      const r=range.getBoundingClientRect();
+
+      if(r.width<=0.1 || r.height<=0.1){
+        current+=raw[i];
+        continue;
+      }
+
+      const center=r.top+r.height/2;
+      const tolerance=Math.max(1.5,r.height*0.35);
+
+      if(currentCenter===null || Math.abs(center-currentCenter)<=tolerance){
+        current+=raw[i];
+        if(currentCenter===null)currentCenter=center;
+      }else{
+        lines.push(current.replace(/\s+$/,""));
+        current=raw[i];
+        currentCenter=center;
+      }
+    }
+
+    if(current || !lines.length)lines.push(current.replace(/\s+$/,""));
+    return lines.map((line,i)=>i===0?line:line.replace(/^\s+/,""));
+  }catch(e){
+    return raw.split(/\n/);
+  }
+}
+
+
+function fitDirectPrintTextBoxes(){
+  document.querySelectorAll("#printQrSheet .directPrintText").forEach(box=>{
+    const text=box.querySelector(".directPrintTextInner");
+    if(!text)return;
+
+    let size=parseFloat(text.style.fontSize)||parseFloat(getComputedStyle(text).fontSize)||0;
+    if(!size)return;
+
+    const originalSize=size;
+    const minPx=5;
+
+    const metrics=()=>{
+      const cs=getComputedStyle(text);
+      const lineHeight=parseFloat(cs.lineHeight)||size*1.12;
+      const textH=Math.max(text.scrollHeight,text.getBoundingClientRect().height);
+      const lineEls=[...text.querySelectorAll(".directPrintTextLine")];
+      const textW=lineEls.length
+        ? Math.max(...lineEls.map(el=>Math.max(el.scrollWidth,el.getBoundingClientRect().width)))
+        : Math.max(text.scrollWidth,text.getBoundingClientRect().width);
+      const lines=lineEls.length || countRenderedTextLines(text);
+      return {
+        textH,textW,lines,
+        availableH:Math.max(1,box.clientHeight-1),
+        availableW:Math.max(1,box.clientWidth-1)
+      };
+    };
+
+    let m=metrics();
+
+    // Preserve the exact preview-derived size. Only correct true print overflow.
+    text.style.fontSize=originalSize+"px";
+    size=originalSize;
+    m=metrics();
+
+    let guard=0;
+    while(
+      guard<40 &&
+      size>minPx &&
+      box.clientWidth>0 &&
+      box.clientHeight>0 &&
+      (m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)
+    ){
+      size=Math.max(minPx,size*0.995);
+      text.style.fontSize=size+"px";
+      void text.offsetHeight;
+      m=metrics();
+      guard++;
+    }
+
+    box.dataset.finalPrintFontPx=String(size);
+    box.dataset.printLineCount=String(m.lines);
+    box.dataset.printOverflow=(m.textW>m.availableW+0.5 || m.textH>m.availableH+0.5)?"1":"0";
+  });
+}
+
+async function preflightDirectPrintLayout(){
+  const sheet=$("printQrSheet");
+  if(!sheet)return;
+
+  // Temporarily lay out the print sheet at the same A4 printable width.
+  // It stays far off-screen, so the user never sees it.
+  const prev={
+    display:sheet.style.display,
+    position:sheet.style.position,
+    left:sheet.style.left,
+    top:sheet.style.top,
+    width:sheet.style.width,
+    visibility:sheet.style.visibility,
+    gridTemplateColumns:sheet.style.gridTemplateColumns,
+    gap:sheet.style.gap,
+    pointerEvents:sheet.style.pointerEvents
+  };
+
+  sheet.style.display="grid";
+  sheet.style.position="fixed";
+  sheet.style.left="-20000px";
+  sheet.style.top="0";
+  sheet.style.width="194mm";
+  sheet.style.visibility="hidden";
+  sheet.style.gridTemplateColumns="repeat(2,1fr)";
+  sheet.style.gap="3mm";
+  sheet.style.pointerEvents="none";
+
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  fitDirectPrintTextBoxes();
+  await new Promise(resolve=>requestAnimationFrame(resolve));
+
+  sheet.style.display=prev.display;
+  sheet.style.position=prev.position;
+  sheet.style.left=prev.left;
+  sheet.style.top=prev.top;
+  sheet.style.width=prev.width;
+  sheet.style.visibility=prev.visibility;
+  sheet.style.gridTemplateColumns=prev.gridTemplateColumns;
+  sheet.style.gap=prev.gap;
+  sheet.style.pointerEvents=prev.pointerEvents;
+}
+
+
+async function printMasterCards(){
+  const items = getPreviewCardEditableItemsForPpt();
+  if(!items.length){
+    setStatus($("qrStatus"),"先にQRコードを表示してください。",false);
+    return;
+  }
+
+  const sheet = $("printQrSheet");
+  if(!sheet)return;
+  sheet.innerHTML="";
+
+  const spec=$("printRange")?.value||"";
+  let selected=items.slice();
+  if(spec.trim()){
+    const pos=parsePrintRange(spec,items.length);
+    if(!pos||!pos.length){
+      setStatus($("qrStatus"),"印刷範囲を確認してください。",false);
+      return;
+    }
+    selected=pos.map(n=>items[n-1]).filter(Boolean);
+  }
+
+  selected=selected.map(applyPrintOverrideToItem);
+  selected=expandQrOutputItemsByCopies(selected);
+
+  const state=readMasterState();
+
+  // A4 portrait, 8 cards fixed:
+  // printable width = 210 - 16 mm = 194 mm
+  // 2 columns with 3 mm gap => each card = 95.5 mm.
+  // CSS print reference is 96 px/inch.
+  const PRINT_CARD_WIDTH_PX=(95.5/25.4)*96;
+
+  selected.forEach(item=>{
+    const card=document.createElement("div");
+    card.className="printMasterCard directPrintCard";
+    card.style.position="relative";
+    card.style.aspectRatio="297 / 210";
+    card.style.background="#fff";
+    card.style.overflow="hidden";
+    card.style.boxSizing="border-box";
+
+    if(item.border){
+      const inner=document.createElement("div");
+      inner.className="directPrintInner";
+      inner.style.position="absolute";
+      inner.style.left=item.border.left+"%";
+      inner.style.top=item.border.top+"%";
+      inner.style.width=item.border.width+"%";
+      inner.style.height=item.border.height+"%";
+      inner.style.boxSizing="border-box";
+      inner.style.background="#fff";
+      inner.style.overflow="hidden";
+      inner.style.border=masterBorderCss(state);
+      inner.style.borderRadius="14px";
+      card.appendChild(inner);
+    }
+
+    if(item.record && item.record.id && item.qr){
+      const qr=document.createElement("img");
+      qr.className="directPrintQr";
+      qr.src=qrDataUrlForPpt(item.record.id,900);
+      qr.style.position="absolute";
+      qr.style.left=item.qr.left+"%";
+      qr.style.top=item.qr.top+"%";
+      qr.style.width=item.qr.width+"%";
+      qr.style.height=item.qr.height+"%";
+      qr.style.objectFit="contain";
+      qr.style.display="block";
+      qr.style.margin="0";
+      qr.style.padding="0";
+      card.appendChild(qr);
+    }
+
+    item.texts.forEach(t=>{
+      const box=document.createElement("div");
+      box.className="directPrintText directPrintText-"+t.key;
+      box.style.position="absolute";
+      box.style.left=t.left+"%";
+      box.style.top=t.top+"%";
+      box.style.width=t.width+"%";
+      box.style.height=t.height+"%";
+      box.style.display="flex";
+      box.style.alignItems="center";
+      box.style.justifyContent=t.align==="left"?"flex-start":"center";
+      box.style.textAlign=t.align==="left"?"left":"center";
+      box.style.fontFamily='Arial,"Helvetica Neue",sans-serif';
+      box.style.fontWeight=t.bold?"700":"400";
+      box.style.color="#222";
+      box.style.overflow="hidden";
+      box.style.boxSizing="border-box";
+      box.style.padding="0";
+
+      const innerText=document.createElement("div");
+      innerText.className="directPrintTextInner";
+
+      const previewLines=Array.isArray(t.renderedLines)&&t.renderedLines.length
+        ? t.renderedLines
+        : [String(t.text||"")];
+
+      previewLines.forEach(line=>{
+        const lineEl=document.createElement("div");
+        lineEl.className="directPrintTextLine";
+        lineEl.textContent=line;
+        lineEl.style.display="block";
+        lineEl.style.width="100%";
+        lineEl.style.whiteSpace="pre";
+        lineEl.style.margin="0";
+        lineEl.style.padding="0";
+        lineEl.style.boxSizing="border-box";
+        innerText.appendChild(lineEl);
+      });
+
+      innerText.style.display="block";
+      innerText.style.width="100%";
+      innerText.style.height="auto";
+      innerText.style.boxSizing="border-box";
+      innerText.style.padding="1px 4px";
+      innerText.style.margin="0";
+      innerText.style.lineHeight="1.12";
+      innerText.style.whiteSpace="normal";
+      innerText.style.wordBreak="normal";
+      innerText.style.overflowWrap="normal";
+      innerText.style.hyphens="none";
+      innerText.style.textAlign=t.align==="left"?"left":"center";
+
+      const ratio=Number(t.fontRatio)||0;
+      const iphoneScale=iPhonePrintFontScale();
+      const px=Math.max(5,ratio*PRINT_CARD_WIDTH_PX*iphoneScale);
+      innerText.style.fontSize=px+"px";
+
+      if(iphoneScale<1){
+        box.dataset.iphonePrintAutofit="1";
+      }
+
+      box.appendChild(innerText);
+      card.appendChild(box);
+    });
+
+    sheet.appendChild(card);
+  });
+
+  applyDynamicPrintLayout();
+
+  // Fit against the real two-column A4 print width, including wrapped two-line text.
+  await preflightDirectPrintLayout();
+
+  // Keep the existing iPhone safety pass as an additional fallback.
+  await new Promise(resolve=>setTimeout(resolve,80));
+  fitIPhonePrintTextBoxes();
+
+  const oldTitle=document.title;
+  document.title=outputBaseFileName();
+  const restoreTitle=()=>{
+    document.title=oldTitle;
+    window.removeEventListener("afterprint",restoreTitle);
+  };
+  window.addEventListener("afterprint",restoreTitle);
+  window.print();
+  setTimeout(()=>{if(document.title!==oldTitle)document.title=oldTitle;},3000);
+}
+
+
+
+
+
+$("masterMirror_settingQrSize")?.addEventListener("input",()=>{
+  requestAnimationFrame(()=>applyMasterLayoutToAllRendered());
+});
+$("masterMirror_settingQrSize")?.addEventListener("change",()=>{
+  requestAnimationFrame(()=>applyMasterLayoutToAllRendered());
+});
+
+
+
+/* Tactile button effect follows the actual mouse/finger press. */
+document.addEventListener("pointerdown",e=>{
+  const btn=e.target?.closest?.("button");
+  if(!btn || btn.disabled)return;
+  btn.classList.add("buttonPressFx");
+},{passive:true});
+
+function clearButtonPressFx(){
+  document.querySelectorAll("button.buttonPressFx").forEach(btn=>btn.classList.remove("buttonPressFx"));
+}
+document.addEventListener("pointerup",clearButtonPressFx,{passive:true});
+document.addEventListener("pointercancel",clearButtonPressFx,{passive:true});
+window.addEventListener("blur",clearButtonPressFx);
+
+loadDataManagementSelection();
+updateProfileUi();
+loadFlashLayout();
+updateFlashShuffleUi();
+loadFlashCheckedIds();
+loadVariablePauseSetting();
+loadPreviewSpeakButtonSetting();
+loadPrintCopiesSetting();
+
+setTimeout(()=>{
+  try{
+    document.querySelectorAll("*").forEach(el=>{
+      if(el.children.length===0 && /保存使用量/.test(el.textContent||"") && /確認中/.test(el.textContent||"")){
+        el.textContent="保存使用量：取得できません（保存機能は使用できます）";
+      }
+    });
+  }catch(e){}
+},2200);
+
+setTimeout(async()=>{
+  let restoredFromBackup=0;
+  try{
+    await ensureDb();
+    restoredFromBackup=await restoreAllBackupsIfNeeded();
+  }catch(e){}
+  // Storage persistence check is optional on iPhone; never block app startup.
+  requestPersistentStorage().catch(()=>{});
+  await refreshSummary();
+  await refreshCurrentCsvFileName();
+  await refreshNumbersCsvFileName();
+  await refreshNumbersSummary();
+  for(const prefix of ["W","P","S"]){
+    await refreshExtraCommonCsvFileName(prefix);
+    await refreshExtraCommonSummary(prefix);
+  }
+  if(restoredFromBackup>0){
+    const el=$("importStatus");
+    if(el)setStatus(el,`iPhone保存バックアップから ${restoredFromBackup}件を復元しました。`);
+  }
+  try{
+    const activeCount=(await getActiveProfileRecords()).length;
+    const commonCount=(await getAllCommonRecords()).length;
+    const persisted=await navigator.storage?.persisted?.();
+    if(activeCount===0 && commonCount===0){
+      const el=$("importStatus");
+      if(el){
+        setStatus(
+          el,
+          `再読み込み後の保存確認：CSV ${activeCsvProfile} 0件 / 共通 0件${persisted===false?"（Safariの永続保存は未許可）":""}`,
+          false
+        );
+      }
+    }
+  }catch(e){}
+
+  updateVersionBadge((await getMeta("version_"+activeCsvProfile))||"");
+  await renderPage();
+
+  // Flashcards are intentionally not generated automatically.
+  // They are created only after an explicit flashcard creation/reload button press.
+  flashRecords=[];
+  flashIndex=0;
+  flashBackShown=false;
+  if($("flashTop"))$("flashTop").textContent="フラッシュカード";
+  if($("flashBottom")){$("flashBottom").textContent="";$("flashBottom").hidden=true;}
+  if($("flashId"))$("flashId").textContent="";
+  if($("flashStatus"))$("flashStatus").textContent="作成ボタンを押すとフラッシュカードを作成します。";
+  updateFlashCheckUi();
+},0);
+
+(function ensureDefaultQrFieldToggles(){
+  try{
+    const key = "qrFieldToggles";
+    const raw = localStorage.getItem(key);
+    if(!raw){
+      localStorage.setItem(key, JSON.stringify({
+        qrShowEnglish:true,
+        qrShowIpa:true,
+        qrShowJapanese:true,
+        qrShowJapaneseRead:true,
+        qrShowId:true
+      }));
+    }
+  }catch(e){}
+})();
+
+
+
+/* ===== v4.5.1 ReaderSet CSV + long-form Reader ===== */
+const READER_SET_STORAGE_KEY="readerSetRecordsV1"; // legacy single-slot key
+const READER_SET_FILENAME_KEY="readerSetFileNameV1"; // legacy single-slot key
+const READER_SET_PROFILE_STORAGE_PREFIX="readerSetRecordsV2_";
+const READER_SET_PROFILE_FILENAME_PREFIX="readerSetFileNameV2_";
+
+function readerSetProfile(profile=activeCsvProfile){
+  const p=String(profile||"").toUpperCase();
+  return ["A","B","C"].includes(p)?p:"A";
+}
+function readerSetStorageKey(profile=activeCsvProfile){
+  return READER_SET_PROFILE_STORAGE_PREFIX+readerSetProfile(profile);
+}
+function readerSetFilenameKey(profile=activeCsvProfile){
+  return READER_SET_PROFILE_FILENAME_PREFIX+readerSetProfile(profile);
+}
+function migrateLegacyReaderSetForProfile(profile=activeCsvProfile){
+  const p=readerSetProfile(profile);
+  const key=readerSetStorageKey(p);
+  if(localStorage.getItem(key)!==null)return;
+  let legacy=[];
+  try{
+    const v=JSON.parse(localStorage.getItem(READER_SET_STORAGE_KEY)||"[]");
+    legacy=Array.isArray(v)?v:[];
+  }catch(e){}
+  if(!legacy.length)return;
+
+  const profileSetIds=new Set(
+    legacy.filter(x=>String(x?.itemId||"").toUpperCase().startsWith(p))
+          .map(x=>String(x?.setId||""))
+          .filter(Boolean)
+  );
+  const scoped=legacy.filter(x=>{
+    const id=String(x?.itemId||"").toUpperCase();
+    if(id.startsWith(p))return true;
+    if(/^(?:N(?:\d+(?:\.\d+)?)|[WPS]\d{6})$/.test(id)){
+      return profileSetIds.has(String(x?.setId||""));
+    }
+    return false;
+  });
+  if(scoped.length){
+    localStorage.setItem(key,JSON.stringify(scoped));
+    const oldName=localStorage.getItem(READER_SET_FILENAME_KEY);
+    if(oldName)localStorage.setItem(readerSetFilenameKey(p),oldName);
+  }
+}
+const STUDY_READER_DEMO=[
+  {id:"DEMO-B001",section:"① 診察のはじまり",english:"Hello, I’m Dr. ___ .",englishSpeak:"Hello, I’m Doctor blank.",japanese:"こんにちは、___医師です。",explanation:"【表現】診察開始時の自己紹介。\n【発音】Dr. は doctor と読みます。"},
+  {id:"DEMO-B002",english:"How can I help you today?",japanese:"今日はどうされましたか？",explanation:"【表現】診察の冒頭で患者さんの主訴を尋ねる表現。"},
+  {id:"DEMO-B003",english:"What brings you in today?",japanese:"今日はどんな症状で来られましたか？",explanation:"【表現】受診理由を自然に尋ねる表現。"},
+  {id:"DEMO-B004",english:"Since when have you had these symptoms?",japanese:"いつから症状がありますか？",explanation:"【表現】since when = いつから。\n【文法】現在完了と組み合わせて症状の持続期間を尋ねる。"},
+  {id:"DEMO-B005",section:"② 症状を聞く",english:"Where does it hurt?",japanese:"どこが痛みますか？",explanation:"【表現】痛みの場所を尋ねる基本表現。"},
+  {id:"DEMO-B006",english:"Can you point to the pain?",japanese:"痛いところを指で示してください。",explanation:"【表現】point to = ～を指し示す。"}
+];
+let studyReaderMarked=new Set();
+let studyReaderSequenceToken=0;
+let studyReaderItems=STUDY_READER_DEMO.slice();
+let studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};
+
+function loadReaderSetRecords(profile=activeCsvProfile){
+  const p=readerSetProfile(profile);
+  migrateLegacyReaderSetForProfile(p);
+  try{
+    const v=JSON.parse(localStorage.getItem(readerSetStorageKey(p))||"[]");
+    return Array.isArray(v)?v:[];
+  }catch(e){return [];}
+}
+function saveReaderSetRecords(rows,fileName="",profile=activeCsvProfile){
+  const p=readerSetProfile(profile);
+  localStorage.setItem(readerSetStorageKey(p),JSON.stringify(rows||[]));
+  if(fileName)localStorage.setItem(readerSetFilenameKey(p),String(fileName));
+}
+function readerSetNormalizeText(v){
+  return String(v??"").replace(/^\uFEFF/,"").normalize("NFKC").trim();
+}
+function readerSetCellIndex(headers,names){
+  const h=headers.map(x=>readerSetNormalizeText(x).toLowerCase().replace(/[\s　]+/g,""));
+  const nn=names.map(x=>readerSetNormalizeText(x).toLowerCase().replace(/[\s　]+/g,""));
+  return h.findIndex(x=>nn.includes(x));
+}
+function detectReaderSetDelimiter(text){
+  const first=(String(text||"").replace(/^\uFEFF/,"").split(/\r?\n/).find(x=>x.trim())||"");
+  const counts=[
+    [",",(first.match(/,/g)||[]).length],
+    ["\t",(first.match(/\t/g)||[]).length],
+    [";",(first.match(/;/g)||[]).length]
+  ].sort((a,b)=>b[1]-a[1]);
+  return counts[0][1]>0?counts[0][0]:",";
+}
+function parseReaderSetDelimited(text){
+  const delimiter=detectReaderSetDelimiter(text);
+  const rows=[]; let row=[],cell="",quoted=false;
+  const src=String(text||"").replace(/^\uFEFF/,"");
+  for(let i=0;i<src.length;i++){
+    const ch=src[i];
+    if(quoted){
+      if(ch==='"'){ if(src[i+1]==='"'){cell+='"';i++;} else quoted=false; }
+      else cell+=ch;
+    }else{
+      if(ch==='"')quoted=true;
+      else if(ch===delimiter){row.push(cell);cell="";}
+      else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell="";}
+      else if(ch!=='\r')cell+=ch;
+    }
+  }
+  row.push(cell); if(row.some(v=>String(v).trim()!==""))rows.push(row);
+  return rows;
+}
+function csvToReaderSetRecords(rows,profile=activeCsvProfile){
+  const targetProfile=readerSetProfile(profile);
+  rows=(rows||[]).filter(r=>Array.isArray(r)&&r.some(v=>readerSetNormalizeText(v)!==""));
+  if(rows.length<2)throw new Error("ReaderSet CSVにデータ行がありません。");
+  const h=rows[0];
+  const iSet=readerSetCellIndex(h,["setid","set_id","set id","セットid","セットID","r id","rid"]);
+  const iTitle=readerSetCellIndex(h,["settitle","set_title","set title","title","セット名","タイトル"]);
+  const iSec=readerSetCellIndex(h,["section","セクション","章","章名","sectiontitle"]);
+  const iOrder=readerSetCellIndex(h,["order","順番","表示順","並び順","no","番号"]);
+  const iItem=readerSetCellIndex(h,["itemid","item_id","item id","id","教材id","教材ID","参照id","参照ID"]);
+  if(iSet<0||iTitle<0||iOrder<0||iItem<0){
+    const got=h.map(readerSetNormalizeText).join(" / ");
+    throw new Error(`必要列は SetID, SetTitle, Order, ItemID です。Section列は任意です。\n読み取った見出し：${got}`);
+  }
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const c=rows[i];
+    const setId=readerSetNormalizeText(c[iSet]);
+    const setTitle=readerSetNormalizeText(c[iTitle]);
+    const section=iSec>=0?readerSetNormalizeText(c[iSec]):"";
+    const itemId=readerSetNormalizeText(c[iItem]).toUpperCase().replace(/[\s　]+/g,"");
+    const orderRaw=readerSetNormalizeText(c[iOrder]);
+    const order=Number(orderRaw);
+    if(!setId&&!setTitle&&!section&&!itemId&&!orderRaw)continue;
+    if(!setId||!setTitle||!itemId||!Number.isFinite(order))throw new Error(`${i+1}行目：SetID / SetTitle / Order / ItemID を確認してください。`);
+    if(!/^(?:[ABC]\d{6}|N(?:\d+(?:\.\d+)?)|[WPS]\d{6})$/i.test(itemId))throw new Error(`${i+1}行目：ItemID「${itemId}」の形式を確認してください。`);
+    const abc=itemId.match(/^([ABC])\d{6}$/);
+    if(abc && abc[1]!==targetProfile){
+      throw new Error(`${i+1}行目：${targetProfile}用ReaderSetに「${itemId}」は登録できません。${targetProfile} IDまたは共通ID（N/W/P/S）を使用してください。`);
+    }
+    out.push({setId,setTitle,section,order,itemId});
+  }
+  if(!out.length)throw new Error("有効なReaderSetデータがありません。");
+  return out;
+}
+function escapeHtml(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+function uniqueSorted(xs){return [...new Set(xs.filter(Boolean).map(String))].sort((a,b)=>a.localeCompare(b,"ja",{numeric:true}));}
+function refreshReaderSetSuggestions({preserveTitle=true,preserveSection=true}={}){
+  const all=loadReaderSetRecords();
+  const titleEl=$("readerSetTitleSearch");
+  const sectionEl=$("readerSetSectionSearch");
+  const oldTitle=preserveTitle?(titleEl?.value||""):"";
+  const oldSection=preserveSection?(sectionEl?.value||""):"";
+  const titles=uniqueSorted(all.map(x=>x.setTitle));
+  if(titleEl){
+    titleEl.innerHTML='<option value="">選択してください</option>'+titles.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+    if(oldTitle && titles.includes(oldTitle))titleEl.value=oldTitle;
+  }
+  const selectedTitle=titleEl?.value||"";
+  const scoped=selectedTitle?all.filter(x=>x.setTitle===selectedTitle):[];
+  const sections=uniqueSorted(scoped.map(x=>x.section));
+  if(sectionEl){
+    sectionEl.innerHTML='<option value="">すべて</option>'+sections.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+    if(oldSection && sections.includes(oldSection))sectionEl.value=oldSection;
+  }
+  const p=readerSetProfile();
+  const registerBadge=$("readerSetRegisterProfileBadge");
+  const openBadge=$("readerSetOpenProfileBadge");
+  if(registerBadge)registerBadge.textContent=p;
+  if(openBadge)openBadge.textContent=p;
+  const meta=$("readerSetMeta");
+  if(meta){
+    const sets=uniqueSorted(all.map(x=>x.setId)).length;
+    const fn=String(localStorage.getItem(readerSetFilenameKey(p))||"").trim();
+    meta.textContent=all.length?`${p}：${all.length}行 / ${sets} Set${fn?` / ${fn}`:""}`:`${p}：ReaderSet CSV未登録。`;
+  }
+}
+async function getReaderRecordById(id){
+  await ensureDb();
+  const s=String(id||"").toUpperCase();
+  if(isCommonRecordId(s))return await reqPromise(tx(STORE_N).get(s));
+  const m=s.match(/^([ABC])\d{6}$/);
+  if(!m)return undefined;
+  const store=m[1]==="A"?STORE_A:m[1]==="B"?STORE_B:STORE_C;
+  return await reqPromise(tx(store).get(s));
+}
+async function buildReaderItemsFromSetRows(rows){
+  const out=[];
+  for(const x of rows.slice().sort((a,b)=>a.order-b.order||a.itemId.localeCompare(b.itemId))){
+    const rec=await getReaderRecordById(x.itemId);
+    if(rec){
+      out.push({id:String(rec.id||x.itemId),section:x.section||"",order:x.order,english:String(rec.english||""),englishSpeak:String(rec.englishSpeak||rec.english||""),japanese:String(rec.japanese||""),ipa:String(rec.ipa||""),explanation:String(rec.explanation||""),missing:false});
+    }else{
+      out.push({id:x.itemId,section:x.section||"",order:x.order,english:`${x.itemId}：データが見つかりません`,englishSpeak:"",japanese:"",ipa:"",explanation:"ReaderSetには登録されていますが、対応するA/B/C/N/W/P/S CSVデータがこの端末にありません。",missing:true});
+    }
+  }
+  return out;
+}
+async function loadReaderSetSelection(){
+  const all=loadReaderSetRecords();
+  if(!all.length){studyReaderItems=STUDY_READER_DEMO.slice();studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};renderStudyReader();setStudyReaderStatus("ReaderSet CSV未登録のためサンプルを表示しています。");return;}
+  const title=$('readerSetTitleSearch')?.value||"";
+  const section=$('readerSetSectionSearch')?.value||"";
+  let filtered=all;
+  if(title)filtered=filtered.filter(x=>x.setTitle===title);
+  if(section)filtered=filtered.filter(x=>x.section===section);
+  if(!filtered.length){setStudyReaderStatus("一致するReaderSetがありません。");return;}
+  const setIds=uniqueSorted(filtered.map(x=>x.setId));
+  if(setIds.length>1)filtered=filtered.filter(x=>x.setId===setIds[0]);
+  studyReaderItems=await buildReaderItemsFromSetRows(filtered);
+  const keyword=String($("readerSetKeywordSearch")?.value||"").trim().normalize("NFKC").toLowerCase();
+  if(keyword){
+    const terms=keyword.split(/\s+/).filter(Boolean);
+    studyReaderItems=studyReaderItems.filter(item=>{
+      const haystack=[
+        item.id,item.section,item.english,item.englishSpeak,item.japanese,item.ipa,item.explanation
+      ].map(v=>String(v||"").normalize("NFKC").toLowerCase()).join("\n");
+      return terms.every(t=>haystack.includes(t));
+    });
+  }
+  studyReaderContext={setId:filtered[0].setId,setTitle:filtered[0].setTitle,section:section};
+  renderStudyReader();
+  const missing=studyReaderItems.filter(x=>x.missing).length;
+  if(keyword && !studyReaderItems.length){
+    setStudyReaderStatus(`検索「${keyword}」に一致する項目はありません。`);
+    return;
+  }
+  setStudyReaderStatus(`${studyReaderContext.setTitle}${section?` / ${section}`:""}：${studyReaderItems.length}文${keyword?` / 検索「${keyword}」`:""}${missing?`（未登録ID ${missing}件）`:""}${setIds.length>1?` / 複数Set一致のため ${setIds[0]} を表示`:""}`);
+}
+function setReaderSetImportStatus(text,isError=false){
+  const el=$("readerSetImportStatus");
+  if(!el)return;
+  el.textContent=text||"";
+  el.style.whiteSpace="pre-wrap";
+  el.style.color=isError?"#b42318":"#667085";
+}
+function decodeReaderSetBuffer(buffer){
+  const bytes=new Uint8Array(buffer);
+  const candidates=[];
+  try{candidates.push(new TextDecoder("utf-8",{fatal:false}).decode(bytes));}catch(e){}
+  try{candidates.push(new TextDecoder("shift_jis",{fatal:false}).decode(bytes));}catch(e){}
+  if(!candidates.length)throw new Error("文字コードを判定できませんでした。");
+  candidates.sort((a,b)=>(a.match(/\uFFFD/g)||[]).length-(b.match(/\uFFFD/g)||[]).length);
+  return candidates[0].replace(/^\uFEFF/,"");
+}
+async function readReaderSetFileText(file){
+  if(!file)throw new Error("ReaderSet CSVが選択されていません。");
+  if(typeof file.arrayBuffer==="function"){
+    try{return decodeReaderSetBuffer(await file.arrayBuffer());}catch(e){}
+  }
+  return await new Promise((resolve,reject)=>{
+    try{
+      const reader=new FileReader();
+      reader.onload=()=>{try{resolve(decodeReaderSetBuffer(reader.result));}catch(e){reject(e);}};
+      reader.onerror=()=>reject(reader.error||new Error("ReaderSet CSVを読み込めませんでした。"));
+      reader.onabort=()=>reject(new Error("ReaderSet CSVの読み込みが中断されました。"));
+      reader.readAsArrayBuffer(file);
+    }catch(e){reject(e);}
+  });
+}
+async function importReaderSetCsv(){
+  const file=$("readerSetCsvInput")?.files?.[0];
+  if(!file){setReaderSetImportStatus("ReaderSet CSVを選択してください。",true);setStudyReaderStatus("ReaderSet CSVを選択してください。");return;}
+  try{
+    setReaderSetImportStatus("CSVを読み込み中…");
+    const text=await readReaderSetFileText(file);
+    const rows=parseReaderSetDelimited(text);
+    const targetProfile=readerSetProfile();
+    const records=csvToReaderSetRecords(rows,targetProfile);
+    saveReaderSetRecords(records,file.name,targetProfile);
+    refreshReaderSetSuggestions({preserveTitle:false,preserveSection:false});
+    const first=records.slice().sort((a,b)=>a.order-b.order)[0];
+    if($("readerSetTitleSearch"))$("readerSetTitleSearch").value=first.setTitle;
+    refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
+    if($("readerSetSectionSearch") && first.section){$("readerSetSectionSearch").value=first.section;}
+    const setCount=uniqueSorted(records.map(x=>x.setId)).length;
+    setReaderSetImportStatus(`${targetProfile} 登録完了：${records.length}行 / ${setCount} Set`);
+    // 登録と文書表示は分離。参照先CSVが未登録でもReaderSet自体は登録成功とする。
+    try{
+      await loadReaderSetSelection();
+      setStudyReaderStatus(`${targetProfile} ReaderSet CSVを登録しました：${records.length}行`);
+    }catch(displayError){
+      setStudyReaderStatus(`ReaderSetは登録済みです。文書表示時の確認：${displayError?.message||displayError}`);
+    }
+  }catch(e){
+    const msg=e?.message||String(e);
+    setReaderSetImportStatus(`登録できません：${msg}`,true);
+    setStudyReaderStatus(`ReaderSet CSVエラー：${msg}`);
+  }
+}
+
+function refreshReaderSetForActiveProfile(){
+  const p=readerSetProfile();
+  if($("readerSetCsvInput"))$("readerSetCsvInput").value="";
+  if($("readerSetKeywordSearch"))$("readerSetKeywordSearch").value="";
+  setReaderSetImportStatus(`${p}用ReaderSet CSVを選択できます。`);
+  refreshReaderSetSuggestions({preserveTitle:false,preserveSection:false});
+  const all=loadReaderSetRecords(p);
+  if(all.length){
+    const first=all.slice().sort((a,b)=>a.order-b.order)[0];
+    if($("readerSetTitleSearch"))$("readerSetTitleSearch").value=first?.setTitle||"";
+    refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
+    if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";
+    setStudyReaderStatus(`${p}用ReaderSetを選択してください。`);
+  }else{
+    studyReaderItems=STUDY_READER_DEMO.slice();
+    studyReaderContext={setId:"DEMO",setTitle:"Medical English / Reader demo",section:""};
+    renderStudyReader();
+    setStudyReaderStatus(`${p}用ReaderSet CSVは未登録です。`);
+  }
+}
+
+function studyReaderRate(){
+  const n=Number($("studyReaderRate")?.value||1);
+  return Number.isFinite(n)?n:1;
+}
+function clearStudyReaderHighlight(){document.querySelectorAll(".readerStudyRow.isReading").forEach(x=>x.classList.remove("isReading"));}
+function setStudyReaderStatus(text){const el=$("studyReaderStatus");if(el)el.textContent=text||"";}
+function renderStudyReader(){
+  const host=$("studyReaderDoc");if(!host)return;
+  host.innerHTML="";
+  const title=$("studyReaderSetTitle");if(title)title.textContent=studyReaderContext.setTitle||"Reader";
+  const meta=$("studyReaderDocMeta");if(meta)meta.textContent=`SetID: ${studyReaderContext.setId||"-"} / ${studyReaderItems.length}文`;
+  let lastSection=null;
+  studyReaderItems.forEach((r,i)=>{
+    const sec=String(r.section||"");
+    if(sec!==lastSection && sec){const h=document.createElement("div");h.className="readerStudySectionTitle";h.textContent=sec;host.appendChild(h);}
+    lastSection=sec;
+    const row=document.createElement("div");row.className="readerStudyRow"+(r.missing?" readerStudyMissing":"");row.dataset.readerIndex=String(i);
+    row.innerHTML=`<div class="readerStudyLine readerStudyIdLine">
+      <div class="readerStudyLeftCell">
+        <div class="readerStudyIdActions">
+          <button type="button" class="readerStudyStar${studyReaderMarked.has(r.id)?" active":""}" aria-pressed="${studyReaderMarked.has(r.id)?"true":"false"}" title="覚える表現"></button>
+          <div class="readerStudyQr" hidden><div class="readerStudyQrBox"></div></div>
+        </div>
+      </div>
+      <div class="readerStudyBodyCell"><div class="readerStudyItemId"></div></div>
+    </div>
+    <div class="readerStudyLine readerStudyEnglishLine">
+      <div class="readerStudyLeftCell"><button type="button" class="readerStudySpeak secondary" aria-label="この英文を発音"${r.missing?" disabled":""}>🔊 発音</button></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyEnglish"></div></div>
+    </div>
+    <div class="readerStudyLine readerStudyJapaneseLine">
+      <div class="readerStudyLeftCell"><button type="button" class="readerStudyJapaneseToggle secondary" aria-pressed="true">日本語</button></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyJapanese"></div></div>
+    </div>
+    <div class="readerStudyLine readerStudyExplanationLine">
+      <div class="readerStudyLeftCell"><details class="readerStudyExplanation"><summary aria-pressed="false">解説</summary></details></div>
+      <div class="readerStudyBodyCell"><div class="readerStudyExplanationBody"></div></div>
+    </div>`;
+    row.querySelector(".readerStudyItemId").textContent=r.id;
+    row.querySelector(".readerStudyEnglish").textContent=r.english;
+    row.querySelector(".readerStudyJapanese").textContent=r.japanese;
+    row.querySelector(".readerStudyExplanationBody").textContent=r.explanation||"解説はありません。";
+    const expDetails=row.querySelector(".readerStudyExplanation");
+    const expBody=row.querySelector(".readerStudyExplanationBody");
+    if(expBody)expBody.hidden=true;
+    expDetails?.addEventListener("toggle",()=>{
+      if(expBody)expBody.hidden=!expDetails.open;
+      const summary=expDetails.querySelector("summary");
+      if(summary)summary.setAttribute("aria-pressed",expDetails.open?"true":"false");
+    });
+    row.querySelector(".readerStudySpeak").addEventListener("click",async()=>{
+      if(r.missing)return;
+      const my=++studyReaderSequenceToken; speakingToken++; const token=speakingToken;
+      clearStudyReaderHighlight();row.classList.add("isReading");
+      if($("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
+      setStudyReaderStatus(`${i+1}/${studyReaderItems.length} を発音中：${r.id}`);
+      await speakScript(r.englishSpeak||r.english,"en-US",studyReaderRate(),token);
+      if(my===studyReaderSequenceToken){row.classList.remove("isReading");setStudyReaderStatus("停止中");}
+    });
+    row.querySelector(".readerStudyJapaneseToggle")?.addEventListener("click",e=>{
+      const ja=row.querySelector(".readerStudyJapanese");
+      const currentlyOn=e.currentTarget.getAttribute("aria-pressed")!=="false";
+      const next=!currentlyOn;
+      if(ja)ja.classList.toggle("isCollapsed",!next);
+      e.currentTarget.setAttribute("aria-pressed",next?"true":"false");
+    });
+    row.querySelector(".readerStudyStar").addEventListener("click",e=>{
+      const b=e.currentTarget;if(studyReaderMarked.has(r.id))studyReaderMarked.delete(r.id);else studyReaderMarked.add(r.id);
+      const on=studyReaderMarked.has(r.id);b.classList.toggle("active",on);b.setAttribute("aria-pressed",on?"true":"false");setStudyReaderStatus(`✓ ${studyReaderMarked.size}件`);
+    });
+    host.appendChild(row);
+  });
+  applyStudyReaderDisplayOptions();
+}
+function applyStudyReaderDisplayOptions(){
+  const showJa=$("studyReaderShowJapanese")?.checked!==false;
+  const openExp=$("studyReaderShowExplanation")?.checked===true;
+  const showQr=$("studyReaderShowQr")?.checked===true;
+  document.querySelectorAll(".readerStudyJapaneseLine").forEach(line=>{
+    const ja=line.querySelector(".readerStudyJapanese");
+    const btn=line.querySelector(".readerStudyJapaneseToggle");
+    if(ja)ja.classList.toggle("isCollapsed",!showJa);
+    if(btn)btn.setAttribute("aria-pressed",showJa?"true":"false");
+  });
+  document.querySelectorAll(".readerStudyExplanationLine").forEach(line=>{
+    const details=line.querySelector(".readerStudyExplanation");
+    const body=line.querySelector(".readerStudyExplanationBody");
+    if(details)details.open=openExp;
+    if(body)body.hidden=!openExp;
+  });
+  document.querySelectorAll(".readerStudyQr").forEach(x=>{
+    x.hidden=!showQr;
+    if(showQr){
+      const row=x.closest(".readerStudyRow");
+      const i=Number(row?.dataset?.readerIndex);
+      const item=Number.isFinite(i)?studyReaderItems[i]:null;
+      const box=x.querySelector(".readerStudyQrBox");
+      if(box&&!box.dataset.done&&item?.id){
+        box.innerHTML="";
+        try{
+          new QRCode(box,{text:item.id,width:30,height:30,correctLevel:QRCode.CorrectLevel.M});
+          box.dataset.done="1";
+        }catch(e){}
+      }
+    }
+  });
+}
+async function playStudyReader(items){
+  items=items.filter(x=>!x.missing&&String(x.englishSpeak||x.english||"").trim());
+  if(!items.length){setStudyReaderStatus("読み上げる文がありません。");return;}
+  const my=++studyReaderSequenceToken;speakingToken++;const token=speakingToken;clearStudyReaderHighlight();
+  for(let pos=0;pos<items.length;pos++){
+    if(my!==studyReaderSequenceToken||token!==speakingToken)return;
+    const item=items[pos];const i=studyReaderItems.indexOf(item);const row=document.querySelector(`.readerStudyRow[data-reader-index="${i}"]`);
+    clearStudyReaderHighlight();if(row)row.classList.add("isReading");
+    if(row&&$("studyReaderAutoScroll")?.checked)row.scrollIntoView({behavior:"smooth",block:"center"});
+    setStudyReaderStatus(`${pos+1}/${items.length} を読み上げ中：${item.id}`);
+    await speakScript(item.englishSpeak||item.english,"en-US",studyReaderRate(),token);
+    if(my!==studyReaderSequenceToken||token!==speakingToken)return;
+    await keepAudioAliveForPause(350,token);
+  }
+  clearStudyReaderHighlight();setStudyReaderStatus("読み上げが終わりました。");
+}
+
+function setAllStudyReaderJapanese(show){
+  const master=$("studyReaderShowJapanese");
+  if(master)master.checked=!!show;
+  document.querySelectorAll(".readerStudyJapaneseLine").forEach(line=>{
+    const ja=line.querySelector(".readerStudyJapanese");
+    const btn=line.querySelector(".readerStudyJapaneseToggle");
+    if(ja)ja.classList.toggle("isCollapsed",!show);
+    if(btn)btn.setAttribute("aria-pressed",show?"true":"false");
+  });
+}
+function setAllStudyReaderExplanation(open){
+  const master=$("studyReaderShowExplanation");
+  if(master)master.checked=!!open;
+  document.querySelectorAll(".readerStudyExplanationLine").forEach(line=>{
+    const details=line.querySelector(".readerStudyExplanation");
+    const body=line.querySelector(".readerStudyExplanationBody");
+    if(details){
+      details.open=!!open;
+      const summary=details.querySelector("summary");
+      if(summary)summary.setAttribute("aria-pressed",open?"true":"false");
+    }
+    if(body)body.hidden=!open;
+  });
+}
+async function createFlashcardsFromStudyReader(){
+  const source=(studyReaderItems||[]).filter(r=>r && !r.missing && String(r.id||"").trim());
+  if(!source.length){
+    setStudyReaderStatus("フラッシュカードにできる表示中の項目がありません。");
+    return 0;
+  }
+
+  // Reader rows are intentionally lightweight for document display.
+  // Re-load each original IndexedDB record here so flashcards inherit every
+  // playback field (Sound / Mode / EnglishSpeak / JapaneseSpeak / rates /
+  // Repeat / Gap etc.) exactly like cards created inside the Flashcard tab.
+  const fullSource=[];
+  for(const readerItem of source){
+    const original=await getReaderRecordById(readerItem.id);
+    if(original){
+      fullSource.push({
+        ...original,
+        section:readerItem.section||"",
+        order:readerItem.order,
+        missing:false
+      });
+    }
+  }
+  if(!fullSource.length){
+    setStudyReaderStatus("元データを取得できず、フラッシュカードを作成できませんでした。");
+    return 0;
+  }
+
+  flashReaderSourceRecords=fullSource.map(r=>({...r}));
+  flashReaderSourceLabel=[studyReaderContext?.setTitle||"",studyReaderContext?.section||""].filter(Boolean).join(" / ")||"表示中の内容";
+  flashSourceMode="reader";
+  flashRecords=flashReaderSourceRecords.map(r=>({...r}));
+  if(flashShuffleEnabled)shuffleFlashRecordOrder();
+  flashIndex=0;
+  flashBackShown=false;
+  renderFlashcard();
+  if($("flashStatus"))$("flashStatus").textContent=`リーダー「${flashReaderSourceLabel}」から ${flashRecords.length}件　CSV ${activeCsvProfile}`;
+  const flashTab=document.querySelector('.tabBtn[data-target="flashcardPanel"]');
+  if(flashTab)flashTab.click();
+  return flashRecords.length;
+}
+
+$("studyReaderToFlashBtn")?.addEventListener("click",async()=>{
+  const btn=$("studyReaderToFlashBtn");
+  if(btn)btn.disabled=true;
+  try{
+    const count=await createFlashcardsFromStudyReader();
+    if(count && btn)flashAccepted(btn);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+});
+$("studyReaderJapaneseAllOnBtn")?.addEventListener("click",()=>setAllStudyReaderJapanese(true));
+$("studyReaderJapaneseAllOffBtn")?.addEventListener("click",()=>setAllStudyReaderJapanese(false));
+$("studyReaderExplanationOpenBtn")?.addEventListener("click",()=>setAllStudyReaderExplanation(true));
+$("studyReaderExplanationCloseBtn")?.addEventListener("click",()=>setAllStudyReaderExplanation(false));
+
+$("studyReaderPlayAllBtn")?.addEventListener("click",()=>playStudyReader(studyReaderItems));
+$("studyReaderPlayMarkedBtn")?.addEventListener("click",()=>playStudyReader(studyReaderItems.filter(x=>studyReaderMarked.has(x.id))));
+$("studyReaderStopBtn")?.addEventListener("click",()=>{studyReaderSequenceToken++;speakingToken++;clearStudyReaderHighlight();try{window.speechSynthesis?.cancel();}catch(e){}setStudyReaderStatus("停止しました。");});
+["studyReaderShowJapanese","studyReaderShowExplanation","studyReaderShowQr"].forEach(id=>$(id)?.addEventListener("change",applyStudyReaderDisplayOptions));
+$("readerSetImportBtn")?.addEventListener("click",importReaderSetCsv);
+$("readerSetCsvInput")?.addEventListener("change",()=>{
+  const f=$("readerSetCsvInput")?.files?.[0];
+  setReaderSetImportStatus(f?"CSVを選択しました。登録ボタンを押してください。":"CSVを選択してください。");
+});
+$("readerSetLoadBtn")?.addEventListener("click",loadReaderSetSelection);
+$("readerSetTitleSearch")?.addEventListener("change",()=>{
+  if($("readerSetSectionSearch"))$("readerSetSectionSearch").value="";
+  refreshReaderSetSuggestions({preserveTitle:true,preserveSection:false});
+});
+$("readerSetSectionSearch")?.addEventListener("change",()=>{});
+$("readerSetKeywordSearch")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();loadReaderSetSelection();}
+});
+refreshReaderSetForActiveProfile();
+renderStudyReader();
