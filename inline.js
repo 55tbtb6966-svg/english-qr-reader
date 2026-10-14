@@ -1,6 +1,6 @@
 
-const APP_VERSION="v4.5.31";
-const APP_UPDATED="2026-09-07 19:56";
+const APP_VERSION="v4.5.32";
+const APP_UPDATED="2026-10-13 21:15";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -4901,11 +4901,25 @@ function isMasterPresetColor(v){
   const color=normalizeMasterHexColor(v);
   return MASTER_BORDER_PRESET_COLORS.includes(color);
 }
+let masterColorPopupOpen=false;
 function setMasterBorderCustomVisibility(){
   const wrap=$("masterBorderCustomWrap");
-  if(!wrap) return;
+  const openBtn=$("masterBorderCustomOpen");
+  const swatch=$("masterBorderColorSwatch");
   const isCustom=$("masterBorderColor")?.value==="__custom__";
-  wrap.classList.toggle("isHidden",!isCustom);
+  if(openBtn) openBtn.classList.toggle("isHidden",!isCustom);
+  if(swatch) swatch.style.background=getMasterBorderColorControlValue(MASTER_DEFAULT_STATE.borderColor);
+  if(!isCustom) masterColorPopupOpen=false;
+  if(wrap) wrap.classList.toggle("isHidden",!(isCustom&&masterColorPopupOpen));
+}
+function openMasterColorPopup(){
+  if($("masterBorderColor")) $("masterBorderColor").value="__custom__";
+  masterColorPopupOpen=true;
+  setMasterBorderCustomVisibility();
+}
+function closeMasterColorPopup(){
+  masterColorPopupOpen=false;
+  setMasterBorderCustomVisibility();
 }
 function getMasterBorderColorControlValue(fallback=MASTER_DEFAULT_STATE.borderColor){
   const select=$("masterBorderColor");
@@ -5460,12 +5474,22 @@ const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSh
 
 $("masterBorderColor")?.addEventListener("change",()=>{
   if($("masterBorderColor")?.value!=="__custom__"){
+    masterColorPopupOpen=false;
     syncMasterBorderColorControls($("masterBorderColor")?.value||MASTER_DEFAULT_STATE.borderColor,false);
   }else{
+    masterColorPopupOpen=true;
     setMasterBorderCustomVisibility();
   }
   updateMasterPreview();
 });
+$("masterBorderCustomOpen")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openMasterColorPopup();});
+$("masterBorderCustomClose")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeMasterColorPopup();});
+document.addEventListener("pointerdown",e=>{
+  if(!masterColorPopupOpen)return;
+  const field=e.target?.closest?.(".masterBorderColorField");
+  if(!field)closeMasterColorPopup();
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&masterColorPopupOpen)closeMasterColorPopup();});
 $("masterBorderColorCustomPicker")?.addEventListener("input",()=>{
   syncMasterBorderColorControls($("masterBorderColorCustomPicker")?.value||MASTER_DEFAULT_STATE.borderColor,true);
   updateMasterPreview();

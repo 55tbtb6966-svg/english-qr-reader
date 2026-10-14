@@ -821,15 +821,23 @@
 .masterPreviewCanvas{width:100%;aspect-ratio:297/210;background:#f5f6f8;border:1px solid #cfd5dd;overflow:hidden;position:relative}
 .masterPreviewCard{position:absolute;inset:0;background:#fff;box-sizing:border-box;overflow:hidden}
 .masterPreviewCard .qrCard{position:absolute;margin:0!important;box-sizing:border-box;background:#fff;width:44%;max-width:44%;border:1px solid #bbb;border-radius:10px}
-.masterBorderColorField{min-width:0;}
-.masterColorCustomRow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
-.masterColorCustomRow input[type="color"]{width:56px;min-width:56px;height:40px;padding:4px;border:1px solid #c9cdd4;border-radius:10px;background:#fff;}
-.masterColorCustomRow input[type="text"]{flex:1 1 110px;min-width:100px;text-transform:uppercase;}
-.masterColorCustomRow.isHidden{display:none;}
-.masterRgbPanel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;width:100%;margin-top:2px;padding:8px;background:#f7f8fa;border:1px solid #e2e6ec;border-radius:10px;}
-.masterRgbControl{display:grid;grid-template-columns:22px 1fr 46px;gap:6px;align-items:center;font-size:.78rem;color:#556176;}
+.masterBorderColorField{min-width:0;position:relative;margin:0 !important;}
+.masterBorderColorField>span{display:block;font-size:.82rem;color:#667085;margin-bottom:3px;}
+.masterColorAdjustBtn{width:100%;margin-top:7px;padding:8px 10px;display:flex;align-items:center;justify-content:center;gap:7px;}
+.masterColorAdjustBtn.isHidden{display:none;}
+.masterColorSwatch{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.22);background:#b8bec7;flex:0 0 auto;}
+.masterColorPopup{position:absolute;left:0;top:calc(100% + 8px);z-index:1200;width:min(360px,calc(100vw - 32px));padding:12px;background:#fff;border:1px solid #cfd5dd;border-radius:14px;box-shadow:0 14px 38px rgba(17,24,39,.20);}
+.masterColorPopup.isHidden{display:none;}
+.masterColorPopupHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.masterColorPopupClose{width:34px;height:34px;padding:0;border-radius:10px;font-size:1.25rem;line-height:1;}
+.masterColorTopRow{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;align-items:center;margin-bottom:9px;}
+.masterColorTopRow input[type="color"]{width:58px;height:42px;padding:4px;border:1px solid #c9cdd4;border-radius:10px;background:#fff;}
+.masterColorTopRow input[type="text"]{width:100%;min-width:0;text-transform:uppercase;}
+.masterRgbPanel{display:grid;grid-template-columns:1fr;gap:8px;width:100%;padding:9px;background:#f7f8fa;border:1px solid #e2e6ec;border-radius:10px;}
+.masterRgbControl{display:grid;grid-template-columns:34px 1fr 48px;gap:7px;align-items:center;font-size:.8rem;color:#556176;}
 .masterRgbControl input[type="range"]{width:100%;margin:0;}
 .masterRgbValue{font-variant-numeric:tabular-nums;text-align:right;color:#111827;font-weight:650;}
+@media(max-width:650px){.masterColorPopup{position:fixed;left:16px;right:16px;top:50%;width:auto;transform:translateY(-50%);max-height:80vh;overflow:auto;}}
 .masterImageSlotGuide{position:absolute;box-sizing:border-box;border:2px dashed #7b8491;background:rgba(123,132,145,.06);display:flex;align-items:center;justify-content:center;color:#667085;font-size:.72rem;font-weight:700;text-align:center;pointer-events:none;z-index:20;}
 @media(max-width:650px){.masterPreviewControls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
@@ -3966,7 +3974,7 @@ button.flashActionAccepted{
 
 
 /* v4.5.26 Reader tab detail triangle UI */
-/* v4.5.31 RGB border color + PPT image placeholder */
+/* v4.5.32 popup RGB color + PPT image placeholder */
 .dataEditorDetails{
   margin-top:10px;
   border:1px solid #d8dee8 !important;
@@ -4018,7 +4026,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.31 / 更新 2026-10-13 21:10</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.32 / 更新 2026-10-13 21:15</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4471,7 +4479,7 @@ button.flashActionAccepted{
 <div class="qrOptionTitle">A4横マスターカード・プレビュー</div>
 <div class="masterPreviewControls">
 </div>
-<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow masterMarginSettingsRow"><div class="masterItemName">余白</div><label><span>横余白（%）</span><input id="masterMarginX" max="45" min="0" step="1" type="number" value="3"/></label><label><span>縦余白（%）</span><input id="masterMarginY" max="45" min="0" step="1" type="number" value="3"/></label><label><span>外枠</span><select id="masterMarginGuide"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><label class="masterBorderColorField"><span>外枠の色</span><select id="masterBorderColor"><option selected="" value="#b8bec7">グレー</option><option value="#111827">黒</option><option value="#2563eb">青</option><option value="#dc2626">赤</option><option value="#16a34a">緑</option><option value="#ea580c">オレンジ</option><option value="#7c3aed">紫</option><option value="__custom__">自由色</option></select><div class="masterColorCustomRow isHidden" id="masterBorderCustomWrap"><input aria-label="自由色" id="masterBorderColorCustomPicker" type="color" value="#b8bec7"/><input aria-label="自由色16進数" autocomplete="off" id="masterBorderColorCustomHex" inputmode="text" maxlength="7" placeholder="#RRGGBB" spellcheck="false" type="text" value="#b8bec7"/><div class="masterRgbPanel"><label class="masterRgbControl"><span>R</span><input id="masterBorderR" max="255" min="0" step="1" type="range" value="184"/><span class="masterRgbValue" id="masterBorderRValue">184</span></label><label class="masterRgbControl"><span>G</span><input id="masterBorderG" max="255" min="0" step="1" type="range" value="190"/><span class="masterRgbValue" id="masterBorderGValue">190</span></label><label class="masterRgbControl"><span>B</span><input id="masterBorderB" max="255" min="0" step="1" type="range" value="199"/><span class="masterRgbValue" id="masterBorderBValue">199</span></label><label class="masterRgbControl"><span>濃さ</span><input id="masterBorderIntensity" max="150" min="20" step="1" type="range" value="100"/><span class="masterRgbValue" id="masterBorderIntensityValue">100%</span></label></div></div></label><label><span>外枠の太さ</span><select id="masterBorderWidth"><option selected="" value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number" value="100"/></label><label><span>中心X（左から%）</span><input id="masterQrCenterX" max="100" min="0" step="0.1" type="number" value="15"/></label><label><span>中心Y（上から%）</span><input id="masterQrCenterY" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">画像予約領域</div><label><span>使用</span><select id="masterImageSlotEnabled"><option selected="" value="off">OFF</option><option value="on">ON</option></select></label><label><span>中心X（左から%）</span><input id="masterImageSlotX" max="100" min="0" step="0.1" type="number" value="80"/></label><label><span>中心Y（上から%）</span><input id="masterImageSlotY" max="100" min="0" step="0.1" type="number" value="22"/></label><label><span>幅（%）</span><input id="masterImageSlotW" max="90" min="5" step="0.5" type="number" value="24"/></label><label><span>高さ（%）</span><input id="masterImageSlotH" max="90" min="5" step="0.5" type="number" value="26"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number" value="1"/></label><label><span>中心X（左から%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>文字揃え</span>
+<div class="masterItemSettingsGrid"><div class="masterItemSettingsRow masterMarginSettingsRow"><div class="masterItemName">余白</div><label><span>横余白（%）</span><input id="masterMarginX" max="45" min="0" step="1" type="number" value="3"/></label><label><span>縦余白（%）</span><input id="masterMarginY" max="45" min="0" step="1" type="number" value="3"/></label><label><span>外枠</span><select id="masterMarginGuide"><option selected="" value="on">ON</option><option value="off">OFF</option></select></label><div class="masterBorderColorField"><span>外枠の色</span><select id="masterBorderColor"><option selected="" value="#b8bec7">グレー</option><option value="#111827">黒</option><option value="#2563eb">青</option><option value="#dc2626">赤</option><option value="#16a34a">緑</option><option value="#ea580c">オレンジ</option><option value="#7c3aed">紫</option><option value="__custom__">自由色</option></select><button class="secondary masterColorAdjustBtn isHidden" id="masterBorderCustomOpen" type="button"><span class="masterColorSwatch" id="masterBorderColorSwatch"></span>色を調整</button><div class="masterColorPopup isHidden" id="masterBorderCustomWrap"><div class="masterColorPopupHeader"><strong>自由色</strong><button aria-label="閉じる" class="secondary masterColorPopupClose" id="masterBorderCustomClose" type="button">×</button></div><div class="masterColorTopRow"><input aria-label="自由色" id="masterBorderColorCustomPicker" type="color" value="#b8bec7"/><input aria-label="自由色16進数" autocomplete="off" id="masterBorderColorCustomHex" inputmode="text" maxlength="7" placeholder="#RRGGBB" spellcheck="false" type="text" value="#b8bec7"/></div><div class="masterRgbPanel"><div class="masterRgbControl"><span>R</span><input id="masterBorderR" max="255" min="0" step="1" type="range" value="184"/><span class="masterRgbValue" id="masterBorderRValue">184</span></div><div class="masterRgbControl"><span>G</span><input id="masterBorderG" max="255" min="0" step="1" type="range" value="190"/><span class="masterRgbValue" id="masterBorderGValue">190</span></div><div class="masterRgbControl"><span>B</span><input id="masterBorderB" max="255" min="0" step="1" type="range" value="199"/><span class="masterRgbValue" id="masterBorderBValue">199</span></div><div class="masterRgbControl"><span>濃さ</span><input id="masterBorderIntensity" max="150" min="20" step="1" type="range" value="100"/><span class="masterRgbValue" id="masterBorderIntensityValue">100%</span></div></div></div></div><label><span>外枠の太さ</span><select id="masterBorderWidth"><option selected="" value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></div><div class="masterItemSettingsRow"><div class="masterItemName">QR</div><label><span>QRサイズ</span><input id="masterMirror_settingQrSize" max="220" min="80" step="2" type="number" value="100"/></label><label><span>中心X（左から%）</span><input id="masterQrCenterX" max="100" min="0" step="0.1" type="number" value="15"/></label><label><span>中心Y（上から%）</span><input id="masterQrCenterY" max="100" min="0" step="0.1" type="number" value="20"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">画像予約領域</div><label><span>使用</span><select id="masterImageSlotEnabled"><option selected="" value="off">OFF</option><option value="on">ON</option></select></label><label><span>中心X（左から%）</span><input id="masterImageSlotX" max="100" min="0" step="0.1" type="number" value="80"/></label><label><span>中心Y（上から%）</span><input id="masterImageSlotY" max="100" min="0" step="0.1" type="number" value="22"/></label><label><span>幅（%）</span><input id="masterImageSlotW" max="90" min="5" step="0.5" type="number" value="24"/></label><label><span>高さ（%）</span><input id="masterImageSlotH" max="90" min="5" step="0.5" type="number" value="26"/></label></div><div class="masterItemSettingsRow"><div class="masterItemName">ID</div><label><span>文字サイズ</span><input id="masterMirror_settingIdSize" max="2.5" min="0.6" step="0.05" type="number" value="1"/></label><label><span>中心X（左から%）</span><input id="masterIdLeft" max="100" min="0" step="0.1" type="number" value="50"/></label><label><span>中心Y（上から%）</span><input id="masterIdTop" max="100" min="0" step="0.1" type="number" value="10"/></label><label><span>文字揃え</span>
 <select id="masterIdAlign">
 <option value="left">左寄せ</option>
 <option selected="" value="center">中央揃え</option>
@@ -4775,8 +4783,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.31";
-const APP_UPDATED="2026-09-07 19:56";
+const APP_VERSION="v4.5.32";
+const APP_UPDATED="2026-10-13 21:15";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -9677,11 +9685,25 @@ function isMasterPresetColor(v){
   const color=normalizeMasterHexColor(v);
   return MASTER_BORDER_PRESET_COLORS.includes(color);
 }
+let masterColorPopupOpen=false;
 function setMasterBorderCustomVisibility(){
   const wrap=$("masterBorderCustomWrap");
-  if(!wrap) return;
+  const openBtn=$("masterBorderCustomOpen");
+  const swatch=$("masterBorderColorSwatch");
   const isCustom=$("masterBorderColor")?.value==="__custom__";
-  wrap.classList.toggle("isHidden",!isCustom);
+  if(openBtn) openBtn.classList.toggle("isHidden",!isCustom);
+  if(swatch) swatch.style.background=getMasterBorderColorControlValue(MASTER_DEFAULT_STATE.borderColor);
+  if(!isCustom) masterColorPopupOpen=false;
+  if(wrap) wrap.classList.toggle("isHidden",!(isCustom&&masterColorPopupOpen));
+}
+function openMasterColorPopup(){
+  if($("masterBorderColor")) $("masterBorderColor").value="__custom__";
+  masterColorPopupOpen=true;
+  setMasterBorderCustomVisibility();
+}
+function closeMasterColorPopup(){
+  masterColorPopupOpen=false;
+  setMasterBorderCustomVisibility();
 }
 function getMasterBorderColorControlValue(fallback=MASTER_DEFAULT_STATE.borderColor){
   const select=$("masterBorderColor");
@@ -10236,12 +10258,22 @@ const masterPreviewObserver=new MutationObserver(updateMasterPreview);if($("qrSh
 
 $("masterBorderColor")?.addEventListener("change",()=>{
   if($("masterBorderColor")?.value!=="__custom__"){
+    masterColorPopupOpen=false;
     syncMasterBorderColorControls($("masterBorderColor")?.value||MASTER_DEFAULT_STATE.borderColor,false);
   }else{
+    masterColorPopupOpen=true;
     setMasterBorderCustomVisibility();
   }
   updateMasterPreview();
 });
+$("masterBorderCustomOpen")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openMasterColorPopup();});
+$("masterBorderCustomClose")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeMasterColorPopup();});
+document.addEventListener("pointerdown",e=>{
+  if(!masterColorPopupOpen)return;
+  const field=e.target?.closest?.(".masterBorderColorField");
+  if(!field)closeMasterColorPopup();
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&masterColorPopupOpen)closeMasterColorPopup();});
 $("masterBorderColorCustomPicker")?.addEventListener("input",()=>{
   syncMasterBorderColorControls($("masterBorderColorCustomPicker")?.value||MASTER_DEFAULT_STATE.borderColor,true);
   updateMasterPreview();
