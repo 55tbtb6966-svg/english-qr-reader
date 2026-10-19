@@ -4011,6 +4011,31 @@ button.flashActionAccepted{
   }
 }
 
+
+/* v4.5.34 trial: sentence builder (isolated; localStorage only) */
+.sentenceTrialNotice{padding:10px 12px;border:1px solid #f0c36d;background:#fff8e8;border-radius:12px;color:#5d4600;font-size:.9rem;line-height:1.5;margin-bottom:12px;}
+.sentenceBuilderAddGrid{display:grid;grid-template-columns:minmax(0,1.35fr) auto minmax(0,1fr) auto;gap:8px;align-items:end;}
+.sentenceBuilderAddGrid label span,.sentenceMetaGrid label span{display:block;font-size:.82rem;color:#667085;margin-bottom:4px;}
+.sentenceBuilderAddGrid input,.sentenceMetaGrid input,.sentenceMetaGrid textarea{width:100%;box-sizing:border-box;}
+.sentenceTokens{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;min-height:64px;padding:10px;border:1px dashed #c9d0da;border-radius:12px;background:#fafbfc;}
+.sentenceToken{min-width:130px;max-width:240px;display:flex;flex-direction:column;gap:6px;padding:9px;background:#fff;border:1px solid #d9dee7;border-radius:12px;}
+.sentenceTokenTop{display:flex;justify-content:space-between;gap:8px;align-items:center;}
+.sentenceTokenSource{font-size:.72rem;color:#667085;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sentenceTokenRemove{width:auto;min-width:34px;padding:5px 8px;background:#eef1f5;color:#111;}
+.sentenceToken input,.sentenceToken select{width:100%;box-sizing:border-box;}
+.sentenceToken select{font-size:.86rem;}
+.sentencePreview{font-size:1.25rem;font-weight:750;line-height:1.55;padding:12px 14px;background:#f6f8fb;border-radius:12px;min-height:56px;}
+.sentenceMetaGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+.sentenceMetaGrid .wide{grid-column:1/-1;}
+.sentenceBuilderActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.sentenceBuilderActions button{width:auto;flex:1 1 150px;}
+.sentenceSavedList{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+.sentenceSavedItem{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px;border:1px solid #e0e5ec;border-radius:12px;background:#fff;}
+.sentenceSavedEnglish{font-weight:750;line-height:1.4;}.sentenceSavedJapanese{font-size:.86rem;color:#667085;margin-top:2px;}
+.sentenceSavedItem button{width:auto;padding:8px 10px;}
+.sentenceEmpty{color:#667085;font-size:.9rem;padding:8px 2px;}
+@media(max-width:720px){.sentenceBuilderAddGrid{grid-template-columns:1fr auto;}.sentenceMetaGrid{grid-template-columns:1fr;}.sentenceMetaGrid .wide{grid-column:auto;}.sentenceSavedItem{grid-template-columns:1fr auto;}.sentenceSavedItem .sentenceSavedInfo{grid-column:1/-1;}}
+
 </style>
 </head>
 <body>
@@ -4026,7 +4051,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.33 / 更新 2026-10-14 14:05</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.34-trial / 更新 2026-10-19 17:15</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4034,6 +4059,7 @@ button.flashActionAccepted{
 <button class="tabBtn" data-target="qrPanel">QR作成</button>
 <button class="tabBtn" data-target="flashcardPanel">フラッシュカード</button>
 <button class="tabBtn" data-target="studyReaderPanel">リーダー</button>
+<button class="tabBtn" data-target="sentenceBuilderPanel">文章づくり <span style="font-size:.72em;opacity:.75;">試作</span></button>
 </div>
 <section class="panel active" id="readerPanel">
 <input id="manualId" type="hidden" value=""/><button id="manualLookupBtn" style="display:none;" type="button"></button>
@@ -4096,6 +4122,9 @@ button.flashActionAccepted{
 <button class="secondary" id="playEnglishBtn">英語だけ</button>
 <button class="secondary" id="playJapaneseBtn">日本語だけ</button>
 <button class="secondary" id="playBothBtn">英語→日本語</button>
+</div>
+<div class="row" style="margin-top:8px;">
+<button class="secondary" id="addCurrentToSentenceBtn" type="button">現在の語を文章づくりに追加</button>
 </div>
 <div class="grid2" style="margin-top:12px;">
 <div class="row"></div>
@@ -4776,6 +4805,43 @@ button.flashActionAccepted{
   </div>
 </section>
 
+<section class="panel" id="sentenceBuilderPanel">
+  <div class="card">
+    <h2>文章づくり <span class="badge">試作</span></h2>
+    <div class="sentenceTrialNotice">この試作機能は既存CSV・IndexedDBを書き換えません。保存文章はこの端末の localStorage に別保存します。v4.5.33へ戻せば既存機能はそのままです。</div>
+    <div class="sentenceBuilderAddGrid">
+      <label><span>ID / Englishから追加</span><input id="sentenceLookupInput" type="search" placeholder="例：A000123 または have"></label>
+      <button id="sentenceLookupAddBtn" type="button" class="secondary">追加</button>
+      <label><span>直接入力</span><input id="sentenceDirectInput" type="text" placeholder="例：has / an / went to"></label>
+      <button id="sentenceDirectAddBtn" type="button" class="secondary">追加</button>
+    </div>
+    <p class="hint" id="sentenceBuilderStatus">IDは現在選択中のCSV（A/B/C）から検索します。English検索は完全一致を優先し、なければ先頭候補を使います。</p>
+    <div class="sentenceTokens" id="sentenceTokens"><div class="sentenceEmpty">まだ単語がありません。</div></div>
+    <div class="sentenceBuilderActions">
+      <button id="sentenceUndoBtn" type="button" class="secondary">1つ戻す</button>
+      <button id="sentenceClearBtn" type="button" class="secondary">全消去</button>
+      <button id="sentenceSpeakBtn" type="button">▶ 全文を読む</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>完成文</h3>
+    <div class="sentencePreview" id="sentencePreview">—</div>
+    <div class="sentenceMetaGrid">
+      <label class="wide"><span>English（保存用）</span><textarea id="sentenceEnglish" rows="2" placeholder="組み立てた文から自動作成"></textarea></label>
+      <label class="wide"><span>Japanese</span><textarea id="sentenceJapanese" rows="2" placeholder="日本語を入力"></textarea></label>
+      <label class="wide"><span>QR内容</span><textarea id="sentenceQrContent" rows="2" placeholder="通常はEnglishと同じ。必要なら変更可能"></textarea></label>
+    </div>
+    <div class="sentenceBuilderActions">
+      <button id="sentenceSyncTextBtn" type="button" class="secondary">組み立て文をEnglish/QRへ反映</button>
+      <button id="sentenceSaveBtn" type="button">文章を保存</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>保存文章</h3>
+    <div class="sentenceSavedList" id="sentenceSavedList"></div>
+  </div>
+</section>
+
 </main>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -4783,7 +4849,7 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.33";
+const APP_VERSION="v4.5.34-trial";
 const APP_UPDATED="2026-10-13 21:15";
 
 function outputDateTimeStamp(){
@@ -5337,6 +5403,7 @@ function csvToRecords(rows) {
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
   const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
   const iExplanation=idx(["explanation","解説","説明","note","notes"]);
+  const iRelatedForms=idx(["relatedforms","related_forms","related forms","関連フォーム","関連形","活用形"]);
   if(iId<0||iEn<0) throw new Error("ID列とEnglish列が必要です。");
   const out=[]; let version="";
   for(let i=1;i<rows.length;i++){
@@ -5356,7 +5423,8 @@ function csvToRecords(rows) {
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
       version:iVer>=0?String(c[iVer]||"").trim():"",
       comment:iComment>=0?String(c[iComment]||"").trim():"",
-      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():""};
+      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():"",
+      relatedForms:iRelatedForms>=0?String(c[iRelatedForms]||"").trim():""};
     if(rec.version) version=rec.version;
     out.push(rec);
   }
@@ -8519,6 +8587,162 @@ function loadFlashTouchSpeakSetting(){
   }
   updateFlashTouchSpeakHint();
 }
+
+
+
+/* ===== v4.5.34 trial: sentence builder ===== */
+const SENTENCE_TRIAL_STORAGE_KEY="sentenceBuilderTrial_v4534";
+let sentenceTrialTokens=[];
+let sentenceTrialQrAuto=true;
+
+function sentenceParseRelatedForms(raw){
+  const out=[];
+  String(raw||"").split("|").map(x=>x.trim()).filter(Boolean).forEach(part=>{
+    const eq=part.indexOf("=");
+    if(eq>0){out.push({label:part.slice(0,eq).trim(),text:part.slice(eq+1).trim()});}
+    else out.push({label:"関連",text:part});
+  });
+  return out.filter(x=>x.text);
+}
+function sentenceNormalizeText(s){return String(s||"").replace(/\s+/g," ").trim();}
+function sentenceCompose(){
+  let s=sentenceTrialTokens.map(t=>sentenceNormalizeText(t.text)).filter(Boolean).join(" ");
+  s=s.replace(/\s+([,.!?;:])/g,"$1").replace(/([([{])\s+/g,"$1");
+  if(s && /^[a-z]/.test(s)) s=s.charAt(0).toUpperCase()+s.slice(1);
+  return s;
+}
+function sentenceSetStatus(msg,ok=true){const el=$("sentenceBuilderStatus");if(el){el.textContent=msg;el.classList.toggle("error",!ok);}}
+function sentenceRefreshPreview(syncFields=false){
+  const s=sentenceCompose();
+  if($("sentencePreview"))$("sentencePreview").textContent=s||"—";
+  if(syncFields){
+    if($("sentenceEnglish"))$("sentenceEnglish").value=s;
+    if(sentenceTrialQrAuto && $("sentenceQrContent"))$("sentenceQrContent").value=s;
+  }
+}
+function sentenceRenderTokens(){
+  const host=$("sentenceTokens");if(!host)return;host.innerHTML="";
+  if(!sentenceTrialTokens.length){host.innerHTML='<div class="sentenceEmpty">まだ単語がありません。</div>';sentenceRefreshPreview(true);return;}
+  sentenceTrialTokens.forEach((t,i)=>{
+    const card=document.createElement("div");card.className="sentenceToken";
+    const top=document.createElement("div");top.className="sentenceTokenTop";
+    const src=document.createElement("div");src.className="sentenceTokenSource";src.textContent=t.sourceLabel||"直接入力";
+    const del=document.createElement("button");del.type="button";del.className="sentenceTokenRemove";del.textContent="×";del.title="削除";
+    del.addEventListener("click",()=>{sentenceTrialTokens.splice(i,1);sentenceRenderTokens();});
+    top.append(src,del);card.appendChild(top);
+    const inp=document.createElement("input");inp.type="text";inp.value=t.text||"";inp.setAttribute("aria-label","文章中の語");
+    inp.addEventListener("input",()=>{t.text=inp.value;sentenceRefreshPreview(true);});
+    card.appendChild(inp);
+    const forms=Array.isArray(t.forms)?t.forms:[];
+    if(forms.length){
+      const sel=document.createElement("select");
+      const baseOpt=document.createElement("option");baseOpt.value=t.base||t.text;baseOpt.textContent=`基本形: ${t.base||t.text}`;sel.appendChild(baseOpt);
+      forms.forEach(f=>{const o=document.createElement("option");o.value=f.text;o.textContent=`${f.label}: ${f.text}`;sel.appendChild(o);});
+      if([...sel.options].some(o=>o.value===t.text))sel.value=t.text;
+      sel.addEventListener("change",()=>{t.text=sel.value;inp.value=t.text;sentenceRefreshPreview(true);});
+      card.appendChild(sel);
+    }
+    host.appendChild(card);
+  });
+  sentenceRefreshPreview(true);
+}
+async function sentenceFindRecord(term){
+  const q=sentenceNormalizeText(term);if(!q)return null;
+  let r=null;
+  try{r=await getRecord(q);}catch(e){}
+  if(r)return r;
+  let all=[];try{all=await getAllRecords();}catch(e){}
+  const lower=q.toLowerCase();
+  return all.find(x=>String(x.english||"").trim().toLowerCase()===lower)
+      || all.find(x=>String(x.id||"").toLowerCase()===lower)
+      || all.find(x=>String(x.english||"").trim().toLowerCase().startsWith(lower))
+      || null;
+}
+async function sentenceAddFromLookup(){
+  const q=$("sentenceLookupInput")?.value||"";
+  const r=await sentenceFindRecord(q);
+  if(!r){sentenceSetStatus(`「${q}」が見つかりません。直接入力で追加できます。`,false);return;}
+  const forms=sentenceParseRelatedForms(r.relatedForms||"");
+  sentenceTrialTokens.push({kind:"id",id:r.id,base:r.english,text:r.english,forms,sourceLabel:`${r.id} / ${r.english}`});
+  if($("sentenceLookupInput"))$("sentenceLookupInput").value="";
+  sentenceRenderTokens();
+  sentenceSetStatus(forms.length?`${r.english} を追加しました。関連フォーム ${forms.length}件があります。`:`${r.english} を追加しました。必要なら文字欄を直接変更できます。`);
+}
+function sentenceAddDirect(){
+  const v=sentenceNormalizeText($("sentenceDirectInput")?.value||"");if(!v)return;
+  sentenceTrialTokens.push({kind:"direct",base:v,text:v,forms:[],sourceLabel:"直接入力"});
+  if($("sentenceDirectInput"))$("sentenceDirectInput").value="";
+  sentenceRenderTokens();sentenceSetStatus(`${v} を直接入力で追加しました。`);
+}
+async function sentenceSpeak(){
+  const text=sentenceNormalizeText($("sentenceEnglish")?.value)||sentenceCompose();
+  if(!text){sentenceSetStatus("読む文章がありません。",false);return;}
+  try{await speakText(text,"en-US",1);sentenceSetStatus("全文を読み上げました。");}catch(e){sentenceSetStatus("読み上げできませんでした。",false);}
+}
+function sentenceLoadSaved(){
+  try{const a=JSON.parse(localStorage.getItem(SENTENCE_TRIAL_STORAGE_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}
+}
+function sentenceWriteSaved(a){localStorage.setItem(SENTENCE_TRIAL_STORAGE_KEY,JSON.stringify(a));}
+function sentenceSaveCurrent(){
+  const english=sentenceNormalizeText($("sentenceEnglish")?.value)||sentenceCompose();
+  const japanese=sentenceNormalizeText($("sentenceJapanese")?.value);
+  const qrContent=sentenceNormalizeText($("sentenceQrContent")?.value)||english;
+  if(!english){sentenceSetStatus("Englishが空なので保存できません。",false);return;}
+  const list=sentenceLoadSaved();
+  list.unshift({sid:"T"+Date.now(),english,japanese,qrContent,tokens:sentenceTrialTokens.map(t=>({...t,forms:(t.forms||[]).map(f=>({...f}))})),savedAt:new Date().toISOString()});
+  sentenceWriteSaved(list.slice(0,200));sentenceRenderSaved();sentenceSetStatus("文章をこの端末に保存しました。");
+}
+function sentenceRestore(item){
+  sentenceTrialTokens=(item.tokens||[]).map(t=>({...t,forms:(t.forms||[]).map(f=>({...f}))}));
+  sentenceRenderTokens();
+  if($("sentenceEnglish"))$("sentenceEnglish").value=item.english||sentenceCompose();
+  if($("sentenceJapanese"))$("sentenceJapanese").value=item.japanese||"";
+  if($("sentenceQrContent"))$("sentenceQrContent").value=item.qrContent||item.english||"";
+  sentenceTrialQrAuto=(item.qrContent||item.english||"")===(item.english||"");
+  if($("sentencePreview"))$("sentencePreview").textContent=item.english||sentenceCompose()||"—";
+  sentenceSetStatus("保存文章を読み込みました。全文を読む、または語を変更できます。");
+}
+function sentenceRenderSaved(){
+  const host=$("sentenceSavedList");if(!host)return;host.innerHTML="";
+  const list=sentenceLoadSaved();
+  if(!list.length){host.innerHTML='<div class="sentenceEmpty">保存文章はまだありません。</div>';return;}
+  list.forEach(item=>{
+    const row=document.createElement("div");row.className="sentenceSavedItem";
+    const info=document.createElement("div");info.className="sentenceSavedInfo";info.innerHTML=`<div class="sentenceSavedEnglish"></div><div class="sentenceSavedJapanese"></div>`;
+    info.querySelector(".sentenceSavedEnglish").textContent=item.english||"";info.querySelector(".sentenceSavedJapanese").textContent=item.japanese||"";
+    const load=document.createElement("button");load.type="button";load.className="secondary";load.textContent="開く";load.addEventListener("click",()=>sentenceRestore(item));
+    const del=document.createElement("button");del.type="button";del.className="secondary";del.textContent="削除";del.addEventListener("click",()=>{if(!confirm("この保存文章を削除しますか？"))return;sentenceWriteSaved(sentenceLoadSaved().filter(x=>x.sid!==item.sid));sentenceRenderSaved();});
+    row.append(info,load,del);host.appendChild(row);
+  });
+}
+
+function sentenceAddCurrentRecord(){
+  if(!currentRecord){setStatus($("scanStatus"),"先にQRまたはIDを読み取ってください。",false);return;}
+  const r=currentRecord;
+  const forms=sentenceParseRelatedForms(r.relatedForms||"");
+  sentenceTrialTokens.push({kind:"id",id:r.id,base:r.english,text:r.english,forms,sourceLabel:`${r.id} / ${r.english}`});
+  sentenceRenderTokens();
+  const tab=document.querySelector('.tabBtn[data-target="sentenceBuilderPanel"]');
+  if(tab)tab.click();
+  sentenceSetStatus(forms.length?`${r.english} をQR読み取りから追加しました。関連フォーム ${forms.length}件があります。`:`${r.english} をQR読み取りから追加しました。必要なら語形を直接変更できます。`);
+}
+
+function initSentenceTrial(){
+  $("addCurrentToSentenceBtn")?.addEventListener("click",sentenceAddCurrentRecord);
+  $("sentenceLookupAddBtn")?.addEventListener("click",sentenceAddFromLookup);
+  $("sentenceLookupInput")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sentenceAddFromLookup();}});
+  $("sentenceDirectAddBtn")?.addEventListener("click",sentenceAddDirect);
+  $("sentenceDirectInput")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sentenceAddDirect();}});
+  $("sentenceUndoBtn")?.addEventListener("click",()=>{sentenceTrialTokens.pop();sentenceRenderTokens();});
+  $("sentenceClearBtn")?.addEventListener("click",()=>{sentenceTrialTokens=[];sentenceRenderTokens();sentenceSetStatus("文章を消去しました。保存済み文章は残っています。");});
+  $("sentenceSpeakBtn")?.addEventListener("click",sentenceSpeak);
+  $("sentenceSyncTextBtn")?.addEventListener("click",()=>{const s=sentenceCompose();if($("sentenceEnglish"))$("sentenceEnglish").value=s;if($("sentenceQrContent"))$("sentenceQrContent").value=s;sentenceTrialQrAuto=true;sentenceRefreshPreview(false);});
+  $("sentenceEnglish")?.addEventListener("input",()=>{if($("sentencePreview"))$("sentencePreview").textContent=$("sentenceEnglish").value||sentenceCompose()||"—";if(sentenceTrialQrAuto && $("sentenceQrContent"))$("sentenceQrContent").value=$("sentenceEnglish").value;});
+  $("sentenceQrContent")?.addEventListener("input",()=>{sentenceTrialQrAuto=false;});
+  $("sentenceSaveBtn")?.addEventListener("click",sentenceSaveCurrent);
+  sentenceRenderTokens();sentenceRenderSaved();
+}
+setTimeout(initSentenceTrial,0);
 
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async()=>{
   // Preserve the latest visible checkbox state before leaving any tab.
