@@ -1,6 +1,6 @@
 
-const APP_VERSION="v4.5.33";
-const APP_UPDATED="2026-10-13 21:15";
+const APP_VERSION="v4.5.36-trial";
+const APP_UPDATED="2026-10-22 10:10";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -553,6 +553,7 @@ function csvToRecords(rows) {
   const iJR=idx(["japaneserate","japanese_rate","日本語速度"]), iRep=idx(["repeat","回数"]);
   const iGap=idx(["gap","間隔"]), iVer=idx(["version","版","データ版"]), iComment=idx(["comment","コメント","備考"]);
   const iExplanation=idx(["explanation","解説","説明","note","notes"]);
+  const iRelatedForms=idx(["relatedforms","related_forms","related forms","関連フォーム","関連形","活用形"]);
   if(iId<0||iEn<0) throw new Error("ID列とEnglish列が必要です。");
   const out=[]; let version="";
   for(let i=1;i<rows.length;i++){
@@ -572,7 +573,8 @@ function csvToRecords(rows) {
       gap:iGap>=0?Math.max(0,Number(c[iGap])||0):0.5,
       version:iVer>=0?String(c[iVer]||"").trim():"",
       comment:iComment>=0?String(c[iComment]||"").trim():"",
-      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():""};
+      explanation:iExplanation>=0?String(c[iExplanation]||"").trim():"",
+      relatedForms:iRelatedForms>=0?String(c[iRelatedForms]||"").trim():""};
     if(rec.version) version=rec.version;
     out.push(rec);
   }
@@ -757,10 +759,10 @@ async function importExtraCommonCsv(prefix,replace){
 async function exportExtraCommonCsv(prefix){
   const cfg=COMMON_PROFILE_CONFIG[prefix];
   const all=(await getCommonProfileRecords(prefix)).slice().sort(compareRecordIds);
-  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,RelatedForms,Comment,Explanation"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
-    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",cfg.comment,r.explanation||""
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.relatedForms||"",cfg.comment,r.explanation||""
   ].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");
@@ -776,10 +778,10 @@ async function exportNumbersCsv(){
     .slice()
     .sort(compareRecordIds);
 
-  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,RelatedForms,Comment,Explanation"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
-    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"","N:",r.explanation||""
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.relatedForms||"","N:",r.explanation||""
   ].map(csvEscape).join(",")));
 
   const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
@@ -793,10 +795,10 @@ async function exportNumbersCsv(){
 function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 async function exportCsv(){
   const all=(await getActiveProfileRecords()).sort((a,b)=>a.id.localeCompare(b.id));
-  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,Comment,Explanation"];
+  const lines=["ID,English,EnglishSpeak,IPA,Japanese,JapaneseRead,JapaneseSpeak,Sound,Mode,EnglishRate,JapaneseRate,Repeat,Gap,Version,RelatedForms,Comment,Explanation"];
   all.forEach(r=>lines.push([
     r.id,r.english,r.englishSpeak||"",r.ipa||"",r.japanese,r.japaneseRead||"",r.japaneseSpeak||"",r.sound||"",r.mode,
-    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.comment||"",r.explanation||""
+    r.englishRate,r.japaneseRate,r.repeat,r.gap,r.version||"",r.relatedForms||"",r.comment||"",r.explanation||""
   ].map(csvEscape).join(",")));
   const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");
@@ -2092,7 +2094,7 @@ async function startScanner(){
   }catch{setStatus($("scanStatus"),"カメラを開始できません。",false);await stopScanner();}
 }
 function clearEditor(){
-  ["editId","editEnglish","editEnglishSpeak","editIpa","editJapanese","editJapaneseRead","editJapaneseSpeak","editSound","editVersion","editComment","editExplanation"].forEach(id=>{if($(id))$(id).value="";});
+  ["editId","editEnglish","editEnglishSpeak","editIpa","editJapanese","editJapaneseRead","editJapaneseSpeak","editSound","editVersion","editRelatedForms","editComment","editExplanation"].forEach(id=>{if($(id))$(id).value="";});
   if($("editMode"))$("editMode").value="both";
   if($("editEnglishRate"))$("editEnglishRate").value="1";
   if($("editJapaneseRate"))$("editJapaneseRate").value="1";
@@ -2137,6 +2139,7 @@ async function saveEditor(){
     repeat:Math.max(1,parseInt($("editRepeat")?.value,10)||1),
     gap:Math.max(0,Number($("editGap")?.value)||0),
     version:$("editVersion")?.value.trim()||"",
+    relatedForms:$("editRelatedForms")?.value.trim()||"",
     comment:enteredComment || (commonPrefix?COMMON_PROFILE_CONFIG[commonPrefix].comment:""),
     explanation:$("editExplanation")?.value.trim()||""
   };
@@ -2165,6 +2168,7 @@ async function editRecord(id){
   $("editRepeat").value=String(r.repeat??1);
   $("editGap").value=String(r.gap??0.5);
   $("editVersion").value=r.version||"";
+  $("editRelatedForms").value=r.relatedForms||"";
   $("editComment").value=r.comment||"";
   $("editExplanation").value=r.explanation||"";
   setStatus($("editStatus"),`${r.id} のCSV内容を表示しています。変更しない場合は保存不要です。`);
@@ -3735,6 +3739,296 @@ function loadFlashTouchSpeakSetting(){
   }
   updateFlashTouchSpeakHint();
 }
+
+
+
+/* ===== v4.5.36 trial: sentence builder / saved QR snapshot ===== */
+const SENTENCE_TRIAL_STORAGE_KEY="sentenceBuilderTrial_v4534"; // keep v4.5.34 saves compatible
+let sentenceTrialTokens=[];
+let sentenceTrialQrAuto=true;
+let sentenceTrialQrDataUrl="";
+let sentenceTrialQrSource="";
+
+function sentenceParseRelatedForms(raw){
+  const out=[];
+  String(raw||"").split("|").map(x=>x.trim()).filter(Boolean).forEach(part=>{
+    const eq=part.indexOf("=");
+    if(eq>0){out.push({label:part.slice(0,eq).trim(),text:part.slice(eq+1).trim()});}
+    else out.push({label:"関連",text:part});
+  });
+  return out.filter(x=>x.text);
+}
+function sentenceNormalizeText(s){return String(s||"").replace(/\s+/g," ").trim();}
+function sentenceNormLookup(s){return sentenceNormalizeText(s).toLocaleLowerCase("en-US");}
+function sentenceTokenizeInput(s){
+  const src=String(s||"").replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
+  const m=src.match(/[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*|[^\sA-Za-z0-9]/g);
+  return (m||[]).map(x=>x.trim()).filter(Boolean);
+}
+function sentenceIsPunctuation(t){return /^[.,!?;:]$/.test(String(t||""));}
+function sentenceTypeLabel(t){
+  if(t.kind==="punct")return "記号";
+  if(t.kind==="direct")return "直接入力";
+  if(t.kind==="related")return "関連フォーム";
+  if(t.kind==="ambiguous")return "候補あり";
+  return "ID";
+}
+function sentenceCompose(){
+  let s=sentenceTrialTokens.map(t=>sentenceNormalizeText(t.text)).filter(Boolean).join(" ");
+  s=s.replace(/\s+([,.!?;:])/g,"$1").replace(/([([{])\s+/g,"$1");
+  if(s && /^[a-z]/.test(s)) s=s.charAt(0).toUpperCase()+s.slice(1);
+  return s;
+}
+function sentenceSetStatus(msg,ok=true){const el=$("sentenceBuilderStatus");if(el){el.textContent=msg;el.classList.toggle("error",!ok);}}
+function sentenceSetQrStatus(msg){const el=$("sentenceQrSavedStatus");if(el)el.textContent=msg;}
+function sentenceRenderQrPreview(dataUrl=""){
+  const host=$("sentenceQrPreview");if(!host)return;host.innerHTML="";
+  if(!dataUrl){host.innerHTML='<div class="sentenceEmpty">QR未作成</div>';return;}
+  const img=document.createElement("img");img.alt="保存QR";img.src=dataUrl;host.appendChild(img);
+}
+function sentenceInvalidateQr(){sentenceTrialQrDataUrl="";sentenceTrialQrSource="";sentenceRenderQrPreview("");sentenceSetQrStatus("QR内容が変更されました。QRを作成・更新してください。");}
+async function sentenceMakeQrDataUrl(content){
+  const value=String(content||"").trim();if(!value)throw new Error("QR内容が空です");
+  const holder=document.createElement("div");holder.style.position="fixed";holder.style.left="-10000px";holder.style.top="0";holder.style.width="220px";holder.style.height="220px";holder.style.background="#fff";document.body.appendChild(holder);
+  try{
+    new QRCode(holder,{text:value,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});
+    await new Promise(r=>setTimeout(r,40));
+    const canvas=holder.querySelector("canvas");if(canvas)return canvas.toDataURL("image/png");
+    const img=holder.querySelector("img");if(img?.src)return img.src;
+    throw new Error("QR生成に失敗しました");
+  }finally{holder.remove();}
+}
+async function sentenceGenerateQr(showStatus=true){
+  const content=String($("sentenceQrContent")?.value||"").trim();
+  if(!content){sentenceSetStatus("QR内容が空です。",false);return "";}
+  try{
+    const dataUrl=await sentenceMakeQrDataUrl(content);sentenceTrialQrDataUrl=dataUrl;sentenceTrialQrSource=content;sentenceRenderQrPreview(dataUrl);sentenceSetQrStatus("現在のQR内容からQRを作成済みです。");
+    if(showStatus)sentenceSetStatus("QRを作成・更新しました。");return dataUrl;
+  }catch(e){sentenceSetStatus("QRを作成できませんでした。",false);return "";}
+}
+function sentenceRefreshPreview(syncFields=false){
+  const s=sentenceCompose();
+  if($("sentencePreview"))$("sentencePreview").textContent=s||"—";
+  if(syncFields){
+    if($("sentenceEnglish"))$("sentenceEnglish").value=s;
+    if(sentenceTrialQrAuto && $("sentenceQrContent"))$("sentenceQrContent").value=s;
+  }
+}
+function sentenceCandidateFromRecord(r,matchType="id",matchedText=""){
+  const forms=sentenceParseRelatedForms(r.relatedForms||"");
+  if(matchType==="related"){
+    const f=forms.find(x=>sentenceNormLookup(x.text)===sentenceNormLookup(matchedText));
+    return {kind:"related",id:r.id,base:r.english,text:matchedText,forms,formLabel:f?.label||"関連",sourceLabel:`${r.id} / ${r.english} → ${matchedText}`};
+  }
+  return {kind:"id",id:r.id,base:r.english,text:matchedText||r.english,forms,sourceLabel:`${r.id} / ${r.english}`};
+}
+function sentenceApplyCandidate(t,c){
+  if(!c)return;
+  t.kind=c.kind;t.id=c.id;t.base=c.base;t.text=c.text;t.forms=(c.forms||[]).map(f=>({...f}));t.formLabel=c.formLabel||"";t.sourceLabel=c.sourceLabel||`${c.id} / ${c.base}`;
+}
+function sentenceRenderTokens(){
+  const host=$("sentenceTokens");if(!host)return;host.innerHTML="";
+  if(!sentenceTrialTokens.length){host.innerHTML='<div class="sentenceEmpty">まだ単語がありません。</div>';sentenceRefreshPreview(true);return;}
+  sentenceTrialTokens.forEach((t,i)=>{
+    const card=document.createElement("div");card.className="sentenceToken";
+    if(t.kind==="direct")card.classList.add("isDirect");
+    if(t.kind==="ambiguous")card.classList.add("isAmbiguous");
+    const top=document.createElement("div");top.className="sentenceTokenTop";
+    const src=document.createElement("div");src.className="sentenceTokenSource";
+    const badge=document.createElement("span");badge.className="sentenceTokenType";badge.textContent=sentenceTypeLabel(t);
+    const srcText=document.createElement("span");srcText.textContent=t.sourceLabel||"直接入力";
+    src.append(badge,srcText);
+    const del=document.createElement("button");del.type="button";del.className="sentenceTokenRemove";del.textContent="×";del.title="削除";
+    del.addEventListener("click",()=>{sentenceTrialTokens.splice(i,1);sentenceRenderTokens();});
+    top.append(src,del);card.appendChild(top);
+
+    if(t.kind==="ambiguous" && Array.isArray(t.candidates) && t.candidates.length){
+      const cs=document.createElement("select");cs.className="sentenceCandidateSelect";
+      const ph=document.createElement("option");ph.value="";ph.textContent=`候補を選択（${t.candidates.length}件）`;cs.appendChild(ph);
+      t.candidates.forEach((c,ci)=>{
+        const o=document.createElement("option");o.value=String(ci);
+        const rel=c.kind==="related"?` / ${c.formLabel||"関連"}→${c.text}`:"";
+        o.textContent=`${c.id} / ${c.base}${rel}`;cs.appendChild(o);
+      });
+      cs.addEventListener("change",()=>{
+        const c=t.candidates[Number(cs.value)];if(!c)return;
+        sentenceApplyCandidate(t,c);delete t.candidates;sentenceRenderTokens();
+        sentenceSetStatus(`${t.text} の候補を ${t.id} に決定しました。`);
+      });
+      card.appendChild(cs);
+    }
+
+    const inp=document.createElement("input");inp.type="text";inp.value=t.text||"";inp.setAttribute("aria-label","文章中の語");
+    inp.addEventListener("input",()=>{t.text=inp.value;sentenceRefreshPreview(true);});
+    card.appendChild(inp);
+
+    const forms=Array.isArray(t.forms)?t.forms:[];
+    if(forms.length && t.kind!=="ambiguous"){
+      const sel=document.createElement("select");
+      const baseOpt=document.createElement("option");baseOpt.value=t.base||t.text;baseOpt.textContent=`基本形: ${t.base||t.text}`;sel.appendChild(baseOpt);
+      forms.forEach(f=>{const o=document.createElement("option");o.value=f.text;o.textContent=`${f.label}: ${f.text}`;sel.appendChild(o);});
+      if([...sel.options].some(o=>sentenceNormLookup(o.value)===sentenceNormLookup(t.text))){
+        const opt=[...sel.options].find(o=>sentenceNormLookup(o.value)===sentenceNormLookup(t.text));if(opt)sel.value=opt.value;
+      }
+      sel.addEventListener("change",()=>{
+        t.text=sel.value;inp.value=t.text;
+        const picked=forms.find(f=>f.text===sel.value);
+        t.kind=picked?"related":"id";t.formLabel=picked?.label||"";
+        t.sourceLabel=picked?`${t.id} / ${t.base} → ${picked.text}`:`${t.id} / ${t.base}`;
+        sentenceRefreshPreview(true);sentenceRenderTokens();
+      });
+      card.appendChild(sel);
+    }
+    host.appendChild(card);
+  });
+  sentenceRefreshPreview(true);
+}
+async function sentenceAllSearchRecords(){
+  let active=[];let common=[];
+  try{active=await getAllRecords();}catch(e){}
+  try{common=await getAllCommonRecords();}catch(e){}
+  const seen=new Set();
+  return active.concat(common).filter(r=>{const id=String(r?.id||"");if(!id||seen.has(id))return false;seen.add(id);return true;});
+}
+function sentenceCandidatesForSurface(surface,records){
+  const q=sentenceNormLookup(surface);if(!q)return [];
+  const exact=[];const related=[];
+  for(const r of records){
+    if(sentenceNormLookup(r.english)===q) exact.push(sentenceCandidateFromRecord(r,"id",surface));
+  }
+  for(const r of records){
+    const forms=sentenceParseRelatedForms(r.relatedForms||"");
+    const f=forms.find(x=>sentenceNormLookup(x.text)===q);
+    if(f) related.push(sentenceCandidateFromRecord(r,"related",surface));
+  }
+  return exact.concat(related);
+}
+async function sentenceFindRecordById(term){
+  const q=sentenceNormalizeText(term);if(!q)return null;
+  try{const r=await getRecordForScan(q);if(r)return r;}catch(e){}
+  return null;
+}
+async function sentenceAnalyzeInput(){
+  const raw=$("sentenceAutoInput")?.value||"";
+  const parts=sentenceTokenizeInput(raw);
+  if(!parts.length){sentenceSetStatus("解析する英文を入力してください。",false);return;}
+  sentenceSetStatus("IDとRelatedFormsを検索しています…");
+  const records=await sentenceAllSearchRecords();
+  const fullMatches=records.filter(r=>sentenceNormLookup(r.english)===sentenceNormLookup(raw));
+  const next=[];let resolved=0,ambiguous=0,direct=0,punct=0,related=0;
+  for(const part of parts){
+    if(sentenceIsPunctuation(part)){
+      next.push({kind:"punct",base:part,text:part,forms:[],sourceLabel:"句読点"});punct++;continue;
+    }
+    const candidates=sentenceCandidatesForSurface(part,records);
+    if(candidates.length===1){
+      next.push({...candidates[0],forms:(candidates[0].forms||[]).map(f=>({...f}))});resolved++;if(candidates[0].kind==="related")related++;
+    }else if(candidates.length>1){
+      next.push({kind:"ambiguous",base:part,text:part,forms:[],sourceLabel:`${candidates.length}件の候補`,candidates});ambiguous++;
+    }else{
+      next.push({kind:"direct",base:part,text:part,forms:[],sourceLabel:"直接入力（IDなし）"});direct++;
+    }
+  }
+  sentenceTrialTokens=next;sentenceTrialQrAuto=true;sentenceRenderTokens();
+  const full=sentenceCompose();
+  if($("sentenceEnglish"))$("sentenceEnglish").value=full;
+  if($("sentenceQrContent"))$("sentenceQrContent").value=full;
+  const fullNote=fullMatches.length?` なお、この完成文そのものにも一致するIDが ${fullMatches.length}件あります（${fullMatches.slice(0,3).map(r=>r.id).join(" / ")}）。`:"";
+  sentenceSetStatus(`解析完了：ID/関連フォーム ${resolved}件（関連フォーム ${related}件）、候補選択 ${ambiguous}件、直接入力 ${direct}件、記号 ${punct}件。${fullNote}`);
+}
+async function sentenceAddPart(){
+  const v=sentenceNormalizeText($("sentencePartInput")?.value||"");if(!v)return;
+  const byId=await sentenceFindRecordById(v);
+  if(byId){
+    const c=sentenceCandidateFromRecord(byId,"id",byId.english);
+    sentenceTrialTokens.push(c);sentenceSetStatus(`${byId.id} / ${byId.english} を追加しました。`);
+  }else if(sentenceIsPunctuation(v)){
+    sentenceTrialTokens.push({kind:"punct",base:v,text:v,forms:[],sourceLabel:"句読点"});sentenceSetStatus(`${v} を記号として追加しました。`);
+  }else{
+    const records=await sentenceAllSearchRecords();
+    const candidates=sentenceCandidatesForSurface(v,records);
+    if(candidates.length===1){sentenceTrialTokens.push(candidates[0]);sentenceSetStatus(`${v} を ${candidates[0].id} から追加しました。`);}
+    else if(candidates.length>1){sentenceTrialTokens.push({kind:"ambiguous",base:v,text:v,forms:[],sourceLabel:`${candidates.length}件の候補`,candidates});sentenceSetStatus(`${v} は複数IDに一致しました。候補を選択してください。`);}
+    else{sentenceTrialTokens.push({kind:"direct",base:v,text:v,forms:[],sourceLabel:"直接入力（IDなし）"});sentenceSetStatus(`${v} はIDにないため直接入力として追加しました。`);}
+  }
+  if($("sentencePartInput"))$("sentencePartInput").value="";
+  sentenceRenderTokens();
+}
+async function sentenceSpeak(){
+  const text=sentenceNormalizeText($("sentenceEnglish")?.value)||sentenceCompose();
+  if(!text){sentenceSetStatus("読む文章がありません。",false);return;}
+  try{await speakText(text,"en-US",1);sentenceSetStatus("全文を読み上げました。");}catch(e){sentenceSetStatus("読み上げできませんでした。",false);}
+}
+function sentenceLoadSaved(){
+  try{const a=JSON.parse(localStorage.getItem(SENTENCE_TRIAL_STORAGE_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}
+}
+function sentenceWriteSaved(a){localStorage.setItem(SENTENCE_TRIAL_STORAGE_KEY,JSON.stringify(a));}
+async function sentenceSaveCurrent(){
+  const english=sentenceNormalizeText($("sentenceEnglish")?.value)||sentenceCompose();
+  const japanese=sentenceNormalizeText($("sentenceJapanese")?.value);
+  const qrContent=sentenceNormalizeText($("sentenceQrContent")?.value)||english;
+  if(!english){sentenceSetStatus("Englishが空なので保存できません。",false);return;}
+  if($("sentenceQrContent") && !$("sentenceQrContent").value)$("sentenceQrContent").value=qrContent;
+  let qrDataUrl=sentenceTrialQrDataUrl;
+  if(!qrDataUrl || sentenceTrialQrSource!==qrContent){qrDataUrl=await sentenceGenerateQr(false);}
+  if(!qrDataUrl){sentenceSetStatus("QRを作成できなかったため保存を中止しました。",false);return;}
+  const list=sentenceLoadSaved();
+  list.unshift({sid:"T"+Date.now(),english,japanese,qrContent,qrDataUrl,tokens:sentenceTrialTokens.map(t=>({...t,forms:(t.forms||[]).map(f=>({...f})),candidates:(t.candidates||[]).map(c=>({...c,forms:(c.forms||[]).map(f=>({...f}))}))})),savedAt:new Date().toISOString()});
+  try{
+    sentenceWriteSaved(list.slice(0,120));sentenceRenderSaved();sentenceSetStatus("文章とQRをこの端末に保存しました。");sentenceSetQrStatus("このQRは保存文章と一緒に保存されています。");
+  }catch(e){sentenceSetStatus("保存容量が不足している可能性があります。不要な保存文章を削除してください。",false);}
+}
+function sentenceRestore(item){
+  sentenceTrialTokens=(item.tokens||[]).map(t=>({...t,forms:(t.forms||[]).map(f=>({...f})),candidates:(t.candidates||[]).map(c=>({...c,forms:(c.forms||[]).map(f=>({...f}))}))}));
+  sentenceRenderTokens();
+  if($("sentenceAutoInput"))$("sentenceAutoInput").value=item.english||sentenceCompose();
+  if($("sentenceEnglish"))$("sentenceEnglish").value=item.english||sentenceCompose();
+  if($("sentenceJapanese"))$("sentenceJapanese").value=item.japanese||"";
+  if($("sentenceQrContent"))$("sentenceQrContent").value=item.qrContent||item.english||"";
+  sentenceTrialQrAuto=(item.qrContent||item.english||"")===(item.english||"");
+  sentenceTrialQrDataUrl=item.qrDataUrl||"";sentenceTrialQrSource=item.qrContent||item.english||"";sentenceRenderQrPreview(sentenceTrialQrDataUrl);
+  sentenceSetQrStatus(sentenceTrialQrDataUrl?"保存時のQRを再表示しています。":"旧保存データのためQR画像はありません。必要ならQRを作成・更新してください。");
+  if($("sentencePreview"))$("sentencePreview").textContent=item.english||sentenceCompose()||"—";
+  sentenceSetStatus("保存文章を読み込みました。構成・QRを確認し、語形変更・全文読み上げができます。");
+}
+function sentenceRenderSaved(){
+  const host=$("sentenceSavedList");if(!host)return;host.innerHTML="";
+  const list=sentenceLoadSaved();
+  if(!list.length){host.innerHTML='<div class="sentenceEmpty">保存文章はまだありません。</div>';return;}
+  list.forEach(item=>{
+    const row=document.createElement("div");row.className="sentenceSavedItem"+(item.qrDataUrl?" hasQr":"");
+    if(item.qrDataUrl){const qr=document.createElement("img");qr.className="sentenceSavedQr";qr.alt="保存QR";qr.src=item.qrDataUrl;row.appendChild(qr);}
+    const info=document.createElement("div");info.className="sentenceSavedInfo";info.innerHTML=`<div class="sentenceSavedEnglish"></div><div class="sentenceSavedJapanese"></div>`;
+    info.querySelector(".sentenceSavedEnglish").textContent=item.english||"";info.querySelector(".sentenceSavedJapanese").textContent=item.japanese||"";
+    const load=document.createElement("button");load.type="button";load.className="secondary";load.textContent="開く";load.addEventListener("click",()=>sentenceRestore(item));
+    const del=document.createElement("button");del.type="button";del.className="secondary";del.textContent="削除";del.addEventListener("click",()=>{if(!confirm("この保存文章とQRを削除しますか？"))return;sentenceWriteSaved(sentenceLoadSaved().filter(x=>x.sid!==item.sid));sentenceRenderSaved();});
+    row.append(info,load,del);host.appendChild(row);
+  });
+}
+function sentenceAddCurrentRecord(){
+  if(!currentRecord){setStatus($("scanStatus"),"先にQRまたはIDを読み取ってください。",false);return;}
+  const r=currentRecord;const c=sentenceCandidateFromRecord(r,"id",r.english);
+  sentenceTrialTokens.push(c);sentenceRenderTokens();
+  const tab=document.querySelector('.tabBtn[data-target="sentenceBuilderPanel"]');if(tab)tab.click();
+  sentenceSetStatus(`${r.english} をQR読み取りから追加しました。${c.forms.length?` 関連フォーム ${c.forms.length}件があります。`:""}`);
+}
+function initSentenceTrial(){
+  $("addCurrentToSentenceBtn")?.addEventListener("click",sentenceAddCurrentRecord);
+  $("sentenceAutoAnalyzeBtn")?.addEventListener("click",sentenceAnalyzeInput);
+  $("sentenceAutoInput")?.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();sentenceAnalyzeInput();}});
+  $("sentencePartAddBtn")?.addEventListener("click",sentenceAddPart);
+  $("sentencePartInput")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sentenceAddPart();}});
+  $("sentenceUndoBtn")?.addEventListener("click",()=>{sentenceTrialTokens.pop();sentenceRenderTokens();});
+  $("sentenceClearBtn")?.addEventListener("click",()=>{sentenceTrialTokens=[];sentenceRenderTokens();sentenceSetStatus("文章を消去しました。保存済み文章は残っています。");});
+  $("sentenceSpeakBtn")?.addEventListener("click",sentenceSpeak);
+  $("sentenceGenerateQrBtn")?.addEventListener("click",()=>sentenceGenerateQr(true));
+  $("sentenceSyncTextBtn")?.addEventListener("click",()=>{const s=sentenceCompose();if($("sentenceEnglish"))$("sentenceEnglish").value=s;if($("sentenceQrContent"))$("sentenceQrContent").value=s;sentenceTrialQrAuto=true;sentenceInvalidateQr();sentenceRefreshPreview(false);});
+  $("sentenceEnglish")?.addEventListener("input",()=>{if($("sentencePreview"))$("sentencePreview").textContent=$("sentenceEnglish").value||sentenceCompose()||"—";if(sentenceTrialQrAuto && $("sentenceQrContent"))$("sentenceQrContent").value=$("sentenceEnglish").value;});
+  $("sentenceQrContent")?.addEventListener("input",()=>{sentenceTrialQrAuto=false;sentenceInvalidateQr();});
+  $("sentenceSaveBtn")?.addEventListener("click",sentenceSaveCurrent);
+  sentenceRenderTokens();sentenceRenderSaved();
+}
+setTimeout(initSentenceTrial,0);
 
 document.querySelectorAll(".tabBtn").forEach(b=>b.addEventListener("click",async()=>{
   // Preserve the latest visible checkbox state before leaving any tab.

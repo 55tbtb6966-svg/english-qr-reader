@@ -4012,7 +4012,7 @@ button.flashActionAccepted{
 }
 
 
-/* v4.5.35 trial: sentence auto ID / RelatedForms analysis */
+/* v4.5.36 trial: sentence saved QR snapshot */
 .sentenceTrialNotice{padding:10px 12px;border:1px solid #f0c36d;background:#fff8e8;border-radius:12px;color:#5d4600;font-size:.9rem;line-height:1.5;margin-bottom:12px;}
 .sentenceAutoInput label span,.sentenceBuilderAddGrid label span,.sentenceMetaGrid label span{display:block;font-size:.82rem;color:#667085;margin-bottom:4px;}
 .sentenceAutoInput textarea,.sentenceBuilderAddGrid input,.sentenceMetaGrid input,.sentenceMetaGrid textarea{width:100%;box-sizing:border-box;}
@@ -4042,8 +4042,15 @@ button.flashActionAccepted{
 .sentenceSavedItem{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px;border:1px solid #e0e5ec;border-radius:12px;background:#fff;}
 .sentenceSavedEnglish{font-weight:750;line-height:1.4;}.sentenceSavedJapanese{font-size:.86rem;color:#667085;margin-top:2px;}
 .sentenceSavedItem button{width:auto;padding:8px 10px;}
+.sentenceQrBox{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;margin-top:12px;padding:12px;border:1px solid #e0e5ec;border-radius:12px;background:#fafbfc;}
+.sentenceQrPreview{width:168px;height:168px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #d9dee7;border-radius:10px;overflow:hidden;}
+.sentenceQrPreview img,.sentenceQrPreview canvas{max-width:100%;max-height:100%;display:block;}
+.sentenceQrMeta{min-width:0;}
+.sentenceQrMeta .hint{margin:0 0 8px;}
+.sentenceSavedQr{width:72px;height:72px;object-fit:contain;background:#fff;border:1px solid #e1e5eb;border-radius:8px;}
+.sentenceSavedItem.hasQr{grid-template-columns:auto minmax(0,1fr) auto auto;}
 .sentenceEmpty{color:#667085;font-size:.9rem;padding:8px 2px;}
-@media(max-width:720px){.sentenceBuilderAddGrid{grid-template-columns:1fr auto;}.sentenceMetaGrid{grid-template-columns:1fr;}.sentenceMetaGrid .wide{grid-column:auto;}.sentenceSavedItem{grid-template-columns:1fr auto;}.sentenceSavedItem .sentenceSavedInfo{grid-column:1/-1;}}
+@media(max-width:720px){.sentenceBuilderAddGrid{grid-template-columns:1fr auto;}.sentenceMetaGrid{grid-template-columns:1fr;}.sentenceMetaGrid .wide{grid-column:auto;}.sentenceSavedItem,.sentenceSavedItem.hasQr{grid-template-columns:1fr auto;}.sentenceSavedItem .sentenceSavedInfo{grid-column:1/-1;}.sentenceSavedQr{grid-row:2;}.sentenceQrBox{grid-template-columns:1fr;}.sentenceQrPreview{width:156px;height:156px;margin:auto;}}
 
 </style>
 </head>
@@ -4060,7 +4067,7 @@ button.flashActionAccepted{
     </select>
   </label>
 </div>
-<div class="appVersionBadge" id="appVersionBadge">App v4.5.35-trial / 更新 2026-10-22 01:15</div>
+<div class="appVersionBadge" id="appVersionBadge">App v4.5.36-trial / 更新 2026-10-22 01:15</div>
 <div class="tabs">
 <button class="tabBtn active" data-target="readerPanel">読み取り</button>
 <button class="tabBtn" data-target="csvPanel">CSV</button>
@@ -4847,8 +4854,16 @@ button.flashActionAccepted{
       <label class="wide"><span>QR内容</span><textarea id="sentenceQrContent" rows="2" placeholder="通常はEnglishと同じ。必要なら変更可能"></textarea></label>
     </div>
     <div class="sentenceBuilderActions">
-      <button id="sentenceSyncTextBtn" type="button" class="secondary">組み立て文をEnglish/QRへ反映</button>
-      <button id="sentenceSaveBtn" type="button">文章を保存</button>
+      <button id="sentenceSyncTextBtn" type="button" class="secondary">組み立て文をEnglish・QR内容にコピー</button>
+      <button id="sentenceGenerateQrBtn" type="button" class="secondary">QRを作成・更新</button>
+      <button id="sentenceSaveBtn" type="button">文章＋QRを保存</button>
+    </div>
+    <div class="sentenceQrBox">
+      <div class="sentenceQrPreview" id="sentenceQrPreview"><div class="sentenceEmpty">QR未作成</div></div>
+      <div class="sentenceQrMeta">
+        <p class="hint">「QR内容」からQRを作ります。保存すると、英文・日本語・構成情報・QR内容・QR画像をまとめて保存します。</p>
+        <div class="hint" id="sentenceQrSavedStatus">QRはまだ作成されていません。</div>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -4864,8 +4879,8 @@ button.flashActionAccepted{
 <script src="./pptxgen.min.js"></script>
 <script src="./ppt-print-layout.js"></script>
 <script>
-const APP_VERSION="v4.5.35-trial";
-const APP_UPDATED="2026-10-13 21:15";
+const APP_VERSION="v4.5.36-trial";
+const APP_UPDATED="2026-10-22 10:10";
 
 function outputDateTimeStamp(){
   const d=new Date();
@@ -8607,10 +8622,12 @@ function loadFlashTouchSpeakSetting(){
 
 
 
-/* ===== v4.5.35 trial: sentence builder / automatic ID resolution ===== */
+/* ===== v4.5.36 trial: sentence builder / saved QR snapshot ===== */
 const SENTENCE_TRIAL_STORAGE_KEY="sentenceBuilderTrial_v4534"; // keep v4.5.34 saves compatible
 let sentenceTrialTokens=[];
 let sentenceTrialQrAuto=true;
+let sentenceTrialQrDataUrl="";
+let sentenceTrialQrSource="";
 
 function sentenceParseRelatedForms(raw){
   const out=[];
@@ -8643,6 +8660,32 @@ function sentenceCompose(){
   return s;
 }
 function sentenceSetStatus(msg,ok=true){const el=$("sentenceBuilderStatus");if(el){el.textContent=msg;el.classList.toggle("error",!ok);}}
+function sentenceSetQrStatus(msg){const el=$("sentenceQrSavedStatus");if(el)el.textContent=msg;}
+function sentenceRenderQrPreview(dataUrl=""){
+  const host=$("sentenceQrPreview");if(!host)return;host.innerHTML="";
+  if(!dataUrl){host.innerHTML='<div class="sentenceEmpty">QR未作成</div>';return;}
+  const img=document.createElement("img");img.alt="保存QR";img.src=dataUrl;host.appendChild(img);
+}
+function sentenceInvalidateQr(){sentenceTrialQrDataUrl="";sentenceTrialQrSource="";sentenceRenderQrPreview("");sentenceSetQrStatus("QR内容が変更されました。QRを作成・更新してください。");}
+async function sentenceMakeQrDataUrl(content){
+  const value=String(content||"").trim();if(!value)throw new Error("QR内容が空です");
+  const holder=document.createElement("div");holder.style.position="fixed";holder.style.left="-10000px";holder.style.top="0";holder.style.width="220px";holder.style.height="220px";holder.style.background="#fff";document.body.appendChild(holder);
+  try{
+    new QRCode(holder,{text:value,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});
+    await new Promise(r=>setTimeout(r,40));
+    const canvas=holder.querySelector("canvas");if(canvas)return canvas.toDataURL("image/png");
+    const img=holder.querySelector("img");if(img?.src)return img.src;
+    throw new Error("QR生成に失敗しました");
+  }finally{holder.remove();}
+}
+async function sentenceGenerateQr(showStatus=true){
+  const content=String($("sentenceQrContent")?.value||"").trim();
+  if(!content){sentenceSetStatus("QR内容が空です。",false);return "";}
+  try{
+    const dataUrl=await sentenceMakeQrDataUrl(content);sentenceTrialQrDataUrl=dataUrl;sentenceTrialQrSource=content;sentenceRenderQrPreview(dataUrl);sentenceSetQrStatus("現在のQR内容からQRを作成済みです。");
+    if(showStatus)sentenceSetStatus("QRを作成・更新しました。");return dataUrl;
+  }catch(e){sentenceSetStatus("QRを作成できませんでした。",false);return "";}
+}
 function sentenceRefreshPreview(syncFields=false){
   const s=sentenceCompose();
   if($("sentencePreview"))$("sentencePreview").textContent=s||"—";
@@ -8800,14 +8843,20 @@ function sentenceLoadSaved(){
   try{const a=JSON.parse(localStorage.getItem(SENTENCE_TRIAL_STORAGE_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}
 }
 function sentenceWriteSaved(a){localStorage.setItem(SENTENCE_TRIAL_STORAGE_KEY,JSON.stringify(a));}
-function sentenceSaveCurrent(){
+async function sentenceSaveCurrent(){
   const english=sentenceNormalizeText($("sentenceEnglish")?.value)||sentenceCompose();
   const japanese=sentenceNormalizeText($("sentenceJapanese")?.value);
   const qrContent=sentenceNormalizeText($("sentenceQrContent")?.value)||english;
   if(!english){sentenceSetStatus("Englishが空なので保存できません。",false);return;}
+  if($("sentenceQrContent") && !$("sentenceQrContent").value)$("sentenceQrContent").value=qrContent;
+  let qrDataUrl=sentenceTrialQrDataUrl;
+  if(!qrDataUrl || sentenceTrialQrSource!==qrContent){qrDataUrl=await sentenceGenerateQr(false);}
+  if(!qrDataUrl){sentenceSetStatus("QRを作成できなかったため保存を中止しました。",false);return;}
   const list=sentenceLoadSaved();
-  list.unshift({sid:"T"+Date.now(),english,japanese,qrContent,tokens:sentenceTrialTokens.map(t=>({...t,forms:(t.forms||[]).map(f=>({...f})),candidates:(t.candidates||[]).map(c=>({...c,forms:(c.forms||[]).map(f=>({...f}))}))})),savedAt:new Date().toISOString()});
-  sentenceWriteSaved(list.slice(0,200));sentenceRenderSaved();sentenceSetStatus("文章をこの端末に保存しました。");
+  list.unshift({sid:"T"+Date.now(),english,japanese,qrContent,qrDataUrl,tokens:sentenceTrialTokens.map(t=>({...t,forms:(t.forms||[]).map(f=>({...f})),candidates:(t.candidates||[]).map(c=>({...c,forms:(c.forms||[]).map(f=>({...f}))}))})),savedAt:new Date().toISOString()});
+  try{
+    sentenceWriteSaved(list.slice(0,120));sentenceRenderSaved();sentenceSetStatus("文章とQRをこの端末に保存しました。");sentenceSetQrStatus("このQRは保存文章と一緒に保存されています。");
+  }catch(e){sentenceSetStatus("保存容量が不足している可能性があります。不要な保存文章を削除してください。",false);}
 }
 function sentenceRestore(item){
   sentenceTrialTokens=(item.tokens||[]).map(t=>({...t,forms:(t.forms||[]).map(f=>({...f})),candidates:(t.candidates||[]).map(c=>({...c,forms:(c.forms||[]).map(f=>({...f}))}))}));
@@ -8817,19 +8866,22 @@ function sentenceRestore(item){
   if($("sentenceJapanese"))$("sentenceJapanese").value=item.japanese||"";
   if($("sentenceQrContent"))$("sentenceQrContent").value=item.qrContent||item.english||"";
   sentenceTrialQrAuto=(item.qrContent||item.english||"")===(item.english||"");
+  sentenceTrialQrDataUrl=item.qrDataUrl||"";sentenceTrialQrSource=item.qrContent||item.english||"";sentenceRenderQrPreview(sentenceTrialQrDataUrl);
+  sentenceSetQrStatus(sentenceTrialQrDataUrl?"保存時のQRを再表示しています。":"旧保存データのためQR画像はありません。必要ならQRを作成・更新してください。");
   if($("sentencePreview"))$("sentencePreview").textContent=item.english||sentenceCompose()||"—";
-  sentenceSetStatus("保存文章を読み込みました。構成を確認し、語形変更・全文読み上げができます。");
+  sentenceSetStatus("保存文章を読み込みました。構成・QRを確認し、語形変更・全文読み上げができます。");
 }
 function sentenceRenderSaved(){
   const host=$("sentenceSavedList");if(!host)return;host.innerHTML="";
   const list=sentenceLoadSaved();
   if(!list.length){host.innerHTML='<div class="sentenceEmpty">保存文章はまだありません。</div>';return;}
   list.forEach(item=>{
-    const row=document.createElement("div");row.className="sentenceSavedItem";
+    const row=document.createElement("div");row.className="sentenceSavedItem"+(item.qrDataUrl?" hasQr":"");
+    if(item.qrDataUrl){const qr=document.createElement("img");qr.className="sentenceSavedQr";qr.alt="保存QR";qr.src=item.qrDataUrl;row.appendChild(qr);}
     const info=document.createElement("div");info.className="sentenceSavedInfo";info.innerHTML=`<div class="sentenceSavedEnglish"></div><div class="sentenceSavedJapanese"></div>`;
     info.querySelector(".sentenceSavedEnglish").textContent=item.english||"";info.querySelector(".sentenceSavedJapanese").textContent=item.japanese||"";
     const load=document.createElement("button");load.type="button";load.className="secondary";load.textContent="開く";load.addEventListener("click",()=>sentenceRestore(item));
-    const del=document.createElement("button");del.type="button";del.className="secondary";del.textContent="削除";del.addEventListener("click",()=>{if(!confirm("この保存文章を削除しますか？"))return;sentenceWriteSaved(sentenceLoadSaved().filter(x=>x.sid!==item.sid));sentenceRenderSaved();});
+    const del=document.createElement("button");del.type="button";del.className="secondary";del.textContent="削除";del.addEventListener("click",()=>{if(!confirm("この保存文章とQRを削除しますか？"))return;sentenceWriteSaved(sentenceLoadSaved().filter(x=>x.sid!==item.sid));sentenceRenderSaved();});
     row.append(info,load,del);host.appendChild(row);
   });
 }
@@ -8849,9 +8901,10 @@ function initSentenceTrial(){
   $("sentenceUndoBtn")?.addEventListener("click",()=>{sentenceTrialTokens.pop();sentenceRenderTokens();});
   $("sentenceClearBtn")?.addEventListener("click",()=>{sentenceTrialTokens=[];sentenceRenderTokens();sentenceSetStatus("文章を消去しました。保存済み文章は残っています。");});
   $("sentenceSpeakBtn")?.addEventListener("click",sentenceSpeak);
-  $("sentenceSyncTextBtn")?.addEventListener("click",()=>{const s=sentenceCompose();if($("sentenceEnglish"))$("sentenceEnglish").value=s;if($("sentenceQrContent"))$("sentenceQrContent").value=s;sentenceTrialQrAuto=true;sentenceRefreshPreview(false);});
+  $("sentenceGenerateQrBtn")?.addEventListener("click",()=>sentenceGenerateQr(true));
+  $("sentenceSyncTextBtn")?.addEventListener("click",()=>{const s=sentenceCompose();if($("sentenceEnglish"))$("sentenceEnglish").value=s;if($("sentenceQrContent"))$("sentenceQrContent").value=s;sentenceTrialQrAuto=true;sentenceInvalidateQr();sentenceRefreshPreview(false);});
   $("sentenceEnglish")?.addEventListener("input",()=>{if($("sentencePreview"))$("sentencePreview").textContent=$("sentenceEnglish").value||sentenceCompose()||"—";if(sentenceTrialQrAuto && $("sentenceQrContent"))$("sentenceQrContent").value=$("sentenceEnglish").value;});
-  $("sentenceQrContent")?.addEventListener("input",()=>{sentenceTrialQrAuto=false;});
+  $("sentenceQrContent")?.addEventListener("input",()=>{sentenceTrialQrAuto=false;sentenceInvalidateQr();});
   $("sentenceSaveBtn")?.addEventListener("click",sentenceSaveCurrent);
   sentenceRenderTokens();sentenceRenderSaved();
 }
