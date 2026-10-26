@@ -1,0 +1,28 @@
+English QR Reader v4.5.37-data-prep
+
+Purpose:
+- Prepare data before implementing the QR sentence-building tab.
+- Keep existing A/B/C/N/P/S behavior unchanged.
+
+Changes:
+1) W is reserved for sentence parts.
+   - Initial master: W_sentence_parts_master.csv
+   - 166 unique visible forms, W000001-W000166.
+   - Duplicate visible forms (e.g. you, it, her, when, so) are one W ID with multiple grammatical roles in Explanation.
+
+2) RelatedForms support added as OPTIONAL 17th CSV column.
+   - Legacy first 16 columns remain in the same order.
+   - Existing CSV without RelatedForms imports normally; RelatedForms becomes blank.
+   - Export writes RelatedForms as the last column.
+   - Data editor can edit RelatedForms.
+   - Search also includes RelatedForms.
+
+Recommended verb format:
+3sg=has|past=had|pastParticiple=had|ing=having
+
+3) A master actual data is NOT bundled in the app ZIP.
+   - A_master_relatedforms_template.csv shows the new schema and an example.
+   - To migrate the real A master safely, import the existing A CSV into this build and export it; the original 16 columns are preserved and RelatedForms is appended.
+   - Verb forms can then be filled into RelatedForms progressively.
+
+4) QR sentence-building UI is intentionally NOT included yet.

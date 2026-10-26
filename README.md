@@ -535,3 +535,13 @@ ReaderSet CSVは端末内localStorageへ保存されます。A/B/C/N/W/P/S本体
 - フラッシュカードは v4.5.1 の状態に戻しました。
 - ReaderSet CSV 読み込みを FileReader(ArrayBuffer) + UTF-8/Shift_JIS 判定に変更しました。
 - ZIP内サンプル名を ASCII の ReaderSet_sample.csv に変更し、ファイル名文字化けの影響を避けました。
+
+
+## v4.5.37-data-prep
+- W is reserved for sentence parts (W000001...).
+- CSV supports a new optional `RelatedForms` column.
+- Existing CSVs without `RelatedForms` remain readable; the value defaults to blank.
+- CSV export preserves `RelatedForms`.
+- Data editor can edit `RelatedForms`.
+- Recommended verb format: `3sg=has|past=had|pastParticiple=had|ing=having`.
+- No QR sentence-building tab is included in this preparation build.
